@@ -1,5 +1,4 @@
-<?php include_once '../lib/ControlAcceso.Class.php'; 
-?>
+<?php include_once '../lib/ControlAcceso.Class.php'; ?>
 
 <html>
     <head>
@@ -17,20 +16,15 @@
     </head>
     <body>
 
-<nav class="navbar navbar-expand-lg navbar-dark bg-dark" style="height:100px; min-height:100px;">
-    <div class="d-flex align-items-center" style="height:100px;">
-        <a class="navbar-brand d-flex align-items-center" href="#">
-            <img src="../lib/img/MetricFlow.png"
-                 style="max-width:80px; max-height:80px; width:auto; height:auto; object-fit:contain; display:block; margin-right:16px;"
-                 class="d-inline-block align-top"
-                 alt="MetricFlow Logo">
-            <span style="font-size:1.5rem; font-weight:600; font-family:'Segoe UI', Arial, sans-serif; color:#fff;">
-                <?php echo Constantes::NOMBRE_SISTEMA; ?> - Login
-            </span>
-        </a>
-    </div>
-</nav>
-   
+        <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+            <div class="container navbar-dark bg-dark">
+                <a class="navbar-brand" href="#">
+                    <img src="../lib/img/Logo-UNPA-UARG-aul.png" width="30" height="30" class="d-inline-block align-top" alt="">
+                    <?php echo Constantes::NOMBRE_SISTEMA; ?> - Login
+                </a>
+            </div>
+        </nav>
+
         <div class="container">
             <section id="main-content">
                 <article>

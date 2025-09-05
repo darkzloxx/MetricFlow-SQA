@@ -13,7 +13,7 @@ setlocale(LC_TIME, 'es_AR.utf8');
 class Constantes {
 
     
-    const NOMBRE_SISTEMA = "MetricFlow SQA";
+    const NOMBRE_SISTEMA = "UARGFlow BS";
     
     const WEBROOT = "/var/www/html/uargflow/";
     const APPDIR = "uargflow";
