@@ -15,10 +15,10 @@
             <li class="nav-item">
                 <a class="nav-link" href="../app/usuarios.php">
                     <span class="oi oi-person" />
-                    Usuarios
+                    Alumnos
                 </a>
             </li>
-
+            <!--
             <?php if (ControlAcceso::verificaPermiso(PermisosSistema::PERMISO_ROLES)) { ?>
                 <li class = "nav-item">
                     <a class = "nav-link" href = "../app/roles.php">
@@ -27,15 +27,21 @@
                     </a>
                 </li>
             <?php } ?>
-
+            -->
             <?php if (ControlAcceso::verificaPermiso(PermisosSistema::PERMISO_PERMISOS)) { ?>
                 <li class="nav-item">
-                    <a class="nav-link" href="../app/permisos.php">
+                    <a class="nav-link" href="../app/proyectos.php">
                         <span class="oi oi-lock-locked" />
-                        Permisos
+                        Proyectos
                     </a>
                 </li>
                 <?php } ?>
+                <li class="nav-item">
+                    <a class="nav-link" href="../app/salir.php">
+                        <span class="oi oi-book" /> 
+                        Modelos
+                    </a>
+                </li>
                 
                 <li class="nav-item">
                     <a class="nav-link" href="../app/salir.php">

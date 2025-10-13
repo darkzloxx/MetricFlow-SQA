@@ -1,7 +1,7 @@
 <?php
-include_once '../lib/ControlAcceso.Class.php';
+include_once '../lib/ControlAcceso.class.php';
 ControlAcceso::requierePermiso(PermisosSistema::PERMISO_PERMISOS);
-include_once '../modelo/Permiso.Class.php';
+include_once '../modelo/Permiso.php';
 $id = $_GET["id"];
 $Permiso = new Permiso($id);
 ?>

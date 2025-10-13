@@ -5,7 +5,22 @@ include_once '../modelo/BDConexion.Class.php';
 $DatosFormulario = $_POST;
 BDConexion::getInstancia()->autocommit(false);
 BDConexion::getInstancia()->begin_transaction();
+/*
+if (isset($_POST['listaProyectos'])) {
+    $listaProyectos = $_POST['listaProyectos'];
+    $rol = $_POST['rol'];
+    $cont = count($listaProyectos);
+        for ($i = 0; $i < $cont; ++$i) {
+            if ($listaProyectos[$i] != " ") {
+                $sql = "INSERT INTO usuarioProyecto VALUES('','$cargoGestion[$i]','$dni')";
+                $consultaGestion = BDConexion::getInstancia()->query($sql);
+            } else {
+                $consultaGestion = true;
+            }
+        }
 
+} 
+*/
 $query = "INSERT INTO usuario "
         . "VALUES (null,'{$DatosFormulario["nombre"]}','{$DatosFormulario["mail"]}')";
 $consulta = BDConexion::getInstancia()->query($query);
@@ -14,6 +29,36 @@ if (!$consulta) {
     //arrojar una excepcion
     die(BDConexion::getInstancia()->errno);
 }
+
+$idUsuario = BDConexion::getInstancia()->insert_id;
+
+if (isset($_POST['listaProyectos'])) {
+    $listaProyectos = $_POST['listaProyectos'];
+    $rol = $_POST['rol'];
+    $cont = count($listaProyectos);
+        for ($i = 0; $i < $cont; ++$i) {
+            if ($listaProyectos[$i] != " ") {
+                $proyectosId = "SELECT id_proyecto FROM proyecto where nombre = '".$listaProyectos[$i]."'"; 
+                $proyectosId=BDConexion::getInstancia()->query($proyectosId);
+                $proyectoId = $proyectosId->fetch_all(MYSQLI_ASSOC); 
+                foreach ($proyectoId as $ProyecId) {
+                    $id_proyecto =  $ProyecId['id_proyecto'];
+                    }
+                $rolId = "SELECT id FROM rol where nombre = '".$rol[$i]."'"; 
+                $rolId=BDConexion::getInstancia()->query($rolId);
+                $rolId = $rolId->fetch_all(MYSQLI_ASSOC); 
+                foreach ($rolId as $idRol) {
+                    $id_rol = $idRol['id'] ;
+                    }
+                $sql = "INSERT INTO usuario_proyecto VALUES($idUsuario,$id_proyecto,$id_rol)";
+                $consultaGestion = BDConexion::getInstancia()->query($sql);
+            } else {
+                $consultaGestion = true;
+            }
+        }
+
+} 
+/*
 $idUsuario = BDConexion::getInstancia()->insert_id;
 foreach ($DatosFormulario["rol"] as $idRol) {
     $query = "INSERT INTO usuario_rol "
@@ -25,6 +70,7 @@ foreach ($DatosFormulario["rol"] as $idRol) {
         die(BDConexion::getInstancia()->errno);
     }
 }
+    */
 BDConexion::getInstancia()->commit();
 BDConexion::getInstancia()->autocommit(true);
 ?>

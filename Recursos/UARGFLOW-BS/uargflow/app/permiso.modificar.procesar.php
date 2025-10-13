@@ -1,5 +1,5 @@
 <?php
-include_once '../lib/ControlAcceso.Class.php';
+include_once '../lib/ControlAcceso.class.php';
 ControlAcceso::requierePermiso(PermisosSistema::PERMISO_PERMISOS);
 include_once '../modelo/BDConexion.Class.php';
 $DatosFormulario = $_POST;
