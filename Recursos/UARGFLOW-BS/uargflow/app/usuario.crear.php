@@ -3,6 +3,14 @@ include_once '../lib/ControlAcceso.Class.php';
 ControlAcceso::requierePermiso(PermisosSistema::PERMISO_USUARIOS);
 include_once '../modelo/ColeccionRoles.php';
 $Roles = new ColeccionRoles();
+
+$proyectos = "SELECT * FROM proyecto"; 
+$proyectos=BDConexion::getInstancia()->query($proyectos);
+$proyecto = $proyectos->fetch_all(MYSQLI_ASSOC); 
+$lista = "";
+foreach ($proyecto as $Proyec) {
+    $lista = $lista . ".append($('<option>').append('" . $Proyec['nombre'] . "'))";
+}
 ?>
 <html>
     <head>
@@ -12,6 +20,56 @@ $Roles = new ColeccionRoles();
         <script type="text/javascript" src="../lib/JQuery/jquery-3.3.1.js"></script>
         <script type="text/javascript" src="../lib/bootstrap-4.1.1-dist/js/bootstrap.min.js"></script>
         <title><?= Constantes::NOMBRE_SISTEMA; ?> - Crear Usuario</title>
+        <script>      
+        $(document).ready(function(){
+            $('#btn_add_proyecto').click(function(){
+                agregarProyecto();
+            });
+            $("body").on('click', "#btn_del_proyecto", eliminarProyecto);
+        });
+       
+        function agregarProyecto(){
+            $("#tablaProyectos")
+	.append
+	(
+		$('<tr>')
+        .append
+        (
+        	$('<td>')
+            .append
+            (
+            	$('<select>').addClass('form-control').attr('name', 'listaProyectos[]').attr('id', 'listaProyectos[]')
+                <?= $lista; ?>
+            )
+        )
+        .append
+        (
+        	$('<td>')
+            .append
+            (
+            	$('<select>').addClass('form-control').attr('name', 'rol[]').attr('id', 'rol[]')
+                .append($('<option>').append('Líder del Proyecto'))
+                .append($('<option>').append('Gerente de Calidad'))
+                .append($('<option>').append('Espectador'))
+            )
+        )
+        .append
+        (
+        	$('<td>').addClass('text-center')
+            .append
+            (
+            	$('<button>').attr('type', 'button').addClass('btn btn-danger').attr('id', 'btn_del_proyecto').attr('name', 'btn_del_proyecto').text('Eliminar')
+            )            
+        )        
+    ); 
+        }
+        
+        function eliminarProyecto(){
+            $(this).parent().parent().fadeOut( "slow", function() { $(this).remove(); } );
+            
+        }
+
+        </script>
     </head>
     <body>
         <?php include_once '../gui/navbar.php'; ?>
@@ -37,16 +95,30 @@ $Roles = new ColeccionRoles();
                             <input type="email" name="mail" class="form-control" id="inputMail" placeholder="Ingrese el email del Usuario" required="">
                         </div>
                         <hr />
-                        <h4>Roles</h4>
-                        <?php foreach ($Roles->getRoles() as $Rol) { ?>
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" value="<?= $Rol->getId(); ?>" id="rol[<?= $Rol->getId(); ?>]" name="rol[<?= $Rol->getId(); ?>]" />
-                                <label class="form-check-label" for="rol">
-                                    <?= $Rol->getNombre(); ?>
-                                </label>
-                            </div>
-                        <?php } ?>
-                    </div>
+                         <!-- Proyectos Roles -->
+  
+                    <div class="form-group">
+
+                  <label>
+                    Proyectos:
+                    &nbsp;&nbsp;
+                    <button type="button" class='btn btn-primary' id="btn_add_proyecto">Nuevo</button>
+                    
+                  </label>
+                  <table class='table table-bordered table-striped' id="tablaProyectos">
+                    <tr>
+                      <th>Proyecto:</th>
+                      <th>Rol:</th>
+                      <th>Eliminar:</th>
+                    </tr>
+                    <tr>
+ 
+                    </tr>
+                    
+                  </table>                 
+
+                </div>
+                <br>
                     <div class="card-footer">
                         <button type="submit" class="btn btn-outline-success">
                             <span class="oi oi-check"></span> Confirmar
@@ -57,6 +129,7 @@ $Roles = new ColeccionRoles();
                             </button>
                         </a>
                     </div>
+                </div>
                 </div>
             </form>
         </div>

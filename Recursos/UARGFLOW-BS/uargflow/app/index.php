@@ -19,7 +19,7 @@
         <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
             <div class="container navbar-dark bg-dark">
                 <a class="navbar-brand" href="#">
-                    <img src="../lib/img/Logo-UNPA-UARG-aul.png" width="30" height="30" class="d-inline-block align-top" alt="">
+                    <img src="../lib/img/Logo-UNPA-UARG-azul.png" width="30" height="30" class="d-inline-block align-top" alt="">
                     <?php echo Constantes::NOMBRE_SISTEMA; ?> - Login
                 </a>
             </div>

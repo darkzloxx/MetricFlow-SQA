@@ -29,11 +29,29 @@ $Usuario = new Usuario($_GET["id"]);
                     <h4 class="card-text">Email</h4>
                     <p> <?= $Usuario->getEmail(); ?></p>
                     <hr />
-                    <h4 class="card-text">Roles</h4>
-                    <?php foreach ($Usuario->getRoles() as $Rol) { ?>
-                        <p> <?= $Rol->getNombre(); ?> </p>
-                    <?php } ?> 
-
+                    <h4 class="card-text">Proyectos:</h4>
+                     <table class='table table-bordered table-striped' id="tablaProyectos">
+                    <tr>
+                      <th>Proyecto:</th>
+                      <th>Rol:</th>
+                    </tr>
+                    <tr>
+                    <?php $proyectos = "SELECT b.nombre as nombre_proyecto,c.nombre as nombre_rol FROM usuario_proyecto a 
+                            left join proyecto b on a.id_proyecto = b.id_proyecto 
+                            left join rol c on c.id = a.rol
+                            WHERE a.id_usuario = '".$_GET["id"]."'";; 
+                            $proyectos=BDConexion::getInstancia()->query($proyectos);
+                            //$proyecto = mysqli_fetch_array($proyectos); 
+                            $proyecto = $proyectos->fetch_all(MYSQLI_ASSOC);
+                            foreach ($proyecto as $Proyec) { ?>
+                         <?= $coso = "
+                <td>". $Proyec["nombre_proyecto"]."</td>
+                      <td>". $Proyec["nombre_rol"]."</td>
+            "; ?> 
+                    <?php } ?>
+                            </tr>
+                    
+                  </table>
                     <hr />
                     <h5 class="card-text">Opciones</h5>
                     <a href="usuarios.php">

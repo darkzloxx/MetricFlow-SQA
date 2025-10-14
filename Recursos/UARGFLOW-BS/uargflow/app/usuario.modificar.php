@@ -5,7 +5,67 @@ include_once '../modelo/Usuario.Class.php';
 include_once '../modelo/ColeccionRoles.php';
 $id = $_GET["id"];
 $Usuario = new Usuario($id);
-$RolesSistema = new ColeccionRoles();
+function id(){
+    $id = $_GET["id"];
+    return $id;
+}
+function proycetos_roles(){
+    $id = id();
+  $usuario = "SELECT b.nombre as nombre_proyecto,c.nombre as nombre_rol FROM usuario_proyecto a 
+  left join proyecto b on a.id_proyecto = b.id_proyecto 
+  left join rol c on c.id = a.rol
+  WHERE a.id_usuario = '".$id."'"; 
+  $usuarios=BDConexion::getInstancia()->query($usuario);
+  $primero = 0;
+  $html='';
+  if ($row = mysqli_fetch_array($usuarios)){
+    do{
+       if($primero == 0){
+            $html.=     '<tr>
+                <td><select class="form-control" id="proyecto[]" name="proyecto[]">
+                <option>'. $row["nombre_proyecto"].'</option>
+            </select></td>
+                      <td><select class="form-control" id="rol[]" name="rol[]">
+                <option>'. $row["nombre_rol"].'</option>
+            </select></td>
+            <td class="text-center">
+                            <button type="button" class="btn btn-danger" id="btn_del_proyecto" name="btn_del_proyecto">Eliminar</button>
+                        </td>
+            </tr>';
+        ++$primero;
+        }
+        else{
+        $html.=     '<tr>
+                <td><select class="form-control" id="proyecto[]" name="proyecto[]">
+                <option>'. $row["nombre_proyecto"].'</option>
+            </select></td>
+                      <td><select class="form-control" id="rol[]" name="rol[]">
+                <option>'. $row["nombre_rol"].'</option>
+            </select></td>
+            <td class="text-center">
+                            <button type="button" class="btn btn-danger" id="btn_del_proyecto" name="btn_del_proyecto">Eliminar</button>
+                        </td>
+            </tr>';
+        ++$primero;
+        }
+    }while($row = mysqli_fetch_array($usuarios));
+   }
+   else{
+       if($primero == 0){
+       $html.=     '';
+       }
+       
+   }
+   return $html;
+}
+
+$proyectos = "SELECT * FROM proyecto"; 
+$proyectos=BDConexion::getInstancia()->query($proyectos);
+$proyecto = $proyectos->fetch_all(MYSQLI_ASSOC); 
+$lista = "";
+foreach ($proyecto as $Proyec) {
+    $lista = $lista . ".append($('<option>').append('" . $Proyec['nombre'] . "'))";
+}
 ?>
 <html>
     <head>
@@ -15,6 +75,56 @@ $RolesSistema = new ColeccionRoles();
         <script type="text/javascript" src="../lib/JQuery/jquery-3.3.1.js"></script>
         <script type="text/javascript" src="../lib/bootstrap-4.1.1-dist/js/bootstrap.min.js"></script>
         <title><?= Constantes::NOMBRE_SISTEMA; ?> - Actualizar Usuario</title>
+        <script>      
+        $(document).ready(function(){
+            $('#btn_add_proyecto').click(function(){
+                agregarProyecto();
+            });
+            $("body").on('click', "#btn_del_proyecto", eliminarProyecto);
+        });
+       
+        function agregarProyecto(){
+            $("#tablaProyectos")
+	.append
+	(
+		$('<tr>')
+        .append
+        (
+        	$('<td>')
+            .append
+            (
+            	$('<select>').addClass('form-control').attr('name', 'listaProyectos[]').attr('id', 'listaProyectos[]')
+                <?= $lista; ?>
+            )
+        )
+        .append
+        (
+        	$('<td>')
+            .append
+            (
+            	$('<select>').addClass('form-control').attr('name', 'rol[]').attr('id', 'rol[]')
+                .append($('<option>').append('Líder del Proyecto'))
+                .append($('<option>').append('Gerente de Calidad'))
+                .append($('<option>').append('Espectador'))
+            )
+        )
+        .append
+        (
+        	$('<td>').addClass('text-center')
+            .append
+            (
+            	$('<button>').attr('type', 'button').addClass('btn btn-danger').attr('id', 'btn_del_proyecto').attr('name', 'btn_del_proyecto').text('Eliminar')
+            )            
+        )        
+    ); 
+        }
+        
+        function eliminarProyecto(){
+            $(this).parent().parent().fadeOut( "slow", function() { $(this).remove(); } );
+            
+        }
+
+        </script>
     </head>
     <body>
         <?php include_once '../gui/navbar.php'; ?>
@@ -41,22 +151,31 @@ $RolesSistema = new ColeccionRoles();
 
                         <input type="hidden" name="id" class="form-control" id="id" value="<?= $Usuario->getId(); ?>" >
                         <hr />
-                        <h3>Roles</h3>
-                        <?php foreach ($RolesSistema->getRoles() as $RolSistema) {
-                            ?>
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" 
-                                       id="rol[<?= $RolSistema->getId(); ?>]" name="rol[<?= $RolSistema->getId(); ?>]"
-                                       value="<?= $RolSistema->getId(); ?>" 
-                                       <?php echo $Usuario->buscarRolPorId($RolSistema->getId()) ? "checked" : ""; ?> 
-                                       />
-                                <label class="form-check-label" for="rol">
+                        <!-- Proyectos Roles -->
+  
+                    <div class="form-group">
 
-                                    <?= $RolSistema->getNombre(); ?>
+                  <label>
+                    Proyectos:
+                    &nbsp;&nbsp;
+                    <button type="button" class='btn btn-primary' id="btn_add_proyecto">Nuevo</button>
+                    
+                  </label>
+                  <table class='table table-bordered table-striped' id="tablaProyectos">
+                    <tr>
+                      <th>Proyecto:</th>
+                      <th>Rol:</th>
+                      <th>Eliminar:</th>
+                    </tr>
+                    <tr>
+                        <?php
+                       echo $output = proycetos_roles()
+                        ?>  
+                    </tr>
+                    
+                  </table>                 
 
-                                </label>
-                            </div>
-                        <?php } ?>
+                </div>
                     </div>
                     <div class="card-footer">
                         <button type="submit" class="btn btn-outline-success">
