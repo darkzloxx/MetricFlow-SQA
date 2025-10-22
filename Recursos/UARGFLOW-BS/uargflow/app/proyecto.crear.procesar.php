@@ -6,6 +6,19 @@ $DatosFormulario = $_POST;
 BDConexion::getInstancia()->autocommit(false);
 BDConexion::getInstancia()->begin_transaction();
 
+$nombre = $DatosFormulario["nombre"];
+
+$resultado = "";
+$mensaje = "Ha ocurrido un error.";
+
+$query = "select * from proyecto where nombre = '{$nombre}'";
+$consulta = BDConexion::getInstancia()->query($query);
+
+if ($consulta->num_rows > 0){
+	$resultado = false;
+	$mensaje = "Ya existe un proyecto con el nombre ingresado";
+} else {
+
 $query = "INSERT INTO proyecto "
         . "VALUES (null,null,'{$DatosFormulario["descripcion"]}','Registrado','{$DatosFormulario["nombre"]}',null)";
 $consulta = BDConexion::getInstancia()->query($query);
@@ -17,6 +30,9 @@ if (!$consulta) {
 
 BDConexion::getInstancia()->commit();
 BDConexion::getInstancia()->autocommit(true);
+$resultado = true;
+$mensaje = "Operacion Realizada con Exito";
+}
 ?>
 <html>
     <head>
@@ -37,14 +53,14 @@ BDConexion::getInstancia()->autocommit(true);
                     <h3>Crear Proyecto</h3>
                 </div>
                 <div class="card-body">
-                    <?php if ($consulta) { ?>
+                    <?php if ($resultado) { ?>
                         <div class="alert alert-success" role="alert">
-                            Operaci&oacute;n realizada con &eacute;xito.
+                            <?= $mensaje; ?>
                         </div>
                     <?php } ?>   
-                    <?php if (!$consulta) { ?>
+                    <?php if (!$resultado) { ?>
                         <div class="alert alert-danger" role="alert">
-                            Ha ocurrido un error.
+                            <?= $mensaje; ?>
                         </div>
                     <?php } ?>
                     <hr />

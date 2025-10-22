@@ -5,74 +5,69 @@ include_once '../modelo/BDConexion.Class.php';
 $DatosFormulario = $_POST;
 BDConexion::getInstancia()->autocommit(false);
 BDConexion::getInstancia()->begin_transaction();
-/*
-if (isset($_POST['listaProyectos'])) {
-    $listaProyectos = $_POST['listaProyectos'];
-    $rol = $_POST['rol'];
-    $cont = count($listaProyectos);
-        for ($i = 0; $i < $cont; ++$i) {
-            if ($listaProyectos[$i] != " ") {
-                $sql = "INSERT INTO usuarioProyecto VALUES('','$cargoGestion[$i]','$dni')";
-                $consultaGestion = BDConexion::getInstancia()->query($sql);
-            } else {
-                $consultaGestion = true;
-            }
-        }
 
-} 
-*/
-$query = "INSERT INTO usuario "
-        . "VALUES (null,'{$DatosFormulario["nombre"]}','{$DatosFormulario["mail"]}')";
+$correo = $DatosFormulario["mail"];
+
+$resultado = "";
+$mensaje = "Ha ocurrido un error.";
+
+$query = "select * from usuario where email = '{$correo}'";
 $consulta = BDConexion::getInstancia()->query($query);
-if (!$consulta) {
-    BDConexion::getInstancia()->rollback();
-    //arrojar una excepcion
-    die(BDConexion::getInstancia()->errno);
+
+if ($consulta->num_rows > 0){
+	$resultado = false;
+	$mensaje = "Ya existe un usuario con el correo ingresado";
+} else {
+	
+	if(strpos($correo, "@gmail.com") === false){
+		$resultado = false;
+		$mensaje = "El correo ingresado no es valido, debe ser dominio ''@gmail.com''";
+	} else {
+
+		$query = "INSERT INTO usuario "
+				. "VALUES (null,'{$DatosFormulario["nombre"]}','{$DatosFormulario["mail"]}')";
+		$consulta = BDConexion::getInstancia()->query($query);
+		if (!$consulta) {
+			BDConexion::getInstancia()->rollback();
+			//arrojar una excepcion
+			die(BDConexion::getInstancia()->errno);
+		}
+		
+		$idUsuario = BDConexion::getInstancia()->insert_id;
+		
+		if (isset($_POST['listaProyectos'])) {
+			$listaProyectos = $_POST['listaProyectos'];
+			$rol = $_POST['rol'];
+			$cont = count($listaProyectos);
+				for ($i = 0; $i < $cont; ++$i) {
+					if ($listaProyectos[$i] != " ") {
+						$proyectosId = "SELECT id_proyecto FROM proyecto where nombre = '".$listaProyectos[$i]."'"; 
+						$proyectosId=BDConexion::getInstancia()->query($proyectosId);
+						$proyectoId = $proyectosId->fetch_all(MYSQLI_ASSOC); 
+						foreach ($proyectoId as $ProyecId) {
+							$id_proyecto =  $ProyecId['id_proyecto'];
+							}
+						$rolId = "SELECT id FROM rol where nombre = '".$rol[$i]."'"; 
+						$rolId=BDConexion::getInstancia()->query($rolId);
+						$rolId = $rolId->fetch_all(MYSQLI_ASSOC); 
+						foreach ($rolId as $idRol) {
+							$id_rol = $idRol['id'] ;
+							}
+						$sql = "INSERT INTO usuario_proyecto VALUES($idUsuario,$id_proyecto,$id_rol)";
+						$consultaGestion = BDConexion::getInstancia()->query($sql);
+					} else {
+						$consultaGestion = true;
+					}
+				}
+		
+		} 
+		
+		BDConexion::getInstancia()->commit();
+		BDConexion::getInstancia()->autocommit(true);
+		$resultado = true;
+		$mensaje = "Operacion Realizada con Exito";
+	}
 }
-
-$idUsuario = BDConexion::getInstancia()->insert_id;
-
-if (isset($_POST['listaProyectos'])) {
-    $listaProyectos = $_POST['listaProyectos'];
-    $rol = $_POST['rol'];
-    $cont = count($listaProyectos);
-        for ($i = 0; $i < $cont; ++$i) {
-            if ($listaProyectos[$i] != " ") {
-                $proyectosId = "SELECT id_proyecto FROM proyecto where nombre = '".$listaProyectos[$i]."'"; 
-                $proyectosId=BDConexion::getInstancia()->query($proyectosId);
-                $proyectoId = $proyectosId->fetch_all(MYSQLI_ASSOC); 
-                foreach ($proyectoId as $ProyecId) {
-                    $id_proyecto =  $ProyecId['id_proyecto'];
-                    }
-                $rolId = "SELECT id FROM rol where nombre = '".$rol[$i]."'"; 
-                $rolId=BDConexion::getInstancia()->query($rolId);
-                $rolId = $rolId->fetch_all(MYSQLI_ASSOC); 
-                foreach ($rolId as $idRol) {
-                    $id_rol = $idRol['id'] ;
-                    }
-                $sql = "INSERT INTO usuario_proyecto VALUES($idUsuario,$id_proyecto,$id_rol)";
-                $consultaGestion = BDConexion::getInstancia()->query($sql);
-            } else {
-                $consultaGestion = true;
-            }
-        }
-
-} 
-/*
-$idUsuario = BDConexion::getInstancia()->insert_id;
-foreach ($DatosFormulario["rol"] as $idRol) {
-    $query = "INSERT INTO usuario_rol "
-            . "VALUES ({$idUsuario}, {$idRol})";
-    $consulta = BDConexion::getInstancia()->query($query);
-    if (!$consulta) {
-        BDConexion::getInstancia()->rollback();
-        //arrojar una excepcion
-        die(BDConexion::getInstancia()->errno);
-    }
-}
-    */
-BDConexion::getInstancia()->commit();
-BDConexion::getInstancia()->autocommit(true);
 ?>
 <html>
     <head>
@@ -93,14 +88,14 @@ BDConexion::getInstancia()->autocommit(true);
                     <h3>Crear Usuario</h3>
                 </div>
                 <div class="card-body">
-                    <?php if ($consulta) { ?>
+                    <?php if ($resultado) { ?>
                         <div class="alert alert-success" role="alert">
-                            Operaci&oacute;n realizada con &eacute;xito.
+                            <?= $mensaje; ?>
                         </div>
                     <?php } ?>   
-                    <?php if (!$consulta) { ?>
+                    <?php if (!$resultado) { ?>
                         <div class="alert alert-danger" role="alert">
-                            Ha ocurrido un error.
+                            <?= $mensaje; ?>
                         </div>
                     <?php } ?>
                     <hr />
