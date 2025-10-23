@@ -346,82 +346,81 @@ trendChart.setOption({
         const dom = document.getElementById(`bars-${i}`);
         const chart = echarts.init(dom);
 
-        // Eje X usa IDs de métricas
-        const labels = it.metrics.map(m => m.id);
+  const labels = it.metrics.map(m => m.id);
+        const maxYBars = 120; // << limite fijo del eje Y
+
         const execData = it.metrics.map(m => ({
-          value: m.executed,
+          // pintar solo hasta el 120%
+          value: Math.min(m.executed, maxYBars),
           meta: m
         }));
         const colors = it.metrics.map(m => colorSemaforo(m.executed, m.min, m.max));
 
-        const maxYBars = Math.max(120, Math.ceil(Math.max(...it.metrics.map(m => Math.max(m.max, m.executed, timePct))) / 10) * 10);
 
         chart.setOption({
           tooltip: {
             trigger: "axis",
-            axisPointer: {
-              type: "shadow"
-            },
+            axisPointer: { type: "shadow" },
             formatter: params => {
               const p = params[0];
               const m = p.data.meta;
               return `<b>#${p.axisValue} - ${m.nombre}</b><br>
-          Rango objetivo: ${m.min}% – ${m.max}%<br>
-          Ejecutado: ${p.value}% (${m.executedReal} de ${m.planned})<br>
-          Progreso temporal: ${timePct.toFixed(1)}%`;
+                Rango objetivo: ${m.min}% – ${m.max}%<br>
+                Ejecutado: ${m.executed}% (${m.executedReal} de ${m.planned})<br>
+                Progreso temporal: ${timePct.toFixed(1)}%`;
             }
           },
-         grid: {
-    left: 44,   // antes 56 -> aprovecha más el lado izquierdo
-    right: 80,  // antes 24 -> deja lugar para el texto "Tiempo: xx%"
-    top: 20,
-    bottom: 64,
-    containLabel: true
-  },
-  xAxis: {
-    type: "category",
-    data: labels,
-    axisLabel: { formatter: v => `#${v}` }
-  },
-  yAxis: {
-    type: "value",
-    min: 0,
-    max: maxYBars,
-    axisLabel: {
-      formatter: '{value}%',
-      margin: 6    // antes valor por defecto (~8) -> gana espacio
-    }
-  },
-  series: [{
-    name: "Ejecutado",
-    type: "bar",
-    data: execData,
-    itemStyle: { color: p => colors[p.dataIndex] },
-    label: {
-      show: true,
-      position: "top",
-      formatter: p => {
-        const m = p.data.meta;
-        return `${p.value}%\n(${m.executedReal}/${m.planned})`;
-      }
-    },
-    barWidth: 28,
-markLine: {
-  symbol: "none",
-  label: {
-    show: true,
-    position: "end",                 // antes: "middle"
-    formatter: () => `Progreso\n${timePct.toFixed(1)}%`,  // arriba "Tiempo", abajo el porcentaje
-    color: "#000",
-    backgroundColor: "rgba(255,255,255,.6)",
-    padding: [2, 4],
-    offset: [8, 0]                   // opcional: separa del borde derecho
-  },
-  lineStyle: { color: "#000", width: 1.5, type: "dashed" },
-  data: [{ yAxis: timePct }]
-}
-  }]
-});
+          grid: {
+            left: 44,
+            right: 80,
+            top: 20,
+            bottom: 64,
+            containLabel: true
+          },
+          xAxis: {
+            type: "category",
+            data: labels,
+            axisLabel: { formatter: v => `#${v}` }
+          },
+          yAxis: {
+            type: "value",
+            min: 0,
+            max: maxYBars,                 // << eje Y fijo en 120%
+            axisLabel: { formatter: '{value}%', margin: 6 }
+          },
+          series: [{
+            name: "Ejecutado",
+            type: "bar",
+            data: execData,
+            itemStyle: { color: p => colors[p.dataIndex] },
+            label: {
+              show: true,
+              position: "top",
+              formatter: p => {
+                const m = p.data.meta;
+                // mostrar el valor real aunque se haya recortado
+                return `${m.executed}%\n(${m.executedReal}/${m.planned})`;
+              }
+            },
+            barWidth: 28,
+            markLine: {
+              symbol: "none",
+              label: {
+                show: true,
+                position: "end",
+                align: "left",
+                formatter: () => `Tiempo\n${timePct.toFixed(1)}%`, // arriba "Tiempo", abajo el %
+                color: "#000",
+                backgroundColor: "rgba(255,255,255,.6)",
+                padding: [2, 4],
+                offset: [8, 0]
+              },
+              lineStyle: { color: "#000", width: 1.5, type: "dashed" },
+              // si el tiempo supera 120, también se recorta visualmente
+              data: [{ yAxis: Math.min(timePct, maxYBars) }]
+            }
+          }]
+        });
 
         // Leyenda “ID = nombre” debajo del gráfico
         const legend = it.metrics
