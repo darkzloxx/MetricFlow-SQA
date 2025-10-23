@@ -371,61 +371,57 @@ trendChart.setOption({
           Progreso temporal: ${timePct.toFixed(1)}%`;
             }
           },
-          grid: {
-            left: 56,
-            right: 24,
-            top: 20,
-            bottom: 60,
-            containLabel: true
-          },
-          xAxis: {
-            type: "category",
-            data: labels,
-            axisLabel: {
-              formatter: v => `#${v}`
-            } // muestra #ID compacto
-          },
-          yAxis: {
-            type: "value",
-            min: 0,
-            max: maxYBars,
-            axisLabel: {
-              formatter: '{value}%'
-            }
-          },
-          series: [{
-            name: "Ejecutado",
-            type: "bar",
-            data: execData,
-            itemStyle: {
-              color: p => colors[p.dataIndex]
-            },
-            label: {
-              show: true,
-              position: "top",
-              formatter: p => {
-                const m = p.data.meta;
-                return `${p.value}%\n(${m.executedReal}/${m.planned})`;
-              }
-            },
-            barWidth: 28,
-            markLine: {
-              symbol: "none",
-              label: {
-                formatter: `Tiempo: ${timePct.toFixed(1)}%`,
-                color: "#000"
-              },
-              lineStyle: {
-                color: "#000",
-                width: 1.5,
-                type: "dashed"
-              },
-              data: [{
-                yAxis: timePct
-              }]
-            }
-          }]
-        });
+         grid: {
+    left: 44,   // antes 56 -> aprovecha más el lado izquierdo
+    right: 80,  // antes 24 -> deja lugar para el texto "Tiempo: xx%"
+    top: 20,
+    bottom: 64,
+    containLabel: true
+  },
+  xAxis: {
+    type: "category",
+    data: labels,
+    axisLabel: { formatter: v => `#${v}` }
+  },
+  yAxis: {
+    type: "value",
+    min: 0,
+    max: maxYBars,
+    axisLabel: {
+      formatter: '{value}%',
+      margin: 6    // antes valor por defecto (~8) -> gana espacio
+    }
+  },
+  series: [{
+    name: "Ejecutado",
+    type: "bar",
+    data: execData,
+    itemStyle: { color: p => colors[p.dataIndex] },
+    label: {
+      show: true,
+      position: "top",
+      formatter: p => {
+        const m = p.data.meta;
+        return `${p.value}%\n(${m.executedReal}/${m.planned})`;
+      }
+    },
+    barWidth: 28,
+markLine: {
+  symbol: "none",
+  label: {
+    show: true,
+    position: "end",                 // antes: "middle"
+    formatter: () => `Progreso\n${timePct.toFixed(1)}%`,  // arriba "Tiempo", abajo el porcentaje
+    color: "#000",
+    backgroundColor: "rgba(255,255,255,.6)",
+    padding: [2, 4],
+    offset: [8, 0]                   // opcional: separa del borde derecho
+  },
+  lineStyle: { color: "#000", width: 1.5, type: "dashed" },
+  data: [{ yAxis: timePct }]
+}
+  }]
+});
 
         // Leyenda “ID = nombre” debajo del gráfico
         const legend = it.metrics
