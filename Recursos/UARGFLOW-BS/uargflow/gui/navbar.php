@@ -37,12 +37,17 @@
                 </li>
                 <?php } ?>
                 <li class="nav-item">
-                    <a class="nav-link" href="../app/salir.php">
+                    <a class="nav-link" href="../app/modelos.php">
                         <span class="oi oi-book" /> 
                         Modelos
                     </a>
                 </li>
-                
+                <li class="nav-item">
+                    <a class="nav-link" href="../app/metricas.php">
+                        <span class="oi oi-signal" /> 
+                        Metricas
+                    </a>
+                </li>
                 <li class="nav-item">
                     <a class="nav-link" href="../app/salir.php">
                         <span class="oi oi-account-logout" /> 
