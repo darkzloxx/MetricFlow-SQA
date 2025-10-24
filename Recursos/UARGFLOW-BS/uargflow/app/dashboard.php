@@ -19,10 +19,20 @@ if ($resProyecto && $resProyecto->num_rows > 0) {
   $row = $resProyecto->fetch_assoc();
   $nombreProyecto = $row['nombre'];
   $estadoProyecto = $row['estado'];
-} else {
+} else { 
   $nombreProyecto = "Proyecto";
   $estadoProyecto = "Sin estado";
 }
+
+//cantidad de metricas con datos ejecutados
+$sqlMetricas = "SELECT COUNT(DISTINCT mi.id_metrica) AS total
+            FROM metrica_iteracion mi
+            JOIN iteracion i ON mi.id_iteracion = i.id_iteracion
+            JOIN fase f ON f.id_fase = i.id_fase
+            JOIN proyecto_fase pf ON pf.id_fase = f.id_fase
+            WHERE pf.id_proyecto = $idProyecto";
+$resMetricas = $conexion->query($sqlMetricas);
+$totalMetricas = ($resMetricas && $resMetricas->num_rows > 0) ? (int)$resMetricas->fetch_assoc()['total'] : 0;
 
 // Total iteraciones
 $sqlIter = "SELECT COUNT(*) AS total
@@ -33,7 +43,7 @@ $sqlIter = "SELECT COUNT(*) AS total
 $resIter = $conexion->query($sqlIter);
 $totalIteraciones = ($resIter && $resIter->num_rows > 0) ? (int)$resIter->fetch_assoc()['total'] : 0;
 
-// Desviación promedio
+// Desviación promedio calculado como AVG de |(Ejecutado - Planificado) / Planificado * 100|
 $sqlDesv = "SELECT AVG(ABS(((mi.valor_ejecutado - mi.valor_planificado)/NULLIF(mi.valor_planificado,0))*100)) AS desv
             FROM metrica_iteracion mi
             JOIN iteracion i ON mi.id_iteracion = i.id_iteracion
@@ -43,9 +53,8 @@ $sqlDesv = "SELECT AVG(ABS(((mi.valor_ejecutado - mi.valor_planificado)/NULLIF(m
 $resDesv = $conexion->query($sqlDesv);
 $desviacionPromedio = ($resDesv && $resDesv->num_rows > 0) ? round((float)$resDesv->fetch_assoc()['desv'], 2) : 0.0;
 
-// ============================
+
 // Datos para los gráficos
-// ============================
 $query = "
 SELECT 
     i.id_iteracion,
@@ -68,7 +77,7 @@ ORDER BY f.id_fase, i.numero_iteracion, m.id_metrica;
 ";
 $result = $conexion->query($query);
 
-// Armar estructura DATA para ECharts
+// Armar estructura para ECharts
 $iterMap = [];
 if ($result) {
   while ($r = $result->fetch_assoc()) {
@@ -89,7 +98,7 @@ if ($result) {
     $pct  = $plan > 0 ? round(($ejec / $plan) * 100, 2) : 0;
 
     $iterMap[$key]["metrics"][] = [
-      "id"           => (int)$r['id_metrica'], // << agregado (usaremos el ID en el eje X de barras)
+      "id"           => (int)$r['id_metrica'], // agregado (ID en el eje X de barras)
       "nombre"       => $r['metrica'],
       "executed"     => $pct,
       "planned"      => $r['planificado'],
@@ -147,7 +156,7 @@ $DATA = array_values($iterMap);
   </nav>
 
   <div class="container my-4">
-    <!-- Resumen -->
+    <!-- Nombre y estado de proyecto -->
     <div class="row g-3 mb-3">
       <div class="col-12 col-md-4">
         <div class="card h-100 text-center">
@@ -158,11 +167,11 @@ $DATA = array_values($iterMap);
           </div>
         </div>
       </div>
-      <div class="col-6 col-md-4">
+           <div class="col-6 col-md-4">
         <div class="card h-100 text-center">
           <div class="card-body">
-            <h6 class="mb-1">Iteraciones</h6>
-            <div class="display-6"><?= $totalIteraciones ?></div>
+            <h6 class="mb-1">Métricas utilizadas</h6>
+            <div class="display-6"><?= $totalMetricas ?></div>
           </div>
         </div>
       </div>
