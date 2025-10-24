@@ -19,7 +19,7 @@ if ($resProyecto && $resProyecto->num_rows > 0) {
   $row = $resProyecto->fetch_assoc();
   $nombreProyecto = $row['nombre'];
   $estadoProyecto = $row['estado'];
-} else { 
+} else {
   $nombreProyecto = "Proyecto";
   $estadoProyecto = "Sin estado";
 }
@@ -93,10 +93,11 @@ if ($result) {
         "metrics"   => []
       ];
     }
-    $plan = (float)$r['planificado'];
-    $ejec = (float)$r['ejecutado'];
-    $pct  = $plan > 0 ? round(($ejec / $plan) * 100, 2) : 0;
-
+    $plan = is_null($r['planificado']) ? 0.0 : (float)$r['planificado'];
+    $ejec = is_null($r['ejecutado']) ? 0.0 : (float)$r['ejecutado'];
+    $pct = $plan > 0
+      ? round(($ejec / $plan) * 100, 2)
+      : ($ejec > 0 ? round($ejec * 100, 2) : 0);
     $iterMap[$key]["metrics"][] = [
       "id"           => (int)$r['id_metrica'], // agregado (ID en el eje X de barras)
       "nombre"       => $r['metrica'],
@@ -167,7 +168,7 @@ $DATA = array_values($iterMap);
           </div>
         </div>
       </div>
-           <div class="col-6 col-md-4">
+      <div class="col-6 col-md-4">
         <div class="card h-100 text-center">
           <div class="card-body">
             <h6 class="mb-1">Métricas utilizadas</h6>
@@ -211,14 +212,19 @@ $DATA = array_values($iterMap);
       return Math.min(Math.max(x, a), b);
     }
 
-    function colorSemaforo(value, min, max) {
-      const margin = Math.max(2, (max - min) * 0.05);
-      const inRange = value >= min && value <= max;
-      const near = (value >= min && value <= min + margin) || (value <= max && value >= max - margin);
-      if (inRange) return near ? "#ffc107" : "#28a745";
-      return "#dc3545";
+    function colorSemaforo(valuePct, minPct, maxPct) {
+      // valuePct: % de cumplimiento calculado (ejecutado/planificado*100)
+      // minPct:  100 - umbral (límite de desviación)
+      // maxPct:  100 + umbral (no se usa para el semáforo del flujo)
+      valuePct = Number(valuePct) || 0;
+      minPct = Number(minPct) || 0;
+
+      if (valuePct >= 100) return "#28a745"; // Verde: ejecutado >= planificado
+      if (valuePct >= minPct) return "#ffc107"; // Amarillo: dentro del límite de desviación
+      return "#dc3545"; // Rojo: fuera del límite
     }
 
+    // Porcentaje de tiempo transcurrido entre inicio y fin
     function pctTiempoIter(inicio, fin) {
       const s = new Date(inicio).getTime();
       const e = new Date(fin).getTime();
@@ -258,80 +264,113 @@ $DATA = array_values($iterMap);
       }
       resizeTrend();
       window.addEventListener("resize", resizeTrend);
-
-const lineSeries = METRIC_KEYS.map((name, idx) => ({
-  name,
-  type: "line",
-  smooth: false,
-  showSymbol: true,
-  lineStyle: {
-    width: 2,
-    color: palette[idx % palette.length]
-  },
-  itemStyle: {
-    color: palette[idx % palette.length]
-  },
-  // << destacar la serie activa y atenuar las demás
-  emphasis: { focus: "series" },
-  blur: {
-    lineStyle: { opacity: 0.25 },
-    itemStyle: { opacity: 0.25 }
-  },
-  data: DATA.map(it => {
-    const m = it.metrics.find(mm => mm.nombre === name);
-    return m ? m.executed : 0;
-  })
-}));
+      const lineSeries = METRIC_KEYS.map((name, idx) => ({
+        name,
+        type: "line",
+        smooth: false,
+        showSymbol: true,
+        lineStyle: {
+          width: 2,
+          color: palette[idx % palette.length]
+        },
+        itemStyle: {
+          color: palette[idx % palette.length]
+        },
+        emphasis: {
+          focus: "series"
+        },
+        blur: {
+          lineStyle: {
+            opacity: 0.25
+          },
+          itemStyle: {
+            opacity: 0.25
+          }
+        },
+        data: DATA.map(it => {
+          const m = it.metrics.find(mm => mm.nombre === name);
+          return m ? {
+            value: m.executed,
+            meta: {
+              nombre: m.nombre,
+              executedReal: m.executedReal,
+              planned: m.planned
+            }
+          } : {
+            value: 0,
+            meta: null
+          };
+        })
+      }));
 
       const maxYTrend = Math.max(
         120,
         Math.ceil(Math.max(...DATA.flatMap(it => it.metrics.map(m => Math.max(m.max, m.executed)))) / 10) * 10
       );
 
-
-trendChart.setOption({
-  tooltip: {
-    trigger: "axis",
-    valueFormatter: v => `${v}%`
-  },
-  legend: {
-    data: METRIC_KEYS,
-    top: 8,              // << bajar un poco la leyenda
-    itemGap: 18
-  },
-  grid: {
-    left: 48,
-    right: 84,
-    top: 88,             // << más margen superior para que no toque la leyenda
-    bottom: 40,
-    containLabel: true
-  },
-  xAxis: {
-    type: "category",
-    data: iterLabels
-  },
-  yAxis: {
-    type: "value",
-    min: 0,
-    max: maxYTrend,
-    axisLabel: { formatter: '{value}%' }
-  },
-  series: [
-    ...lineSeries,
-    {
-      name: "Referencia 100%",
-      type: "line",
-      silent: true,
-      symbol: "none",
-      markLine: {
-        symbol: "none",
-        lineStyle: { type: "dashed", color: "#6c757d" },
-        data: [{ yAxis: 100 }]
-      }
-    }
-  ]
-});
-
+      trendChart.setOption({
+        tooltip: {
+          trigger: "axis",
+          formatter: function(params) {
+            const idx = params[0]?.dataIndex ?? 0;
+            const iter = iterLabels[idx] || "";
+            let html = `<b>${iter}</b><br/>`;
+            params.forEach(p => {
+              if (p.seriesName === "Referencia 100%") return;
+              const meta = p.data?.meta;
+              const pct = typeof p.value === "number" ? p.value : (p.data?.value ?? 0);
+              const ejec = meta?.executedReal ?? "—";
+              const plan = meta?.planned ?? "—";
+              const dot = `<span style="display:inline-block;margin-right:6px;width:10px;height:10px;background:${p.color};border-radius:50%"></span>`;
+              html += `${dot}${p.seriesName}: ${pct}% ${meta ? `(${ejec}/${plan})` : ""}<br/>`;
+            });
+            return html;
+          }
+        },
+        legend: {
+          data: METRIC_KEYS,
+          top: 8,
+          itemGap: 18
+        },
+        grid: {
+          left: 48,
+          right: 84,
+          top: 88,
+          bottom: 40,
+          containLabel: true
+        },
+        xAxis: {
+          type: "category",
+          data: iterLabels
+        },
+        yAxis: {
+          type: "value",
+          min: 0,
+          max: maxYTrend,
+          axisLabel: {
+            formatter: '{value}%'
+          }
+        },
+        series: [
+          ...lineSeries,
+          {
+            name: "Referencia 100%",
+            type: "line",
+            silent: true,
+            symbol: "none",
+            markLine: {
+              symbol: "none",
+              lineStyle: {
+                type: "dashed",
+                color: "#6c757d"
+              },
+              data: [{
+                yAxis: 100
+              }]
+            }
+          }
+        ]
+      });
       // === BARRAS POR ITERACIÓN ===
       const row = document.getElementById("barsRow");
 
@@ -355,21 +394,35 @@ trendChart.setOption({
         const dom = document.getElementById(`bars-${i}`);
         const chart = echarts.init(dom);
 
-  const labels = it.metrics.map(m => m.id);
-        const maxYBars = 120; // << limite fijo del eje Y
-
+        const labels = it.metrics.map(m => m.id);
+        const maxYBars = 120; // pintar solo hasta el 120%
         const execData = it.metrics.map(m => ({
-          // pintar solo hasta el 120%
           value: Math.min(m.executed, maxYBars),
           meta: m
         }));
         const colors = it.metrics.map(m => colorSemaforo(m.executed, m.min, m.max));
 
+        // Datos para marcar overflow (barras que superan maxYBars)
+        const overflowData = it.metrics.map((m, idx) =>
+          m.executed > maxYBars ?
+          {
+            value: maxYBars,
+            meta: m,
+            itemStyle: {
+              color: colors[idx]
+            }
+          } :
+          {
+            value: null
+          }
+        );
 
         chart.setOption({
           tooltip: {
             trigger: "axis",
-            axisPointer: { type: "shadow" },
+            axisPointer: {
+              type: "shadow"
+            },
             formatter: params => {
               const p = params[0];
               const m = p.data.meta;
@@ -383,25 +436,33 @@ trendChart.setOption({
             left: 44,
             right: 80,
             top: 20,
-            bottom: 64,
+            bottom: 28, // antes: 64 (reduce espacio bajo el eje X)
             containLabel: true
           },
           xAxis: {
             type: "category",
             data: labels,
-            axisLabel: { formatter: v => `#${v}` }
+            axisLabel: {
+              formatter: v => `#${v}`,
+              margin: 2 // antes: 6 (acerca las etiquetas al eje)
+            }
           },
           yAxis: {
             type: "value",
             min: 0,
-            max: maxYBars,                 // << eje Y fijo en 120%
-            axisLabel: { formatter: '{value}%', margin: 6 }
+            max: maxYBars, // << eje Y fijo en 120%
+            axisLabel: {
+              formatter: '{value}%',
+              margin: 6
+            }
           },
           series: [{
             name: "Ejecutado",
             type: "bar",
             data: execData,
-            itemStyle: { color: p => colors[p.dataIndex] },
+            itemStyle: {
+              color: p => colors[p.dataIndex]
+            },
             label: {
               show: true,
               position: "top",
@@ -424,9 +485,15 @@ trendChart.setOption({
                 padding: [2, 4],
                 offset: [8, 0]
               },
-              lineStyle: { color: "#000", width: 1.5, type: "dashed" },
+              lineStyle: {
+                color: "#000",
+                width: 1.5,
+                type: "dashed"
+              },
               // si el tiempo supera 120, también se recorta visualmente
-              data: [{ yAxis: Math.min(timePct, maxYBars) }]
+              data: [{
+                yAxis: Math.min(timePct, maxYBars)
+              }]
             }
           }]
         });
