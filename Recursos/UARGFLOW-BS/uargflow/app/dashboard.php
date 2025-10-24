@@ -95,18 +95,42 @@ if ($result) {
     }
     $plan = is_null($r['planificado']) ? 0.0 : (float)$r['planificado'];
     $ejec = is_null($r['ejecutado']) ? 0.0 : (float)$r['ejecutado'];
-    $pct = $plan > 0
-      ? round(($ejec / $plan) * 100, 2)
-      : ($ejec > 0 ? round($ejec * 100, 2) : 0);
+    if ($plan == 0 && $ejec == 0) {
+      // Nada planificado y nada hecho
+      $pct = 100;
+      $nota = "Sin planificación";
+      $extra = 0;
+    } elseif ($plan == 0 && $ejec > 0) {
+      // No se planificó nada pero se hizo trabajo
+      $pct = 100;
+      $nota = "No planificado (+{$ejec})";
+      $extra = $ejec;
+    } elseif ($ejec > $plan) {
+      // Se hizo más de lo planificado
+      $pct = round(($ejec / $plan) * 100, 2);
+      $nota = "Supera planificado (+" . ($ejec - $plan) . ")";
+      $extra = $ejec - $plan;
+    } else {
+      // Caso normal
+      $pct = round(($ejec / $plan) * 100, 2);
+      $nota = "";
+      $extra = 0;
+    }
+
+    // “Cuánto más que lo planificado” (si plan=0, es todo ejecutado)
+    $extra = $plan > 0 ? max(0, $ejec - $plan) : $ejec;
+
     $iterMap[$key]["metrics"][] = [
-      "id"           => (int)$r['id_metrica'], // agregado (ID en el eje X de barras)
+      "id"           => (int)$r['id_metrica'],
       "nombre"       => $r['metrica'],
       "executed"     => $pct,
       "planned"      => $r['planificado'],
       "executedReal" => $r['ejecutado'],
       "unit"         => "u",
       "min"          => max(0, 100 - (float)$r['umbral']),
-      "max"          => 100 + (float)$r['umbral']
+      "max"          => 100 + (float)$r['umbral'],
+      "nota"         => $nota,   // 👈 agregado
+      "extra"        => $extra   // 👈 agregado
     ];
   }
 }
@@ -135,6 +159,28 @@ $DATA = array_values($iterMap);
     .chart {
       width: 100%;
       height: 360px;
+    }
+
+    /* Leyenda de colores (semáforo) */
+    .legend-colors {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .legend-item {
+      font-size: 0.875rem;
+      color: #6c757d;
+    }
+
+    .legend-dot {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      margin-right: 6px;
+      border-radius: 2px;
+      border: 1px solid rgba(0, 0, 0, .2);
+      vertical-align: -2px;
     }
 
     @media (max-width: 576px) {
@@ -294,7 +340,10 @@ $DATA = array_values($iterMap);
             meta: {
               nombre: m.nombre,
               executedReal: m.executedReal,
-              planned: m.planned
+              planned: m.planned,
+              unit: m.unit,
+              noPlan: m.noPlan,
+              extra: m.extra
             }
           } : {
             value: 0,
@@ -322,7 +371,15 @@ $DATA = array_values($iterMap);
               const ejec = meta?.executedReal ?? "—";
               const plan = meta?.planned ?? "—";
               const dot = `<span style="display:inline-block;margin-right:6px;width:10px;height:10px;background:${p.color};border-radius:50%"></span>`;
-              html += `${dot}${p.seriesName}: ${pct}% ${meta ? `(${ejec}/${plan})` : ""}<br/>`;
+              let detalle = "";
+              if (meta) {
+                if (meta.noPlan && ejec > 0) {
+                  detalle = `( +${meta.extra} ${meta.unit || 'u'} sin plan )`;
+                } else {
+                  detalle = `(${ejec} / ${plan})`;
+                }
+              }
+              html += `${dot}${p.seriesName}: ${pct}% ${detalle}<br/>`;
             });
             return html;
           }
@@ -385,8 +442,9 @@ $DATA = array_values($iterMap);
         <small class="text-muted">Del ${it.inicio} al ${it.fin}</small>
       </div>
       <div class="card-body">
-        <div id="bars-${i}" class="chart"></div>
-        <div id="legend-${i}" class="small text-muted mt-2"></div>
+        <div id="legend-colors-${i}" class="small text-muted mb-2"></div>  <!-- colores arriba -->
+        <div id="bars-${i}" class="chart"></div>                           <!-- gráfico -->
+        <div id="legend-metrics-${i}" class="small text-muted mt-2"></div> <!-- métricas abajo -->
       </div>
     </div>`;
         row.appendChild(col);
@@ -395,27 +453,39 @@ $DATA = array_values($iterMap);
         const chart = echarts.init(dom);
 
         const labels = it.metrics.map(m => m.id);
-        const maxYBars = 120; // pintar solo hasta el 120%
+        const maxYBars = 120; // límite visual del eje Y
         const execData = it.metrics.map(m => ({
           value: Math.min(m.executed, maxYBars),
           meta: m
         }));
         const colors = it.metrics.map(m => colorSemaforo(m.executed, m.min, m.max));
 
-        // Datos para marcar overflow (barras que superan maxYBars)
-        const overflowData = it.metrics.map((m, idx) =>
-          m.executed > maxYBars ?
-          {
-            value: maxYBars,
-            meta: m,
-            itemStyle: {
-              color: colors[idx]
-            }
-          } :
-          {
-            value: null
+        // === 🔺 Crear puntos de marca (triángulos) para valores que superan 120% ===
+        const markPoints = [];
+        it.metrics.forEach((m, idx) => {
+          if (m.executed > maxYBars) {
+            markPoints.push({
+              symbol: 'triangle',
+              symbolSize: 18,
+              symbolOffset: [0, -5],
+              itemStyle: {
+                color: colors[idx]
+              },
+              xAxis: idx,
+              //se dibuja a la mitad del maximo para que no quede tan alto
+              y: maxYBars/2, 
+              label: {
+                show: true,
+                formatter: `▲ ${m.executed}%`,
+                position: 'top',
+                color: '#000',
+                fontWeight: 'bold'
+              }
+            });
           }
-        );
+        });
+
+
 
         chart.setOption({
           tooltip: {
@@ -426,17 +496,22 @@ $DATA = array_values($iterMap);
             formatter: params => {
               const p = params[0];
               const m = p.data.meta;
-              return `<b>#${p.axisValue} - ${m.nombre}</b><br>
-                Rango objetivo: ${m.min}% – ${m.max}%<br>
-                Ejecutado: ${m.executed}% (${m.executedReal} de ${m.planned})<br>
-                Progreso temporal: ${timePct.toFixed(1)}%`;
+              let html = `<b>#${p.axisValue} - ${m.nombre}</b><br>`;
+              html += `Rango objetivo: ${m.min}% – ${m.max}%<br>`;
+              html += `Ejecutado: ${m.executed}% (${m.executedReal} de ${m.planned})<br>`;
+              if (m.planned === 0 && m.executedReal > 0) {
+                html += `<span style="color:#17a2b8;font-weight:bold;">No planificado (+${m.executedReal})</span><br>`;
+              }
+              html += `Progreso temporal: ${timePct.toFixed(1)}%`;
+              return html;
             }
+
           },
           grid: {
             left: 44,
             right: 80,
             top: 20,
-            bottom: 28, // antes: 64 (reduce espacio bajo el eje X)
+            bottom: 28,
             containLabel: true
           },
           xAxis: {
@@ -444,68 +519,116 @@ $DATA = array_values($iterMap);
             data: labels,
             axisLabel: {
               formatter: v => `#${v}`,
-              margin: 2 // antes: 6 (acerca las etiquetas al eje)
+              margin: 2
             }
           },
           yAxis: {
             type: "value",
             min: 0,
-            max: maxYBars, // << eje Y fijo en 120%
+            max: maxYBars,
             axisLabel: {
               formatter: '{value}%',
               margin: 6
             }
           },
-          series: [{
-            name: "Ejecutado",
-            type: "bar",
-            data: execData,
-            itemStyle: {
-              color: p => colors[p.dataIndex]
-            },
-            label: {
-              show: true,
-              position: "top",
-              formatter: p => {
-                const m = p.data.meta;
-                // mostrar el valor real aunque se haya recortado
-                return `${m.executed}%\n(${m.executedReal}/${m.planned})`;
-              }
-            },
-            barWidth: 28,
-            markLine: {
-              symbol: "none",
-              label: {
-                show: true,
-                position: "end",
-                align: "left",
-                formatter: () => `Tiempo\n${timePct.toFixed(1)}%`, // arriba "Tiempo", abajo el %
-                color: "#000",
-                backgroundColor: "rgba(255,255,255,.6)",
-                padding: [2, 4],
-                offset: [8, 0]
-              },
-              lineStyle: {
-                color: "#000",
-                width: 1.5,
-                type: "dashed"
-              },
-              // si el tiempo supera 120, también se recorta visualmente
-              data: [{
-                yAxis: Math.min(timePct, maxYBars)
-              }]
-            }
-          }]
-        });
+         series: [
+  {
+    name: "Ejecutado",
+    type: "bar",
+    data: execData,
+    itemStyle: { color: p => colors[p.dataIndex] },
+    label: {
+      show: true,
+      position: "top",
+      formatter: p => {
+        const m = p.data.meta;
+        return `${m.executed}%\n(${m.executedReal}/${m.planned})`;
+      }
+    },
+    barWidth: 28,
+    markLine: {
+      symbol: "none",
+      label: {
+        show: true,
+        position: "end",
+        align: "left",
+        formatter: () => `Tiempo\n${timePct.toFixed(1)}%`,
+        color: "#000",
+        backgroundColor: "rgba(255,255,255,.6)",
+        padding: [2, 4],
+        offset: [8, 0]
+      },
+      lineStyle: { color: "#000", width: 1.5, type: "dashed" },
+      data: [{ yAxis: Math.min(timePct, maxYBars) }]
+    },
+    markPoint: { data: markPoints }
+  },
 
-        // Leyenda “ID = nombre” debajo del gráfico
-        const legend = it.metrics
+  // 🔸 LÍNEAS DE UMBRAL (encima de las barras)
+  {
+    name: "Límite de desviación",
+    type: "custom",
+    silent: true,
+    tooltip: { show: false },
+    z: 999, // 👈 muy alto para forzar que se pinte encima
+    renderItem: function(params, api) {
+      const idx = api.value(0);
+      const m = it.metrics[idx];
+      if (!m) return null;
+
+      const yPx = api.coord([idx, m.min])[1];
+      const xCenter = api.coord([idx, m.min])[0];
+      const half = (api.size([1, 0])[0] || 30) * 0.32;
+      const xStart = xCenter - half;
+      const xEnd = xCenter + half;
+
+      return {
+        type: "line",
+        shape: { x1: xStart, y1: yPx, x2: xEnd, y2: yPx },
+        style: {
+          stroke: "#000", // negro
+          lineWidth: 2
+        },
+        z: 9999, // 🔝 asegura que quede sobre la barra
+        textContent: {
+          style: {
+            text: `${m.min}%`,
+            fill: "#000",
+            fontWeight: "bold",
+            fontSize: 11,
+            align: "center",
+            backgroundColor: "rgba(255,255,255,0.85)",
+            padding: [1, 3],
+            borderRadius: 2
+          }
+        },
+        textConfig: { position: "top" }
+      };
+    },
+    data: it.metrics.map((_, idx) => idx)
+  }
+]
+
+
+        });
+        // Leyenda de colores (arriba)
+        const legendColorsHtml = `
+    <div class="legend-colors">
+      <span class="legend-item"><span class="legend-dot" style="background:#28a745;"></span>Ejecutado ≥ Planificado</span>
+      <span class="legend-item"><span class="legend-dot" style="background:#ffc107;"></span>Dentro del límite de desviación</span>
+      <span class="legend-item"><span class="legend-dot" style="background:#dc3545;"></span>Debajo del límite de desviación</span>
+    </div>
+  `;
+        document.getElementById(`legend-colors-${i}`).innerHTML = legendColorsHtml;
+
+        // Lista de métricas (abajo)
+        const metricsHtml = it.metrics
           .map(m => `<span class="me-3"><b>#${m.id}</b> = ${m.nombre}</span>`)
           .join(' ');
-        document.getElementById(`legend-${i}`).innerHTML = legend;
+        document.getElementById(`legend-metrics-${i}`).innerHTML = metricsHtml;
       });
 
-      // Redimensionar tras ajustar ancho
+      // Redimensionamiento y actualización de gráficos
       setTimeout(() => {
         try {
           trendChart.resize();
@@ -513,10 +636,8 @@ $DATA = array_values($iterMap);
         window.dispatchEvent(new Event('resize'));
       }, 200);
 
-      // Forzar resize
       setTimeout(() => window.dispatchEvent(new Event('resize')), 500);
-    }
-
+    };
     document.addEventListener("DOMContentLoaded", initDashboard);
   </script>
 </body>
