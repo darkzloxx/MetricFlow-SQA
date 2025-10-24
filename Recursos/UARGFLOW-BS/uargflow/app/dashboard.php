@@ -172,8 +172,7 @@ $DATA = array_values($iterMap);
       font-size: 0.875rem;
       color: #6c757d;
     }
-
-    .legend-dot {
+ .legend-dot {
       display: inline-block;
       width: 12px;
       height: 12px;
@@ -182,7 +181,15 @@ $DATA = array_values($iterMap);
       border: 1px solid rgba(0, 0, 0, .2);
       vertical-align: -2px;
     }
-
+/* Línea negra para el umbral en la leyenda */
+    .legend-line {
+      display: inline-block;
+      width: 22px;
+      height: 0;
+      margin-right: 6px;
+      border-top: 2px solid #000; /* negra */
+      vertical-align: 2px;
+    }
     @media (max-width: 576px) {
       .chart {
         height: 300px;
@@ -408,25 +415,31 @@ $DATA = array_values($iterMap);
             formatter: '{value}%'
           }
         },
-        series: [
-          ...lineSeries,
-          {
-            name: "Referencia 100%",
-            type: "line",
-            silent: true,
-            symbol: "none",
-            markLine: {
-              symbol: "none",
-              lineStyle: {
-                type: "dashed",
-                color: "#6c757d"
-              },
-              data: [{
-                yAxis: 100
-              }]
-            }
-          }
-        ]
+     series: [
+  ...lineSeries,
+  {
+    name: "Referencia 100%",
+    type: "line",
+    silent: true,
+    symbol: "none",
+    markLine: {
+      symbol: "none",
+      label: {
+        show: true,
+        position: "end",
+        formatter: "100%",             // <-- se muestra como 100%
+        color: "#6c757d",
+        backgroundColor: "rgba(255,255,255,.6)",
+        padding: [2, 4]
+      },
+      lineStyle: {
+        type: "dashed",
+        color: "#6c757d"
+      },
+      data: [{ yAxis: 100 }]           // <-- debe quedar numérico
+    }
+  }
+]
       });
       // === BARRAS POR ITERACIÓN ===
       const row = document.getElementById("barsRow");
@@ -497,7 +510,7 @@ $DATA = array_values($iterMap);
               const p = params[0];
               const m = p.data.meta;
               let html = `<b>#${p.axisValue} - ${m.nombre}</b><br>`;
-              html += `Rango objetivo: ${m.min}% – ${m.max}%<br>`;
+              html += `Límite Desviación: ${m.min}%<br>`;
               html += `Ejecutado: ${m.executed}% (${m.executedReal} de ${m.planned})<br>`;
               if (m.planned === 0 && m.executedReal > 0) {
                 html += `<span style="color:#17a2b8;font-weight:bold;">No planificado (+${m.executedReal})</span><br>`;
@@ -565,48 +578,56 @@ $DATA = array_values($iterMap);
   },
 
   // 🔸 LÍNEAS DE UMBRAL (encima de las barras)
-  {
-    name: "Límite de desviación",
-    type: "custom",
-    silent: true,
-    tooltip: { show: false },
-    z: 999, // 👈 muy alto para forzar que se pinte encima
-    renderItem: function(params, api) {
-      const idx = api.value(0);
-      const m = it.metrics[idx];
-      if (!m) return null;
+ {
+  name: "Límite de desviación",
+  type: "custom",
+  silent: true,
+  tooltip: { show: false },
+  z: 999, // asegura que se pinte sobre las barras
+  renderItem: function(params, api) {
+    const idx = api.value(0);
+    const m = it.metrics[idx];
+    if (!m) return null;
 
-      const yPx = api.coord([idx, m.min])[1];
-      const xCenter = api.coord([idx, m.min])[0];
-      const half = (api.size([1, 0])[0] || 30) * 0.32;
-      const xStart = xCenter - half;
-      const xEnd = xCenter + half;
+    // Coordenadas base de la línea
+    const yPx = api.coord([idx, m.min])[1];
+    const xCenter = api.coord([idx, m.min])[0];
+    const half = (api.size([1, 0])[0] || 30) * 0.32;
+    const xStart = xCenter - half;
+    const xEnd = xCenter + half;
 
-      return {
-        type: "line",
-        shape: { x1: xStart, y1: yPx, x2: xEnd, y2: yPx },
+    // ✅ Detección de superposición
+    const diff = Math.abs(m.executed - m.min);
+    const close = diff < 5; // Si están a menos de 5% de diferencia
+    const textOffsetY = close ? 14 : -4; // Si están muy cerca, movemos la etiqueta hacia abajo
+
+    return {
+      type: "line",
+      shape: { x1: xStart, y1: yPx, x2: xEnd, y2: yPx },
+      style: {
+        stroke: "#000",           // línea negra
+        lineWidth: 2
+      },
+      z: 9999,                    // asegura que quede por encima de las barras
+      textContent: {
         style: {
-          stroke: "#000", // negro
-          lineWidth: 2
-        },
-        z: 9999, // 🔝 asegura que quede sobre la barra
-        textContent: {
-          style: {
-            text: `${m.min}%`,
-            fill: "#000",
-            fontWeight: "bold",
-            fontSize: 11,
-            align: "center",
-            backgroundColor: "rgba(255,255,255,0.85)",
-            padding: [1, 3],
-            borderRadius: 2
-          }
-        },
-        textConfig: { position: "top" }
-      };
-    },
-    data: it.metrics.map((_, idx) => idx)
-  }
+          text: `${m.min}%`,
+          fill: "#000",
+          fontWeight: "bold",
+          fontSize: 11,
+          align: "center",
+          backgroundColor: "rgba(255,255,255,0.85)",
+          padding: [1, 3],
+          borderRadius: 2
+        }
+      },
+      // 👇 Ajuste dinámico: si está cerca, se mueve hacia abajo
+      textConfig: { position: "top", offset: [0, textOffsetY] }
+    };
+  },
+  data: it.metrics.map((_, idx) => idx)
+}
+
 ]
 
 
@@ -617,6 +638,7 @@ $DATA = array_values($iterMap);
       <span class="legend-item"><span class="legend-dot" style="background:#28a745;"></span>Ejecutado ≥ Planificado</span>
       <span class="legend-item"><span class="legend-dot" style="background:#ffc107;"></span>Dentro del límite de desviación</span>
       <span class="legend-item"><span class="legend-dot" style="background:#dc3545;"></span>Debajo del límite de desviación</span>
+      <span class="legend-item"><span class="legend-line"></span>Límite de desviación</span> <!-- línea negra -->
     </div>
   `;
         document.getElementById(`legend-colors-${i}`).innerHTML = legendColorsHtml;
