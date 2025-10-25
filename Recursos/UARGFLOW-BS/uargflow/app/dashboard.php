@@ -629,29 +629,39 @@ $DATA = array_values($iterMap);
           },
 
           grid: {
-            left: 44,
-            right: 110, // más espacio a la derecha
-            top: 20,
-            bottom: 28,
-            containLabel: true
-          },
+  left: 56,          // antes 44
+  right: 110,
+  top: 20,
+  bottom: 44,        // antes 28
+  containLabel: true
+},
           xAxis: {
             type: "category",
             data: labels,
+            name: "Métricas",
+            nameLocation: "middle",
+            nameGap: 28,
+            nameTextStyle: {
+              fontSize: 12,
+              fontWeight: 600,
+              color: "#495057"
+            },
             axisLabel: {
               formatter: v => `#${v}`,
               margin: 2
             }
           },
-          yAxis: {
-            type: "value",
-            min: 0,
-            max: maxYBars,
-            axisLabel: {
-              formatter: '{value}%',
-              margin: 6
-            }
-          },
+        yAxis: {
+  type: "value",
+  min: 0,
+  max: maxYBars,
+  name: "Cumplimiento (%)",
+  nameLocation: "middle",
+  nameGap: 46,       // distancia del eje
+  nameRotate: 90,    // rotado
+  nameTextStyle: { fontSize: 12, fontWeight: 600, color: "#495057" },
+  axisLabel: { formatter: '{value}%', margin: 6 }
+},
           series: [
             // === BARRAS PRINCIPALES ===
             {
@@ -922,34 +932,39 @@ $DATA = array_values($iterMap);
                 const m = it.metrics[idx];
                 if (!m) return null;
 
-               
-    const barWidth = api.size([1, 0])[0] * 0.5;
-    const base = api.coord([idx, 100]); // base en 100%
 
-    // === CASO 1: SIN PLANIFICACIÓN (plan=0 y ejecutado>0)
-    // Azul infinito — sube más allá del 120% (representa trabajo fuera del plan)
-    if (m.planned === 0 && m.executedReal > 0) {
-      const yTop = api.coord([idx, 160])[1]; // "infinito" visual (160%)
-      const height = base[1] - yTop;
-      return {
-        type: "rect",
-        shape: {
-          x: base[0] - barWidth / 2,
-          y: yTop,
-          width: barWidth,
-          height: height
-        },
-        enterFrom: { shape: { y: base[1], height: 0 } },
-        transition: ["shape"],
-        style: {
-          fill: "#007bff",
-          opacity: 0.35,
-          stroke: "#0056b3",
-          lineWidth: 1
-        },
-        z: 25
-      };
-    }
+                const barWidth = api.size([1, 0])[0] * 0.5;
+                const base = api.coord([idx, 100]); // base en 100%
+
+                // === CASO 1: SIN PLANIFICACIÓN (plan=0 y ejecutado>0)
+                // Azul infinito — sube más allá del 120% (representa trabajo fuera del plan)
+                if (m.planned === 0 && m.executedReal > 0) {
+                  const yTop = api.coord([idx, 160])[1]; // "infinito" visual (160%)
+                  const height = base[1] - yTop;
+                  return {
+                    type: "rect",
+                    shape: {
+                      x: base[0] - barWidth / 2,
+                      y: yTop,
+                      width: barWidth,
+                      height: height
+                    },
+                    enterFrom: {
+                      shape: {
+                        y: base[1],
+                        height: 0
+                      }
+                    },
+                    transition: ["shape"],
+                    style: {
+                      fill: "#007bff",
+                      opacity: 0.35,
+                      stroke: "#0056b3",
+                      lineWidth: 1
+                    },
+                    z: 25
+                  };
+                }
 
 
                 //CASO 2: se superó el 100% (normal, color verde)
