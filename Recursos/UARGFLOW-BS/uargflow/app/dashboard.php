@@ -2,7 +2,7 @@
 // ============================
 // Conexión a MariaDB
 // ============================
-$conexion = new mysqli("localhost", "root", "", "bd", 3308);
+$conexion = new mysqli("localhost", "root", "", "bd_codevit", 3308);
 if ($conexion->connect_error) {
   die("Error al conectar: " . $conexion->connect_error);
 }
