@@ -98,12 +98,12 @@ if ($result) {
     if ($plan == 0 && $ejec == 0) {
       // Nada planificado y nada hecho
       $pct = 100;
-      $nota = "Sin planificación";
+      $nota = "Se cumplió";
       $extra = 0;
     } elseif ($plan == 0 && $ejec > 0) {
       // No se planificó nada pero se hizo trabajo
       $pct = 100;
-      $nota = "No planificado (+{$ejec})";
+      $nota = "Se planificó 0 ($ejec)";
       $extra = $ejec;
     } elseif ($ejec > $plan) {
       // Se hizo más de lo planificado
@@ -161,43 +161,126 @@ $DATA = array_values($iterMap);
       height: 360px;
     }
 
-    /* Leyenda de colores (semáforo) */
-    .legend-colors {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 12px;
+    /* ======== GLOBAL ======== */
+    body {
+      background-color: #f8f9fa;
+      font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     }
 
-    .legend-item {
-      font-size: 0.875rem;
+    /* ======== TARJETAS ======== */
+    .card {
+      border: 1px solid rgba(0, 0, 0, 0.08);
+      border-radius: 0.75rem;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    }
+
+    .card-header {
+      background-color: #f8f9fa;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+      font-weight: 600;
+    }
+
+    .card-header h6 {
+      font-weight: 600;
+      color: #212529;
+    }
+
+    .card-header small {
+      font-size: 0.85rem;
       color: #6c757d;
     }
 
-    .legend-dot {
-      display: inline-block;
-      width: 12px;
-      height: 12px;
-      margin-right: 6px;
-      border-radius: 2px;
-      border: 1px solid rgba(0, 0, 0, .2);
-      vertical-align: -2px;
+    /* ======== LEYENDAS ======== */
+    .legend-top,
+    .legend-bottom {
+      text-align: center;
+      width: 100%;
+      font-size: 0.85rem;
+      color: #495057;
     }
 
-    /* Línea negra para el umbral en la leyenda */
-    .legend-line {
-      display: inline-block;
+    .legend-colors {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin: 0 auto;
+      max-width: 90%;
+    }
+
+    /* Línea punteada azul (Tiempo transcurrido) */
+    .legend-dash {
       width: 22px;
       height: 0;
+      border-top: 2px dashed #0a3bcf;
       margin-right: 6px;
-      border-top: 2px solid #000;
-      /* negra */
-      vertical-align: 2px;
     }
 
-    @media (max-width: 576px) {
+    .legend-item {
+      display: flex;
+      align-items: center;
+      font-weight: 500;
+    }
+
+    .legend-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 2px;
+      border: 1px solid rgba(0, 0, 0, 0.2);
+      margin-right: 6px;
+    }
+
+    .legend-line {
+      width: 22px;
+      height: 0;
+      border-top: 2px solid #000;
+      margin-right: 6px;
+    }
+
+    /* ======== CHART ======== */
+    .chart-scroll {
+      overflow-x: auto;
+      overflow-y: hidden;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .chart-stage {
+      display: inline-block;
+      min-width: 100%;
+    }
+
+    .chart {
+      width: 100%;
+      height: 380px;
+    }
+
+    @media (max-width: 768px) {
       .chart {
         height: 300px;
       }
+    }
+
+    /* Scrollbar estilizado */
+    .chart-scroll::-webkit-scrollbar {
+      height: 6px;
+    }
+
+    .chart-scroll::-webkit-scrollbar-thumb {
+      background: rgba(0, 0, 0, 0.25);
+      border-radius: 4px;
+    }
+
+    /* ======== TÍTULOS ======== */
+    .card-title-main {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: #212529;
+    }
+
+    .card-subtitle-dates {
+      font-size: 0.9rem;
+      color: #6c757d;
     }
   </style>
 </head>
@@ -367,7 +450,7 @@ $DATA = array_values($iterMap);
         120,
         Math.ceil(Math.max(...DATA.flatMap(it => it.metrics.map(m => Math.max(m.max, m.executed)))) / 10) * 10
       );
-
+      // Configuración del gráfico de tendencia
       trendChart.setOption({
         tooltip: {
           trigger: "axis",
@@ -456,17 +539,28 @@ $DATA = array_values($iterMap);
         const col = document.createElement("div");
         col.className = "col-12 col-xl-6";
         col.innerHTML = `
-    <div class="card h-100">
-      <div class="card-header d-flex justify-content-between align-items-center">
-        <h6 class="mb-0">${it.iteracion}</h6>
-        <small class="text-muted">Del ${it.inicio} al ${it.fin}</small>
+  <div class="card h-100">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <div class="card-title-main">${it.iteracion}</div>
+      <div class="card-subtitle-dates">Del ${it.inicio} al ${it.fin}</div>
+    </div>
+
+    <div class="card-body p-3">
+      <!-- Leyenda superior fija -->
+      <div id="legend-colors-${i}" class="legend-top mb-2"></div>
+
+      <!-- Área scrolleable solo para el gráfico -->
+      <div class="chart-scroll">
+        <div class="chart-stage">
+          <div id="bars-${i}" class="chart"></div>
+        </div>
       </div>
-      <div class="card-body">
-        <div id="legend-colors-${i}" class="small text-muted mb-2"></div>
-        <div id="bars-${i}" class="chart"></div>
-        <div id="legend-metrics-${i}" class="small text-muted mt-2"></div>
-      </div>
-    </div>`;
+
+      <!-- Leyenda inferior fija -->
+      <div id="legend-metrics-${i}" class="legend-bottom mt-3"></div>
+    </div>
+  </div>
+`;
         row.appendChild(col);
 
         const dom = document.getElementById(`bars-${i}`);
@@ -484,10 +578,29 @@ $DATA = array_values($iterMap);
         const OVERFLOW_DURATION = 1500; // el rect “extra” que aparece arriba
         const lastDelay = BAR_DELAY_PER_IDX(it.metrics.length - 1);
         const AFTER_OVERFLOW_ALL = lastDelay + BAR_DURATION + OVERFLOW_DURATION + 150;
+        // --- SCROLL HORIZONTAL Y ANCHO DINÁMICO ---
+        const container = dom.parentElement; // el <div> que contiene la gráfica
+        container.style.overflowX = "auto"; // habilita scroll horizontal
+
+        const perMetricPx = 110; // ancho mínimo por barra (ajustable)
+        const minWidth = container.clientWidth || 600;
+        dom.style.width = Math.max(minWidth, it.metrics.length * perMetricPx) + "px";
+
+        // si hay scroll, ECharts necesita recalcular
+        chart.resize();
         // umbrales y tiempo aparecerán después de esto
         chart.setOption({
           tooltip: {
             trigger: "axis",
+            appendToBody: true,
+            backgroundColor: "rgba(255,255,255,0.95)",
+            borderColor: "#ccc",
+            borderWidth: 1,
+            textStyle: {
+              color: "#222",
+              fontSize: 13,
+            },
+            extraCssText: "box-shadow: 0 2px 8px rgba(0,0,0,0.2); border-radius: 6px;",
             axisPointer: {
               type: "none"
             },
@@ -497,15 +610,15 @@ $DATA = array_values($iterMap);
               let html = `<b>#${p.axisValue} - ${m.nombre}</b><br>`;
               html += `Límite Desviación: ${m.min}%<br>`;
               html += `Ejecutado: ${m.executed}% (${m.executedReal} de ${m.planned})<br>`;
-              if (m.planned === 0 && m.executedReal > 0) {
-                html += `<span style="color:#17a2b8;font-weight:bold;">ℹ️ No planificado (+${m.executedReal})</span><br>`;
-              } else if (m.planned > 0 && m.executedReal > m.planned) {
+              if (m.planned === 0 && m.executedReal > 0) { //si se planificó 0 y se ejecutó algo
+                html += `<span style="color:#17a2b8;font-weight:bold;">ℹ️ Se planificó 0 (+${m.executedReal})</span><br>`;
+              } else if (m.planned > 0 && m.executedReal > m.planned) { //si planificado es mayor a 0 y se superó lo planificado
                 html += `<span style="color:#28a745;font-weight:bold;">▲ Supera lo planificado (+${m.executedReal - m.planned})</span><br>`;
-              } else if (m.planned > 0 && m.executedReal === m.planned) {
+              } else if (m.planned > 0 && m.executedReal === m.planned) { //si se cumplió exactamente lo planificado
                 html += `<span style="color:#198754;font-weight:bold;">✔️ Cumple lo planificado (=${m.planned})</span><br>`;
-              } else if (m.planned > 0 && m.executedReal > 0 && m.executedReal < m.planned) {
+              } else if (m.planned > 0 && m.executedReal > 0 && m.executedReal < m.planned) { //si se quedó por debajo de lo planificado
                 html += `<span style="color:#dc3545;font-weight:bold;">▼ Por debajo del plan (-${m.planned - m.executedReal})</span><br>`;
-              } else if (m.planned > 0 && m.executedReal === 0) {
+              } else if (m.planned > 0 && m.executedReal === 0) { //si no se ejecutó nada y se planifico mas de 0
                 html += `<span style="color:#6c757d;font-weight:bold;">⛔ Sin ejecución (0/${m.planned})</span><br>`;
               } else {
                 html += `<span style="color:#999;">❔ Sin datos disponibles</span><br>`;
@@ -640,8 +753,8 @@ $DATA = array_values($iterMap);
                     y2: yPx
                   },
                   style: {
-                    stroke: "#666",
-                    lineDash: [5, 3],
+                    stroke: "#000000",
+                    lineWidth: 1.5,
                     lineWidth: 1.2,
                     opacity: 0
                   },
@@ -689,81 +802,111 @@ $DATA = array_values($iterMap);
               }))
             },
 
-// === LÍNEA DE TIEMPO TRANSCURRIDO ===
-{
-  name: "Tiempo transcurrido",
-  type: "custom",
-  coordinateSystem: "cartesian2d",
-  silent: true,
-  z: 890,
-  renderItem: function (params, api) {
-    const pct = Math.min(timePct, 120); // cap 120%
-    const y = api.coord([0, pct])[1];
-    const xStart = api.coord([0, 0])[0];
+            // === LÍNEA DE TIEMPO TRANSCURRIDO ===
+            {
+              name: "Tiempo transcurrido",
+              type: "custom",
+              coordinateSystem: "cartesian2d",
+              silent: true,
+              z: 890,
+              renderItem: function(params, api) {
+                const pct = Math.min(timePct, 120); // cap 120%
+                const y = api.coord([0, pct])[1];
+                const xStart = api.coord([0, 0])[0];
 
-    // borde derecho real del área de barras
-    const lastCenter = api.coord([it.metrics.length - 1, 0])[0];
-    const bandW = api.size([1, 0])[0];
-    const plotRight = lastCenter + bandW * 0.5;
-    const chartW = api.getWidth();
+                // borde derecho real del área de barras
+                const lastCenter = api.coord([it.metrics.length - 1, 0])[0];
+                const bandW = api.size([1, 0])[0];
+                const plotRight = lastCenter + bandW * 0.5;
+                const chartW = api.getWidth();
 
-    // margen dinámico: evita que el texto quede pegado
-    const labelX = Math.min(plotRight + 90, chartW - 10);
+                // margen dinámico: evita que el texto quede pegado
+                const labelX = Math.min(plotRight + 90, chartW - 10);
 
-    return {
-      type: "group",
-      children: [
-        // Línea punteada elegante (animada)
-        {
-          type: "line",
-          shape: { x1: xStart - 20, y1: y, x2: chartW - 10, y2: y },
-          style: {
-            stroke: "#0a3bcfff",
-            lineWidth: 1.2,
-            lineDash: [6, 4],
-            opacity: 0
-          },
-          keyframeAnimation: {
-            duration: 400,
-            delay: AFTER_OVERFLOW_ALL-100, // aparece después del overflow
-            easing: "cubicOut",
-            keyframes: [
-              { percent: 0, style: { opacity: 0, lineWidth: 0 } },
-              { percent: 1, style: { opacity: 0.8, lineWidth: 1.2 } }
-            ]
-          }
-        },
-        // Texto a la derecha (animado)
-        {
-          type: "text",
-          style: {
-            x: labelX,
-            y: y - 2,
-            text: `Tiempo ${pct.toFixed(1)}%`,
-            fill: "#222",
-            fontWeight: "bold",
-            fontSize: 12,
-            textAlign: "right",
-            textVerticalAlign: "bottom",
-            textShadowColor: "rgba(255,255,255,0.7)",
-            textShadowBlur: 3,
-            opacity: 0
-          },
-          keyframeAnimation: {
-            duration: 500,
-            delay: AFTER_OVERFLOW_ALL , // luego de la línea
-            easing: "cubicOut",
-            keyframes: [
-              { percent: 0, style: { opacity: 0, y: y + 6 } },
-              { percent: 1, style: { opacity: 1, y: y - 2 } }
-            ]
-          }
-        }
-      ]
-    };
-  },
-  data: [{ value: 0 }]
-},
+                return {
+                  type: "group",
+                  children: [
+                    // Línea punteada elegante (animada)
+                    {
+                      type: "line",
+                      shape: {
+                        x1: xStart - 20, // empieza un poco antes
+                        y1: y,
+                        x2: chartW - 50, // hasta el borde derecho del canvas
+                        y2: y
+                      },
+                      style: {
+                        stroke: "#0a3bcfff",
+                        lineWidth: 1.2,
+                        lineDash: [6, 4],
+                        opacity: 0
+                      },
+                      keyframeAnimation: {
+                        duration: 400,
+                        delay: AFTER_OVERFLOW_ALL - 100, // aparece después del overflow
+                        easing: "cubicOut",
+                        keyframes: [{
+                            percent: 0,
+                            style: {
+                              opacity: 0,
+                              lineWidth: 0
+                            }
+                          },
+                          {
+                            percent: 1,
+                            style: {
+                              opacity: 0.8,
+                              lineWidth: 1.0
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    // Texto a la derecha (animado)
+                    {
+                      type: "text",
+                      style: {
+                        x: labelX - 50, // corrige leve desplazamiento a la izquierda
+                        y: y - 500,
+                        text: `${pct.toFixed(1)}%`,
+                        fill: "#0a3bcfff",
+                        fontWeight: "bold",
+                        fontSize: 11.5,
+                        textAlign: "center",
+                        textVerticalAlign: "bottom",
+                        lineHeight: 16,
+                        textShadowColor: "rgba(255,255,255,0.7)",
+                        textShadowBlur: 3,
+                        opacity: 0
+                      },
+                      keyframeAnimation: {
+                        duration: 500,
+                        delay: AFTER_OVERFLOW_ALL, // luego de la línea
+                        easing: "cubicOut",
+                        keyframes: [{
+                            percent: 0,
+                            style: {
+                              opacity: 0,
+                              y: y + 6
+                            }
+                          },
+                          {
+                            percent: 1,
+                            style: {
+                              opacity: 1,
+                              y: y - 8
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                };
+              },
+              data: [{
+                value: 0
+              }]
+            },
 
 
             //(OVERFLOW)
@@ -771,47 +914,80 @@ $DATA = array_values($iterMap);
               name: "Overflow",
               type: "custom",
               animationEasing: "cubicOut",
-
               // Variante A: encadenado por barra (empieza al terminar su barra)
               animationDuration: 1500,
               animationDelay: idx => BAR_DELAY_PER_IDX(idx) + BAR_DURATION,
               renderItem: function(params, api) {
                 const idx = api.value(0);
                 const m = it.metrics[idx];
-                if (!m || m.executed <= 100) return null; // sólo si supera el 100%
+                if (!m) return null;
 
-                const base = api.coord([idx, 100]); // arranca en 100%
-                const barWidth = api.size([1, 0])[0] * 0.6;
-                const baseColor = colorSemaforo(m.executed, m.min, m.max);
-                const lightColor = echarts.color.lift(baseColor, 0.3);
+               
+    const barWidth = api.size([1, 0])[0] * 0.5;
+    const base = api.coord([idx, 100]); // base en 100%
 
-                const extraPct = Math.min((m.executed - 100) / 100, 0.5); // máx. 50% del alto
-                const height = api.size([0, extraPct * 100])[1];
-                const y = base[1] - height;
+    // === CASO 1: SIN PLANIFICACIÓN (plan=0 y ejecutado>0)
+    // Azul infinito — sube más allá del 120% (representa trabajo fuera del plan)
+    if (m.planned === 0 && m.executedReal > 0) {
+      const yTop = api.coord([idx, 160])[1]; // "infinito" visual (160%)
+      const height = base[1] - yTop;
+      return {
+        type: "rect",
+        shape: {
+          x: base[0] - barWidth / 2,
+          y: yTop,
+          width: barWidth,
+          height: height
+        },
+        enterFrom: { shape: { y: base[1], height: 0 } },
+        transition: ["shape"],
+        style: {
+          fill: "#007bff",
+          opacity: 0.35,
+          stroke: "#0056b3",
+          lineWidth: 1
+        },
+        z: 25
+      };
+    }
 
-                return {
-                  type: "rect",
-                  shape: {
-                    x: base[0] - barWidth / 2,
-                    y,
-                    width: barWidth,
-                    height
-                  },
-                  enterFrom: {
+
+                //CASO 2: se superó el 100% (normal, color verde)
+                if (m.executed > 100) {
+                  const base = api.coord([idx, 100]);
+                  const barWidth = api.size([1, 0])[0] * 0.5;
+                  const baseColor = colorSemaforo(m.executed, m.min, m.max);
+                  const lightColor = echarts.color.lift(baseColor, 0.3);
+                  const extraPct = Math.min((m.executed - 100) / 100, 0.5);
+                  const height = api.size([0, extraPct * 100])[1];
+                  const y = base[1] - height;
+
+                  return {
+                    type: "rect",
                     shape: {
-                      y: base[1],
-                      height: 0
-                    }
-                  }, // anima desde 0 hasta height
-                  transition: ["shape"],
-                  style: {
-                    fill: lightColor,
-                    opacity: 0.6,
-                    stroke: baseColor,
-                    lineWidth: 0.5
-                  },
-                  z: 20
-                };
+                      x: base[0] - barWidth / 2,
+                      y,
+                      width: barWidth,
+                      height
+                    },
+                    enterFrom: {
+                      shape: {
+                        y: base[1],
+                        height: 0
+                      }
+                    },
+                    transition: ["shape"],
+                    style: {
+                      fill: lightColor,
+                      opacity: 0.6,
+                      stroke: baseColor,
+                      lineWidth: 0.5
+                    },
+                    z: 20
+                  };
+                }
+
+                return null;
               },
               data: it.metrics.map((_, idx) => idx)
             }
@@ -823,12 +999,14 @@ $DATA = array_values($iterMap);
     <div class="legend-colors">
       <span class="legend-item"><span class="legend-dot" style="background:#28a745;"></span>Ejecutado ≥ Planificado</span>
       <span class="legend-item"><span class="legend-dot" style="background:#ffc107;"></span>Dentro del límite de desviación</span>
-      <span class="legend-item"><span class="legend-dot" style="background:#dc3545;"></span>Debajo del límite de desviación</span>
+      <span class="legend-item"><span class="legend-dot" style="background:#dc3545;"></span>Cumplimiento < límite de desviación</span>
+      <span class="legend-item"><span class="legend-dot" style="background:#007bff;"></span>Ejecutado sin planificación (plan=0)</span>
       <span class="legend-item"><span class="legend-line"></span>Límite de desviación</span> <!-- línea negra -->
-    </div>
+      <span class="legend-item"><span class="legend-dash"></span>Progreso de iteración</span>
+
+      </div>
   `;
         document.getElementById(`legend-colors-${i}`).innerHTML = legendColorsHtml;
-
         // Lista de métricas (abajo)
         const metricsHtml = it.metrics
           .map(m => `<span class="me-3"><b>#${m.id}</b> = ${m.nombre}</span>`)
