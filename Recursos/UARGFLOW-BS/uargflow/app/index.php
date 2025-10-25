@@ -20,7 +20,7 @@
             <div class="container navbar-dark bg-dark">
                 <a class="navbar-brand" href="#">
                     <img src="../lib/img/Logo-UNPA-UARG-azul.png" width="30" height="30" class="d-inline-block align-top" alt="">
-                    <?php echo Constantes::NOMBRE_SISTEMA; ?> - Login
+                    MetricFlowSQA - Login
                 </a>
             </div>
         </nav>
@@ -30,7 +30,7 @@
                 <article>
                     <div class="card">
                         <div class="card-header">
-                            <h3> <?php echo Constantes::NOMBRE_SISTEMA; ?> - Login</h3>
+                            <h3> MetricFlowSQA - Login</h3>
                         </div>
                         <div class="card-body">
 
@@ -63,9 +63,7 @@
             </section>
         </div>
         <footer class="footer">
-            UARGFlow BS 
-            <span class="oi oi-globe"></span> 
-            UNPA-UARG
+            Codevit
         </footer>
     </body>
 </html>

@@ -26,7 +26,7 @@ include_once '../modelo/Permiso.php';
                     <h3>Propiedades del Proyecto</h3>
                 </div>
                 <div class="card-body">
-                    <h4 class="card-text">ACA IRIA EL DASHBORD</h4>
+                    <h4 class="card-text">ACA IRIA EL DASHBORD DEL GIL DE TEPPA</h4>
                    
                 </div>
             </div>

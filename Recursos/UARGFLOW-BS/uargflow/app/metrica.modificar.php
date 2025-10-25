@@ -1,9 +1,8 @@
 <?php
-include_once '../lib/ControlAcceso.Class.php';
-ControlAcceso::requierePermiso(PermisosSistema::PERMISO_USUARIOS);
-include_once '../modelo/ColeccionRoles.php';
-$Roles = new ColeccionRoles();
-
+include_once '../lib/ControlAcceso.class.php';
+ControlAcceso::requierePermiso(PermisosSistema::PERMISO_PERMISOS);
+include_once '../modelo/Permiso.php';
+$id = $_GET["id"];
 
 ?>
 <html>
@@ -13,15 +12,16 @@ $Roles = new ColeccionRoles();
         <link rel="stylesheet" href="../lib/open-iconic-master/font/css/open-iconic-bootstrap.css" />
         <script type="text/javascript" src="../lib/JQuery/jquery-3.3.1.js"></script>
         <script type="text/javascript" src="../lib/bootstrap-4.1.1-dist/js/bootstrap.min.js"></script>
-        <title><?= Constantes::NOMBRE_SISTEMA; ?> - Crear Modelo</title>
+        <title><?php echo Constantes::NOMBRE_SISTEMA; ?> - Actualizar Metrica</title>
+
     </head>
     <body>
         <?php include_once '../gui/navbar.php'; ?>
         <div class="container">
-            <form action="modelo.crear.procesar.php" method="post">
+            <form action="metrica.modificar.procesar.php" method="post">
                 <div class="card">
                     <div class="card-header">
-                        <h3>Crear Modelo</h3>
+                        <h3>Actualizar Metrica</h3>
                         <p>
                             Complete los campos a continuaci&oacute;n. 
                             Luego, presione el bot&oacute;n <b>Confirmar</b>.<br />
@@ -29,28 +29,34 @@ $Roles = new ColeccionRoles();
                         </p>
                     </div>
                     <div class="card-body">
-                        <h4>Propiedades</h4>
                         <div class="form-group">
                             <label for="inputNombre">Nombre</label>
-                            <input type="text" name="nombre" pattern="[a-zA-Z0-9\s]+" class="form-control" id="inputNombre" placeholder="Ingrese el nombre del modelo" required="">
+                            <?php $proyectos = "SELECT * FROM metrica where id_metrica = ". $_GET["id"]; 
+                            $proyectos=BDConexion::getInstancia()->query($proyectos);
+                            //$proyecto = mysqli_fetch_array($proyectos); 
+                            $proyecto = $proyectos->fetch_all(MYSQLI_ASSOC);
+                            foreach ($proyecto as $Proyec) { ?>
+                            <input type="text" name="nombre" class="form-control" id="inputNombre" value="<?= $Proyec['nombre']; ?>" placeholder="Ingrese el nombre de la Metrica" required="">
                         </div>
-                        <div class="form-group">
-                            <label for="inputMail">Descripcion</label>
-                            <input type="text" name="descripcion" pattern="[a-zA-Z\s]+" class="form-control" id="inputDescripcion" placeholder="Ingrese una breve descripcion del modelo" required="">
-                        </div>
-                        <hr />
-                <br>
+                        <label for="inputMail">Descripcion</label>
+                            <br>
+                            <textarea class="form-control" name="descripcion" id="inputDescripcion" placeholder="Ingrese una breve Descripcion" rows="5" cols="40">
+                                <?= $Proyec['descripcion']; ?>
+                                </textarea>
+                       
+                        <?php } ?>
+                        <input type="hidden" name="id" class="form-control" id="id" value="<?= $_GET["id"]; ?>" >
+                    </div>
                     <div class="card-footer">
                         <button type="submit" class="btn btn-outline-success">
                             <span class="oi oi-check"></span> Confirmar
                         </button>
-                        <a href="modelos.php">
+                        <a href="metricas.php">
                             <button type="button" class="btn btn-outline-danger">
                                 <span class="oi oi-x"></span> Cancelar
                             </button>
                         </a>
                     </div>
-                </div>
                 </div>
             </form>
         </div>

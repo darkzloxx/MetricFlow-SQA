@@ -23,7 +23,7 @@ session_destroy();
                 </div>
                 <div class="card-body">
                     <div class="alert alert-success" role="alert">
-                        Ha salido del sistema <?= Constantes::NOMBRE_SISTEMA; ?>.
+                        Ha salido del sistema MetricFlowSQA.
                         Ud. seguir&aacute; conectado a su correo electr&oacute;nico.
                     </div>
                     <p>Elija una de las opciones a continuaci&oacute;n:</p>
