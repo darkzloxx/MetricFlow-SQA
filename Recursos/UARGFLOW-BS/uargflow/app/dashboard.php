@@ -1,8 +1,14 @@
+/**
+* Genera el panel de control del proyecto seleccionado mostrando estadísticas generales,
+* métricas por iteración y gráficos de tendencia utilizando datos extraídos desde MariaDB.
+* Se soporta la selección dinámica de proyectos (?proyecto=ID) y se distingue entre
+* iteraciones actuales y anteriores para facilitar el análisis del cumplimiento planificado.
+*/
 <?php
 // ============================
 // Conexión a MariaDB
 // ============================
-$conexion = new mysqli("localhost", "root", "", "bd", 3308);
+$conexion = new mysqli("localhost", "root", "", "bd_codevit", 3308);
 if ($conexion->connect_error) {
   die("Error al conectar: " . $conexion->connect_error);
 }
@@ -62,7 +68,7 @@ SELECT
     f.nombre AS fase,
     i.fecha_inicio AS inicio,
     i.fecha_fin AS fin,
-    m.id_metrica AS id_metrica,     -- << agregado
+    m.id_metrica AS id_metrica,
     m.nombre AS metrica,
     mi.valor_planificado AS planificado,
     mi.valor_ejecutado AS ejecutado,
@@ -77,15 +83,16 @@ ORDER BY f.id_fase, i.numero_iteracion, m.id_metrica;
 ";
 $result = $conexion->query($query);
 
-// Armar estructura para ECharts
+// ============================
+// Construcción de $DATA
+// ============================
 $iterMap = [];
 if ($result) {
   while ($r = $result->fetch_assoc()) {
-    // Antes: "Iteración N"
-    $key = trim($r['fase'] . ' ' . $r['numero_iteracion']); // Ej: "Elaboración 2"
+    $key = trim($r['fase'] . ' ' . $r['numero_iteracion']);
     if (!isset($iterMap[$key])) {
       $iterMap[$key] = [
-        "iteracion" => $key,   // eje X del trend y título de cada card
+        "iteracion" => $key,
         "fase"      => $r['fase'],
         "numero"    => $r['numero_iteracion'],
         "inicio"    => $r['inicio'],
@@ -93,50 +100,97 @@ if ($result) {
         "metrics"   => []
       ];
     }
-    $plan = is_null($r['planificado']) ? 0.0 : (float)$r['planificado'];
-    $ejec = is_null($r['ejecutado']) ? 0.0 : (float)$r['ejecutado'];
+
+    $plan = (float)($r['planificado'] ?? 0);
+    $ejec = (float)($r['ejecutado'] ?? 0);
     if ($plan == 0 && $ejec == 0) {
-      // Nada planificado y nada hecho
       $pct = 100;
       $nota = "Se cumplió";
-      $extra = 0;
     } elseif ($plan == 0 && $ejec > 0) {
-      // No se planificó nada pero se hizo trabajo
       $pct = 100;
       $nota = "Se planificó 0 ($ejec)";
-      $extra = $ejec;
     } elseif ($ejec > $plan) {
-      // Se hizo más de lo planificado
       $pct = round(($ejec / $plan) * 100);
       $nota = "Supera planificado (+" . ($ejec - $plan) . ")";
-      $extra = $ejec - $plan;
     } else {
-      // Caso normal
       $pct = round(($ejec / $plan) * 100);
       $nota = "";
-      $extra = 0;
     }
-
-    // “Cuánto más que lo planificado” (si plan=0, es todo ejecutado)
-    $extra = $plan > 0 ? max(0, $ejec - $plan) : $ejec;
 
     $iterMap[$key]["metrics"][] = [
       "id"           => (int)$r['id_metrica'],
       "nombre"       => $r['metrica'],
       "executed"     => $pct,
-      "planned"      => $r['planificado'],
-      "executedReal" => $r['ejecutado'],
+      "planned"      => $plan,
+      "executedReal" => $ejec,
       "unit"         => "u",
       "min"          => max(0, 100 - (float)$r['umbral']),
       "max"          => 100 + (float)$r['umbral'],
-      "nota"         => $nota,   // 👈 agregado
-      "extra"        => $extra   // 👈 agregado
+      "nota"         => $nota,
+      "extra"        => ($plan > 0 ? max(0, $ejec - $plan) : $ejec)
     ];
   }
 }
-$conexion->close();
 $DATA = array_values($iterMap);
+
+// ============================
+// Lógica de iteraciones actual y anterior
+// ============================
+$hoy = date('Y-m-d');
+$actualIndex = -1;
+$actualIter = null;
+$anteriorIter = null;
+$mensajeActual = '';
+$mensajeAnterior = '';
+
+if (count($DATA) === 0) {
+  // Caso 1
+  $mensajeActual = 'No se encontraron fases ni iteraciones registradas en este proyecto.';
+  $mensajeAnterior = 'Sin datos históricos disponibles.';
+} else {
+  // Buscar actual por rango de fechas
+  foreach ($DATA as $idx => $it) {
+    if ($it['inicio'] <= $hoy && $it['fin'] >= $hoy) {
+      $actualIndex = $idx;
+      break;
+    }
+  }
+
+  if ($actualIndex === -1) {
+    // Caso 2: no hay actual para hoy → usar la última como referencia y armar mensaje
+    $actualIndex = count($DATA) - 1;
+    $fase = $DATA[$actualIndex]['fase'] ?? 'Desconocida';
+    $num  = $DATA[$actualIndex]['numero'] ?? '?';
+    $mensajeActual = "No se planificó la fase <b>$fase</b> (Iteración $num) para la fecha actual.";
+  }
+
+  $actualIter = $DATA[$actualIndex] ?? null;
+
+  // Buscar la anterior más cercana por inicio, con fin < inicio actual
+  $anteriorIndex = null;
+  $fechaActualInicio = $actualIter ? $actualIter['inicio'] : $hoy;
+  $minDiff = PHP_INT_MAX;
+  foreach ($DATA as $idx => $it) {
+    if ($it['fin'] < $fechaActualInicio) {
+      $diff = abs(strtotime($fechaActualInicio) - strtotime($it['inicio']));
+      if ($diff < $minDiff) {
+        $minDiff = $diff;
+        $anteriorIndex = $idx;
+      }
+    }
+  }
+
+  if ($anteriorIndex === null) {
+    // Caso 3
+    $mensajeAnterior = 'No existen iteraciones anteriores.';
+  } else {
+    $anteriorIter = $DATA[$anteriorIndex];
+  }
+}
+
+$conexion->close();
 ?>
+
 
 <!doctype html>
 <html lang="es">
@@ -386,7 +440,6 @@ $DATA = array_values($iterMap);
       font-size: 0.9rem;
       color: #6c757d;
     }
-    
   </style>
 </head>
 
@@ -403,24 +456,24 @@ $DATA = array_values($iterMap);
 
   <div class="container my-4">
     <?php
-    // Colores de estado y desvío 
+    // Colores de estado y desvío
     $estadoClass = 'badge-secondary';
     $estadoKey = strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)));
     switch ($estadoKey) {
       case 'REGISTRADO':
-        $estadoClass = 'badge-secondary'; // gris
+        $estadoClass = 'badge-secondary';
         break;
       case 'EN_PROGRESO':
-        $estadoClass = 'badge-primary';   // azul
+        $estadoClass = 'badge-primary';
         break;
       case 'FINALIZADO':
-        $estadoClass = 'badge-success';   // verde
+        $estadoClass = 'badge-success';
         break;
       case 'CANCELADO':
-        $estadoClass = 'badge-danger';    // rojo
+        $estadoClass = 'badge-danger';
         break;
       default:
-        $estadoClass = 'badge-secondary'; // fallback
+        $estadoClass = 'badge-secondary';
     }
 
     $desvClass = 'text-success';
@@ -432,9 +485,7 @@ $DATA = array_values($iterMap);
       <div class="col-12 col-md-4">
         <div class="card stat-card h-100">
           <div class="card-body">
-            <div class="stat-icon icon-bg-primary">
-              <span class="oi oi-briefcase"></span>
-            </div>
+            <div class="stat-icon icon-bg-primary"><span class="oi oi-briefcase"></span></div>
             <div class="stat-content">
               <span class="stat-label">Proyecto</span>
               <div class="stat-value"><?= htmlspecialchars($nombreProyecto) ?></div>
@@ -449,9 +500,7 @@ $DATA = array_values($iterMap);
       <div class="col-6 col-md-4">
         <div class="card stat-card h-100">
           <div class="card-body">
-            <div class="stat-icon icon-bg-success">
-              <span class="oi oi-graph"></span>
-            </div>
+            <div class="stat-icon icon-bg-success"><span class="oi oi-graph"></span></div>
             <div class="stat-content">
               <span class="stat-label">Métricas utilizadas</span>
               <div class="stat-value"><?= (int)$totalMetricas ?></div>
@@ -464,9 +513,7 @@ $DATA = array_values($iterMap);
       <div class="col-6 col-md-4">
         <div class="card stat-card h-100">
           <div class="card-body">
-            <div class="stat-icon icon-bg-danger">
-              <span class="oi oi-warning"></span>
-            </div>
+            <div class="stat-icon icon-bg-danger"><span class="oi oi-warning"></span></div>
             <div class="stat-content">
               <span class="stat-label">Desviación promedio</span>
               <div class="stat-value <?= $desvClass ?>"><?= $desviacionPromedio ?>%</div>
@@ -479,6 +526,7 @@ $DATA = array_values($iterMap);
 
     <!-- Barras -->
     <div id="barsRow" class="row g-3"></div>
+
     <!-- Tendencia -->
     <div class="card mb-4">
       <div class="card-header">
@@ -490,15 +538,19 @@ $DATA = array_values($iterMap);
         </div>
       </div>
     </div>
-
   </div>
 
   <footer class="footer">UARGFlow BS <span class="oi oi-globe"></span> UNPA-UARG</footer>
 
   <script>
+    // ========= Datos del backend =========
     const DATA = <?= json_encode($DATA, JSON_UNESCAPED_UNICODE | JSON_NUMERIC_CHECK); ?>;
+    const ACTUAL = <?= json_encode($actualIter, JSON_UNESCAPED_UNICODE | JSON_NUMERIC_CHECK); ?>;
+    const ANTERIOR = <?= json_encode($anteriorIter, JSON_UNESCAPED_UNICODE | JSON_NUMERIC_CHECK); ?>;
+    const MSG_ACTUAL = <?= json_encode($mensajeActual, JSON_UNESCAPED_UNICODE); ?>;
+    const MSG_ANT = <?= json_encode($mensajeAnterior, JSON_UNESCAPED_UNICODE); ?>;
 
-    // Utilidades
+    // ========= Utilidades =========
     function clamp(x, a, b) {
       return Math.min(Math.max(x, a), b);
     }
@@ -509,13 +561,11 @@ $DATA = array_values($iterMap);
       // maxPct:  100 + umbral (no se usa para el semáforo del flujo)
       valuePct = Number(valuePct) || 0;
       minPct = Number(minPct) || 0;
-
-      if (valuePct >= 100) return "#28a745"; // Verde: ejecutado >= planificado
-      if (valuePct >= minPct) return "#ffc107"; // Amarillo: dentro del límite de desviación
-      return "#dc3545"; // Rojo: fuera del límite
+      if (valuePct >= 100) return "#28a745"; // Verde
+      if (valuePct >= minPct) return "#ffc107"; // Amarillo
+      return "#dc3545"; // Rojo
     }
 
-    // Porcentaje de tiempo transcurrido entre inicio y fin
     function pctTiempoIter(inicio, fin) {
       const s = new Date(inicio).getTime();
       const e = new Date(fin).getTime();
@@ -523,7 +573,505 @@ $DATA = array_values($iterMap);
       if (!isFinite(s) || !isFinite(e) || e <= s) return 100;
       return clamp(((now - s) / (e - s)) * 100, 0, 100);
     }
+    //aca se inicializa el dashboard
+    function renderIteracionChart(it, chartId, legendId) {
+      //si no hay métricas
+      if (!it || !it.metrics || it.metrics.length === 0) {
+        document.getElementById(chartId).innerHTML = `
+    <div class="text-center text-muted mt-5">
+      No se planificaron métricas para ${it?.iteracion || 'esta iteración'}.
+    </div>`;
+        return;
+      }
+      const dom = document.getElementById(chartId);
+      const chart = echarts.init(dom);
+      const labels = it.metrics.map(m => m.id);
+      const maxYBars = 120;
+      const execData = it.metrics.map(m => ({
+        value: Math.min(m.executed, maxYBars),
+        meta: m
+      }));
+      const BAR_DURATION = 1500;
+      const BAR_DELAY_PER_IDX = idx => idx * 150;
+      const OVERFLOW_DURATION = 1500;
+      const lastDelay = BAR_DELAY_PER_IDX(it.metrics.length - 1);
+      const AFTER_OVERFLOW_ALL = lastDelay + BAR_DURATION + OVERFLOW_DURATION + 150;
+      const timePct = pctTiempoIter(it.inicio, it.fin);
 
+      // Ancho adaptativo
+      const container = dom.parentElement;
+      const containerWidth = container.clientWidth || 600;
+      const totalBarsWidth = it.metrics.length * 90;
+      if (totalBarsWidth <= containerWidth) {
+        dom.style.width = "100%";
+        container.style.overflowX = "hidden";
+      } else {
+        dom.style.width = totalBarsWidth + "px";
+        container.style.overflowX = "auto";
+      }
+      chart.resize();
+      // umbrales y tiempo aparecerán después de esto
+      chart.setOption({
+        tooltip: {
+          trigger: "axis",
+          appendToBody: true,
+          boundaryGap: false,
+          backgroundColor: "rgba(255,255,255,0.95)",
+          borderColor: "#ccc",
+          borderWidth: 1,
+          textStyle: {
+            color: "#222",
+            fontSize: 13,
+          },
+          extraCssText: "box-shadow: 0 2px 8px rgba(0,0,0,0.2); border-radius: 6px;",
+          axisPointer: {
+            type: "none"
+          },
+          formatter: params => {
+            const p = params[0];
+            const m = p.data.meta;
+            let html = `<b>#${p.axisValue} - ${m.nombre}</b><br>`;
+            html += `Límite Desviación: ${m.min}%<br>`;
+            html += `Ejecutado: ${m.executed}% (${m.executedReal} de ${m.planned})<br>`;
+
+            const pct = (m.planned > 0) ?
+              (m.executedReal / m.planned) * 100 :
+              (m.executedReal > 0 ? 100 : 100); // ✅ ahora si plan=0 y ejec=0 → 100%
+
+            switch (true) {
+              // ✅ planificado 0 y ejecutado > 0 → se planificó 0 pero se hizo algo
+              case (m.planned === 0 && m.executedReal > 0):
+                html += `<span style="color:#17a2b8;font-weight:bold;">ℹ️ Se planificó 0 (+${m.executedReal})</span><br>`;
+                break;
+
+                // ✅ planificado 0 y ejecutado 0 → se cumplió
+              case (m.planned === 0 && m.executedReal === 0):
+                html += `<span style="color:#198754;font-weight:bold;">✔️ Cumple lo planificado (0/0)</span><br>`;
+                break;
+
+                // Superó lo planificado
+              case (m.planned > 0 && pct > 100):
+                html += `<span style="color:#28a745;font-weight:bold;">▲ Supera lo planificado (+${(m.executedReal - m.planned).toFixed(0)})</span><br>`;
+                break;
+
+                // Cumplió exactamente lo planificado
+              case (m.planned > 0 && Math.round(pct) === 100):
+                html += `<span style="color:#198754;font-weight:bold;">✔️ Cumple lo planificado (=${m.planned})</span><br>`;
+                break;
+
+                // Dentro del umbral permitido (amarillo)
+              case (m.planned > 0 && pct >= m.min && pct < 100):
+                html += `<span style="color:#ffc107;font-weight:bold;">⚠️ Dentro del umbral (${pct.toFixed(1)}%)</span><br>`;
+                break;
+
+                // Por debajo del umbral (rojo)
+              case (m.planned > 0 && pct > 0 && pct < m.min):
+                html += `<span style="color:#dc3545;font-weight:bold;">▼ Por debajo del plan (-${(m.planned - m.executedReal).toFixed(0)})</span><br>`;
+                break;
+
+                // Sin ejecución (plan > 0 y ejec = 0)
+              case (m.planned > 0 && m.executedReal === 0):
+                html += `<span style="color:#6c757d;font-weight:bold;">⛔ Sin ejecución (0/${m.planned})</span><br>`;
+                break;
+
+                // Sin datos o casos no contemplados
+              default:
+                html += `<span style="color:#999;">❔ Sin datos disponibles</span><br>`;
+            }
+
+            html += `Progreso temporal: ${timePct.toFixed(1)}%`;
+            return html;
+          }
+        },
+
+        grid: {
+          left: 56, // antes 44
+          right: 110,
+          top: 20,
+          bottom: 44, // antes 28
+          containLabel: true
+        },
+        xAxis: {
+          type: "category",
+          data: labels,
+          name: "Métricas",
+          nameLocation: "middle",
+          nameGap: 28,
+          nameTextStyle: {
+            fontSize: 12,
+            fontWeight: 600,
+            color: "#495057"
+          },
+          axisLabel: {
+            formatter: v => `#${v}`,
+            margin: 2
+          }
+        },
+        yAxis: {
+          type: "value",
+          min: 0,
+          max: maxYBars,
+          name: "Cumplimiento (%)",
+          nameLocation: "middle",
+          nameGap: 46, // distancia del eje
+          nameRotate: 90, // rotado
+          nameTextStyle: {
+            fontSize: 12,
+            fontWeight: 600,
+            color: "#495057"
+          },
+          axisLabel: {
+            formatter: '{value}%',
+            margin: 6
+          }
+        },
+        series: [
+          // === BARRAS PRINCIPALES ===
+          {
+            name: "Ejecutado",
+            type: "bar",
+            data: execData.map(d => ({
+              value: 100, // todas llenan hasta 100%
+              meta: d.meta,
+              fill: Math.min(d.value, 100) // % realmente ejecutado
+            })),
+            barWidth: 40,
+            z: 10,
+            itemStyle: {
+              borderColor: "#000",
+              borderWidth: 2,
+              color: params => {
+                const m = params.data.meta;
+                const baseColor = colorSemaforo(m.executed, m.min, m.max);
+                const fillPct = Math.min(m.executed, 100) / 100;
+                return new echarts.graphic.LinearGradient(0, 1, 0, 0, [{
+                    offset: 0,
+                    color: baseColor
+                  },
+                  {
+                    offset: fillPct,
+                    color: baseColor
+                  },
+                  {
+                    offset: fillPct,
+                    color: "rgba(255,255,255,0)"
+                  },
+                  {
+                    offset: 1,
+                    color: "rgba(255,255,255,0)"
+                  }
+                ]);
+              }
+            },
+            label: {
+              show: true,
+              position: "top",
+              align: "center",
+              verticalAlign: "bottom",
+              distance: 4,
+              formatter: p => {
+                const m = p.data.meta;
+                let label = "";
+                label += `{main|${m.executed}%}\n{small|${m.executedReal}/${m.planned}}`;
+                return label;
+              },
+              rich: {
+                extra: {
+                  color: "#28a745",
+                  fontSize: 12,
+                  fontWeight: "bold",
+                  align: "center"
+                },
+                main: {
+                  color: "#000",
+                  fontSize: 14,
+                  fontWeight: "bold",
+                  align: "center"
+                },
+                small: {
+                  color: "#555",
+                  fontSize: 11,
+                  align: "center"
+                },
+
+              }
+            },
+            animationDuration: BAR_DURATION,
+            animationEasing: "cubicOut",
+            animationDelay: BAR_DELAY_PER_IDX,
+          },
+
+          // === LÍNEAS DE UMBRAL (mejor contraste y estilo más liviano) ===
+          {
+            name: "Límites de desviación",
+            type: "custom",
+            coordinateSystem: "cartesian2d",
+            silent: true,
+            z: 900,
+            renderItem: function(params, api) {
+              const idx = api.value(0);
+              const m = it.metrics[idx];
+              if (!m) return null;
+
+              const yPx = api.coord([idx, m.min])[1];
+              const xCenter = api.coord([idx, m.min])[0];
+              const half = (api.size([1, 0])[0] || 30) * 0.35;
+
+              return {
+                type: "line",
+                shape: {
+                  x1: xCenter - half,
+                  y1: yPx,
+                  x2: xCenter + half,
+                  y2: yPx
+                },
+                style: {
+                  stroke: "#000000",
+                  lineWidth: 1.5,
+                  lineWidth: 1.2,
+                  opacity: 0
+                },
+                keyframeAnimation: {
+                  duration: 700,
+                  delay: 1800,
+                  easing: "cubicOut",
+                  keyframes: [{
+                      percent: 0,
+                      style: {
+                        opacity: 0,
+                        lineWidth: 0
+                      }
+                    },
+                    {
+                      percent: 1,
+                      style: {
+                        opacity: 0.9,
+                        lineWidth: 1.2
+                      }
+                    }
+                  ]
+                },
+                textContent: {
+                  style: {
+                    text: `${m.min}%`,
+                    fill: "#333",
+                    fontSize: 11,
+                    fontWeight: 600,
+                    backgroundColor: "rgba(255,255,255,0.9)",
+                    padding: [1, 4],
+                    borderRadius: 3,
+                    textShadowColor: "rgba(255,255,255,0.9)",
+                    textShadowBlur: 3
+                  }
+                },
+                textConfig: {
+                  position: "top",
+                  offset: [0, -5]
+                }
+              };
+            },
+            data: it.metrics.map((_, idx) => ({
+              value: idx
+            }))
+          },
+
+          // === LÍNEA DE TIEMPO TRANSCURRIDO ===
+          {
+            name: "Tiempo transcurrido",
+            type: "custom",
+            coordinateSystem: "cartesian2d",
+            silent: true,
+            z: 890,
+            renderItem: function(params, api) {
+              const pct = Math.min(timePct, 120); // cap 120%
+              const y = api.coord([0, pct])[1];
+              const xStart = api.coord([0, 0])[0];
+
+              // borde derecho real del área de barras
+              const lastCenter = api.coord([it.metrics.length - 1, 0])[0];
+              const bandW = api.size([1, 0])[0];
+              const plotRight = lastCenter + bandW * 0.5;
+              const chartW = api.getWidth();
+
+              // margen dinámico: evita que el texto quede pegado
+              const labelX = Math.min(plotRight + 90, chartW - 10);
+
+              return {
+                type: "group",
+                children: [
+                  // Línea punteada elegante (animada)
+                  {
+                    type: "line",
+                    shape: {
+                      x1: xStart - 20, // empieza un poco antes
+                      y1: y,
+                      x2: chartW - 50, // hasta el borde derecho del canvas
+                      y2: y
+                    },
+                    style: {
+                      stroke: "#0a3bcfff",
+                      lineWidth: 1.2,
+                      lineDash: [6, 4],
+                      opacity: 0
+                    },
+                    keyframeAnimation: {
+                      duration: 400,
+                      delay: AFTER_OVERFLOW_ALL - 100, // aparece después del overflow
+                      easing: "cubicOut",
+                      keyframes: [{
+                          percent: 0,
+                          style: {
+                            opacity: 0,
+                            lineWidth: 0
+                          }
+                        },
+                        {
+                          percent: 1,
+                          style: {
+                            opacity: 0.8,
+                            lineWidth: 1.0
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  // Texto a la derecha (animado)
+                  {
+                    type: "text",
+                    style: {
+                      x: labelX - 50, // corrige leve desplazamiento a la izquierda
+                      y: y - 500,
+                      text: `${pct.toFixed(1)}%`,
+                      fill: "#0a3bcfff",
+                      fontWeight: "bold",
+                      fontSize: 11.5,
+                      textAlign: "center",
+                      textVerticalAlign: "bottom",
+                      lineHeight: 16,
+                      textShadowColor: "rgba(255,255,255,0.7)",
+                      textShadowBlur: 3,
+                      opacity: 0
+                    },
+                    keyframeAnimation: {
+                      duration: 500,
+                      delay: AFTER_OVERFLOW_ALL, // luego de la línea
+                      easing: "cubicOut",
+                      keyframes: [{
+                          percent: 0,
+                          style: {
+                            opacity: 0,
+                            y: y + 6
+                          }
+                        },
+                        {
+                          percent: 1,
+                          style: {
+                            opacity: 1,
+                            y: y - 8
+                          }
+                        }
+                      ]
+                    }
+                  }
+                ]
+              };
+            },
+            data: [{
+              value: 0
+            }]
+          },
+          //(OVERFLOW)
+          {
+            name: "Overflow",
+            type: "custom",
+            animationEasing: "cubicOut",
+            // Variante A: encadenado por barra (empieza al terminar su barra)
+            animationDuration: 1500,
+            animationDelay: idx => BAR_DELAY_PER_IDX(idx) + BAR_DURATION,
+            renderItem: function(params, api) {
+              const idx = api.value(0);
+              const m = it.metrics[idx];
+              if (!m) return null;
+              const barWidth = api.size([1, 0])[0] * 0.6;
+              const base = api.coord([idx, 100]); // base en 100%
+
+              // === CASO 1: SIN PLANIFICACIÓN (plan=0 y ejecutado>0)
+              // Azul infinito — sube más allá del 120% (representa trabajo fuera del plan)
+              if (m.planned === 0 && m.executedReal > 0) {
+                const yTop = api.coord([idx, 160])[1]; // "infinito" visual (160%)
+                const height = base[1] - yTop;
+                return {
+                  type: "rect",
+                  shape: {
+                    x: base[0] - barWidth / 2,
+                    y: yTop,
+                    width: barWidth,
+                    height: height
+                  },
+                  enterFrom: {
+                    shape: {
+                      y: base[1],
+                      height: 0
+                    }
+                  },
+                  transition: ["shape"],
+                  style: {
+                    fill: "#007bff",
+                    opacity: 0.35,
+                    stroke: "#0056b3",
+                    lineWidth: 1
+                  },
+                  z: 25
+                };
+              }
+              //CASO 2: se superó el 100% (normal, color verde)
+              if (m.executed > 100) {
+                const base = api.coord([idx, 100]);
+                const barWidth = api.size([1, 0])[0] * 0.6;
+                const baseColor = colorSemaforo(m.executed, m.min, m.max);
+                const lightColor = echarts.color.lift(baseColor, 0.3);
+                const extraPct = Math.min((m.executed - 100) / 100, 0.5);
+                const height = api.size([0, extraPct * 100])[1];
+                const y = base[1] - height;
+
+                return {
+                  type: "rect",
+                  shape: {
+                    x: base[0] - barWidth / 2,
+                    y,
+                    width: barWidth,
+                    height
+                  },
+                  enterFrom: {
+                    shape: {
+                      y: base[1],
+                      height: 0
+                    }
+                  },
+                  transition: ["shape"],
+                  style: {
+                    fill: lightColor,
+                    opacity: 0.6,
+                    stroke: baseColor,
+                    lineWidth: 0.5
+                  },
+                  z: 20
+                };
+              }
+
+              return null;
+            },
+            data: it.metrics.map((_, idx) => idx)
+          }
+        ]
+      });
+
+      // Leyenda de métricas
+      if (legendId) {
+        const legendDiv = document.getElementById(legendId);
+        legendDiv.innerHTML = it.metrics.map(m => `<span class="me-3"><b>#${m.id}</b> = ${m.nombre}</span>`).join(' ');
+      }
+    }
     // Esperar a ECharts cargado
     function initDashboard() {
       if (typeof echarts === "undefined") {
@@ -532,671 +1080,277 @@ $DATA = array_values($iterMap);
         return;
       }
 
-      if (!Array.isArray(DATA) || DATA.length === 0) {
-        document.getElementById('trendChart').innerHTML = '<div class="text-muted">No hay datos para mostrar.</div>';
-        return;
-      }
-
-      // === TENDENCIA ===
-      const METRIC_KEYS = [...new Set(DATA.flatMap(it => it.metrics.map(m => m.nombre)))];
-      const palette = ["#007bff", "#28a745", "#e83e8c", "#fd7e14", "#6f42c1", "#20c997", "#6610f2", "#17a2b8"];
-      const iterLabels = DATA.map(d => d.iteracion);
-      // Ajuste de ancho + scroll horizontal
-      const perIterPx = 160; // px por iteración
+      // ========== Gráfico Tendencia (igual a tu original) ==========
       const trendWrap = document.getElementById("trendWrap");
       const trendChartDom = document.getElementById("trendChart");
-      const trendChart = echarts.init(trendChartDom);
+      if (!Array.isArray(DATA) || DATA.length === 0) {
+        trendChartDom.innerHTML = '<div class="text-muted">No hay datos para mostrar.</div>';
+      } else {
+        const METRIC_KEYS = [...new Set(DATA.flatMap(it => it.metrics.map(m => m.nombre)))];
+        //paleta de colores dinamica porque puede haber muchas métricas
+        const palette = [
+          "#007bff", "#28a745", "#dc3545", "#ffc107", "#17a2b8",
+          "#6f42c1", "#fd7e14", "#20c997", "#6610f2", "#e83e8c",
+          "#343a40", "#fd7e14", "#20c997", "#6f42c1", "#e83e8c"
+        ];
+        const iterLabels = DATA.map(d => d.iteracion);
+        const perIterPx = 160;
+        const trendChart = echarts.init(trendChartDom);
 
-      function resizeTrend() {
-        const wrapW = trendWrap.clientWidth || 800; // ancho disponible
-        const needed = Math.max(wrapW, DATA.length * perIterPx);
-        trendChartDom.style.width = needed + "px"; // ocupa 100% o se expande para scroll
-        trendChart.resize();
-      }
-      resizeTrend();
-      window.addEventListener("resize", resizeTrend);
-      const lineSeries = METRIC_KEYS.map((name, idx) => ({
-        name,
-        type: "line",
-        smooth: false,
-        showSymbol: true,
-        lineStyle: {
-          width: 2,
-          color: palette[idx % palette.length]
-        },
-        itemStyle: {
-          color: palette[idx % palette.length]
-        },
-        emphasis: {
-          focus: "series"
-        },
-        blur: {
+        function resizeTrend() {
+          const wrapW = trendWrap.clientWidth || 800;
+          const needed = Math.max(wrapW, DATA.length * perIterPx);
+          trendChartDom.style.width = needed + "px";
+          trendChart.resize();
+        }
+        resizeTrend();
+        window.addEventListener("resize", resizeTrend);
+
+        const lineSeries = METRIC_KEYS.map((name, idx) => ({
+          name,
+          type: "line",
+          smooth: false,
+          showSymbol: true,
           lineStyle: {
-            opacity: 0.25
+            width: 2,
+            color: palette[idx % palette.length]
           },
           itemStyle: {
-            opacity: 0.25
-          }
-        },
-        data: DATA.map(it => {
-          const m = it.metrics.find(mm => mm.nombre === name);
-          return m ? {
-            value: m.executed,
-            meta: {
-              nombre: m.nombre,
-              executedReal: m.executedReal,
-              planned: m.planned,
-              unit: m.unit,
-              noPlan: m.noPlan,
-              extra: m.extra
+            color: palette[idx % palette.length]
+          },
+          emphasis: {
+            focus: "series"
+          },
+          blur: {
+            lineStyle: {
+              opacity: 0.25
+            },
+            itemStyle: {
+              opacity: 0.25
             }
-          } : {
-            value: 0,
-            meta: null
-          };
-        })
-      }));
-
-      const maxYTrend = Math.max(
-        120,
-        Math.ceil(Math.max(...DATA.flatMap(it => it.metrics.map(m => Math.max(m.max, m.executed)))) / 10) * 10
-      );
-      // Configuración del gráfico de tendencia
-      trendChart.setOption({
-        tooltip: {
-          trigger: "axis",
-          formatter: function(params) {
-            const idx = params[0]?.dataIndex ?? 0;
-            const iter = iterLabels[idx] || "";
-            let html = `<b>${iter}</b><br/>`;
-            params.forEach(p => {
-              if (p.seriesName === "Referencia 100%") return;
-              const meta = p.data?.meta;
-              const pct = typeof p.value === "number" ? p.value : (p.data?.value ?? 0);
-              const ejec = meta?.executedReal ?? "—";
-              const plan = meta?.planned ?? "—";
-              const dot = `<span style="display:inline-block;margin-right:6px;width:10px;height:10px;background:${p.color};border-radius:50%"></span>`;
-              let detalle = "";
-              if (meta) {
-                if (meta.noPlan && ejec > 0) {
-                  detalle = `( +${meta.extra} ${meta.unit || 'u'} sin plan )`;
-                } else {
-                  detalle = `(${ejec} / ${plan})`;
-                }
+          },
+          data: DATA.map(it => {
+            const m = it.metrics.find(mm => mm.nombre === name);
+            return m ? {
+              value: m.executed,
+              meta: {
+                nombre: m.nombre,
+                executedReal: m.executedReal,
+                planned: m.planned,
+                unit: m.unit,
+                noPlan: m.noPlan,
+                extra: m.extra
               }
-              html += `${dot}${p.seriesName}: ${pct}% ${detalle}<br/>`;
-            });
-            return html;
-          }
-        },
-        legend: {
-          data: METRIC_KEYS,
-          top: 8,
-          itemGap: 18
-        },
-        grid: {
-          left: 48,
-          right: 84,
-          top: 88,
-          bottom: 40,
-          containLabel: true
-        },
-        xAxis: {
-          type: "category",
-          data: iterLabels
-        },
-        yAxis: {
-          type: "value",
-          min: 0,
-          max: maxYTrend,
-          axisLabel: {
-            formatter: '{value}%'
-          }
-        },
-        series: [
-          ...lineSeries,
-          {
-            name: "Referencia 100%",
-            type: "line",
-            silent: true,
-            symbol: "none",
-            markLine: {
-              symbol: "none",
-              label: {
-                show: true,
-                position: "end",
-                formatter: "100%", // <-- se muestra como 100%
-                color: "#6c757d",
-                backgroundColor: "rgba(255,255,255,.6)",
-                padding: [2, 4]
-              },
-              lineStyle: {
-                type: "dashed",
-                color: "#6c757d"
-              },
-              data: [{
-                yAxis: 100
-              }] // <-- debe quedar numérico
-            }
-          }
-        ]
-      });
-      // === BARRAS POR ITERACIÓN ===
-      const row = document.getElementById("barsRow");
-
-      DATA.forEach((it, i) => {
-        const timePct = pctTiempoIter(it.inicio, it.fin);
-
-        const col = document.createElement("div");
-        col.className = "col-12 col-xl-6";
-        col.innerHTML = `
-<div class="card card-iteracion h-100">
-    <div class="card-header d-flex justify-content-between align-items-center">
-      <div class="card-title-main">${it.iteracion}</div>
-      <div class="card-subtitle-dates">Del ${it.inicio} al ${it.fin}</div>
-    </div>
-
- <div class="card-body p-3">
-  <div class="chart-scroll mb-2">
-    <div class="chart-stage">
-      <div id="bars-${i}" class="chart"></div>
-    </div>
-  </div>
-
-  <!-- Leyendas compactas de colores -->
-  <div class="legend-colors mb-2">
-    <span class="legend-item"><span class="legend-dot" style="background:#28a745;"></span>Se cumplió</span>
-    <span class="legend-item"><span class="legend-dot" style="background:#ffc107;"></span>Dentro de umbral</span>
-    <span class="legend-item"><span class="legend-dot" style="background:#dc3545;"></span>Debajo de límite</span>
-    <span class="legend-item"><span class="legend-dot" style="background:#007bff;"></span>Plan=0</span>
-    <span class="legend-item"><span class="legend-line"></span>Umbral</span>
-    <span class="legend-item"><span class="legend-dash"></span>Progreso</span>
-  </div>
-<!-- Leyendas unificadas abajo -->
-<div class="legend-bottom mt-3">
-  <div id="legend-metrics-${i}" class="mb-2"></div>
-</div>
-  </div>
-
-`;
-        row.appendChild(col);
-
-        const dom = document.getElementById(`bars-${i}`);
-        const chart = echarts.init(dom);
-
-        const labels = it.metrics.map(m => m.id);
-        const maxYBars = 120;
-        const execData = it.metrics.map(m => ({
-          value: Math.min(m.executed, maxYBars),
-          meta: m
+            } : {
+              value: 0,
+              meta: null
+            };
+          })
         }));
-        const colors = it.metrics.map(m => colorSemaforo(m.executed, m.min, m.max));
-        const BAR_DURATION = 1500; // ya lo usás
-        const BAR_DELAY_PER_IDX = idx => idx * 150; // ya lo usás
-        const OVERFLOW_DURATION = 1500; // el rect “extra” que aparece arriba
-        const lastDelay = BAR_DELAY_PER_IDX(it.metrics.length - 1);
-        const AFTER_OVERFLOW_ALL = lastDelay + BAR_DURATION + OVERFLOW_DURATION + 150;
-        // --- ANCHO ADAPTATIVO SIN MÁRGENES VACÍOS ---
-        const container = dom.parentElement;
-        const containerWidth = container.clientWidth || 600;
-        const metricsCount = it.metrics.length;
 
-        // calculamos ancho total ideal (90 px por barra como referencia)
-        const totalBarsWidth = metricsCount * 90;
-
-        // si entra todo, ocupar 100% del contenedor y eliminar scroll
-        if (totalBarsWidth <= containerWidth) {
-          dom.style.width = "100%";
-          container.style.overflowX = "hidden";
-        } else {
-          // si no entra, habilitar scroll y expandir solo lo necesario
-          dom.style.width = totalBarsWidth + "px";
-          container.style.overflowX = "auto";
-        }
-
-        chart.resize();
-
-
-        // umbrales y tiempo aparecerán después de esto
-        chart.setOption({
+        const maxYTrend = Math.max(
+          120,
+          Math.ceil(Math.max(...DATA.flatMap(it => it.metrics.map(m => Math.max(m.max, m.executed)))) / 10) * 10
+        );
+        // Configuración del gráfico de tendencia
+        trendChart.setOption({
           tooltip: {
             trigger: "axis",
-            appendToBody: true,
-            boundaryGap: false,
-            backgroundColor: "rgba(255,255,255,0.95)",
-            borderColor: "#ccc",
-            borderWidth: 1,
-            textStyle: {
-              color: "#222",
-              fontSize: 13,
-            },
-            extraCssText: "box-shadow: 0 2px 8px rgba(0,0,0,0.2); border-radius: 6px;",
-            axisPointer: {
-              type: "none"
-            },
-            formatter: params => {
-              const p = params[0];
-              const m = p.data.meta;
-              let html = `<b>#${p.axisValue} - ${m.nombre}</b><br>`;
-              html += `Límite Desviación: ${m.min}%<br>`;
-              html += `Ejecutado: ${m.executed}% (${m.executedReal} de ${m.planned})<br>`;
-              if (m.planned === 0 && m.executedReal > 0) { //si se planificó 0 y se ejecutó algo
-                html += `<span style="color:#17a2b8;font-weight:bold;">ℹ️ Se planificó 0 (+${m.executedReal})</span><br>`;
-              } else if (m.planned > 0 && m.executedReal > m.planned) { //si planificado es mayor a 0 y se superó lo planificado
-                html += `<span style="color:#28a745;font-weight:bold;">▲ Supera lo planificado (+${m.executedReal - m.planned})</span><br>`;
-              } else if (m.planned > 0 && m.executedReal === m.planned) { //si se cumplió exactamente lo planificado
-                html += `<span style="color:#198754;font-weight:bold;">✔️ Cumple lo planificado (=${m.planned})</span><br>`;
-              } else if (m.planned > 0 && m.executedReal > 0 && m.executedReal < m.planned) { //si se quedó por debajo de lo planificado
-                html += `<span style="color:#dc3545;font-weight:bold;">▼ Por debajo del plan (-${m.planned - m.executedReal})</span><br>`;
-              } else if (m.planned > 0 && m.executedReal === 0) { //si no se ejecutó nada y se planifico mas de 0
-                html += `<span style="color:#6c757d;font-weight:bold;">⛔ Sin ejecución (0/${m.planned})</span><br>`;
-              } else {
-                html += `<span style="color:#999;">❔ Sin datos disponibles</span><br>`;
-              }
-              html += `Progreso temporal: ${timePct.toFixed(1)}%`;
+            formatter: function(params) {
+              const idx = params[0]?.dataIndex ?? 0;
+              const iter = iterLabels[idx] || "";
+              let html = `<b>${iter}</b><br/>`;
+              params.forEach(p => {
+                if (p.seriesName === "Referencia 100%") return;
+                const meta = p.data?.meta;
+                const pct = typeof p.value === "number" ? p.value : (p.data?.value ?? 0);
+                const ejec = meta?.executedReal ?? "—";
+                const plan = meta?.planned ?? "—";
+                const dot = `<span style="display:inline-block;margin-right:6px;width:10px;height:10px;background:${p.color};border-radius:50%"></span>`;
+                let detalle = "";
+                if (meta) {
+                  if (meta.noPlan && ejec > 0) {
+                    detalle = `( +${meta.extra} ${meta.unit || 'u'} sin plan )`;
+                  } else {
+                    detalle = `(${ejec} / ${plan})`;
+                  }
+                }
+                html += `${dot}${p.seriesName}: ${pct}% ${detalle}<br/>`;
+              });
               return html;
             }
           },
-
+          legend: {
+            data: METRIC_KEYS,
+            top: 8,
+            itemGap: 18
+          },
           grid: {
-            left: 56, // antes 44
-            right: 110,
-            top: 20,
-            bottom: 44, // antes 28
+            left: 48,
+            right: 84,
+            top: 88,
+            bottom: 40,
             containLabel: true
           },
           xAxis: {
             type: "category",
-            data: labels,
-            name: "Métricas",
-            nameLocation: "middle",
-            nameGap: 28,
-            nameTextStyle: {
-              fontSize: 12,
-              fontWeight: 600,
-              color: "#495057"
-            },
-            axisLabel: {
-              formatter: v => `#${v}`,
-              margin: 2
-            }
+            data: iterLabels
           },
           yAxis: {
             type: "value",
             min: 0,
-            max: maxYBars,
-            name: "Cumplimiento (%)",
-            nameLocation: "middle",
-            nameGap: 46, // distancia del eje
-            nameRotate: 90, // rotado
-            nameTextStyle: {
-              fontSize: 12,
-              fontWeight: 600,
-              color: "#495057"
-            },
+            max: maxYTrend,
             axisLabel: {
-              formatter: '{value}%',
-              margin: 6
+              formatter: '{value}%'
             }
           },
           series: [
-            // === BARRAS PRINCIPALES ===
+            ...lineSeries,
             {
-              name: "Ejecutado",
-              type: "bar",
-              data: execData.map(d => ({
-                value: 100, // todas llenan hasta 100%
-                meta: d.meta,
-                fill: Math.min(d.value, 100) // % realmente ejecutado
-              })),
-              barWidth: 40,
-              z: 10,
-              itemStyle: {
-                borderColor: "#000",
-                borderWidth: 2,
-                color: params => {
-                  const m = params.data.meta;
-                  const baseColor = colorSemaforo(m.executed, m.min, m.max);
-                  const fillPct = Math.min(m.executed, 100) / 100;
-                  return new echarts.graphic.LinearGradient(0, 1, 0, 0, [{
-                      offset: 0,
-                      color: baseColor
-                    },
-                    {
-                      offset: fillPct,
-                      color: baseColor
-                    },
-                    {
-                      offset: fillPct,
-                      color: "rgba(255,255,255,0)"
-                    },
-                    {
-                      offset: 1,
-                      color: "rgba(255,255,255,0)"
-                    }
-                  ]);
-                }
-              },
-              label: {
-                show: true,
-                position: "top",
-                align: "center",
-                verticalAlign: "bottom",
-                distance: 4,
-                formatter: p => {
-                  const m = p.data.meta;
-                  let label = "";
-                  label += `{main|${m.executed}%}\n{small|${m.executedReal}/${m.planned}}`;
-                  return label;
+              name: "Referencia 100%",
+              type: "line",
+              silent: true,
+              symbol: "none",
+              markLine: {
+                symbol: "none",
+                label: {
+                  show: true,
+                  position: "end",
+                  formatter: "100%", // <-- se muestra como 100%
+                  color: "#6c757d",
+                  backgroundColor: "rgba(255,255,255,.6)",
+                  padding: [2, 4]
                 },
-                rich: {
-                  extra: {
-                    color: "#28a745",
-                    fontSize: 12,
-                    fontWeight: "bold",
-                    align: "center"
-                  },
-                  main: {
-                    color: "#000",
-                    fontSize: 14,
-                    fontWeight: "bold",
-                    align: "center"
-                  },
-                  small: {
-                    color: "#555",
-                    fontSize: 11,
-                    align: "center"
-                  },
-
-                }
-              },
-              animationDuration: BAR_DURATION,
-              animationEasing: "cubicOut",
-              animationDelay: BAR_DELAY_PER_IDX,
-            },
-
-            // === LÍNEAS DE UMBRAL (mejor contraste y estilo más liviano) ===
-            {
-              name: "Límites de desviación",
-              type: "custom",
-              coordinateSystem: "cartesian2d",
-              silent: true,
-              z: 900,
-              renderItem: function(params, api) {
-                const idx = api.value(0);
-                const m = it.metrics[idx];
-                if (!m) return null;
-
-                const yPx = api.coord([idx, m.min])[1];
-                const xCenter = api.coord([idx, m.min])[0];
-                const half = (api.size([1, 0])[0] || 30) * 0.35;
-
-                return {
-                  type: "line",
-                  shape: {
-                    x1: xCenter - half,
-                    y1: yPx,
-                    x2: xCenter + half,
-                    y2: yPx
-                  },
-                  style: {
-                    stroke: "#000000",
-                    lineWidth: 1.5,
-                    lineWidth: 1.2,
-                    opacity: 0
-                  },
-                  keyframeAnimation: {
-                    duration: 700,
-                    delay: 1800,
-                    easing: "cubicOut",
-                    keyframes: [{
-                        percent: 0,
-                        style: {
-                          opacity: 0,
-                          lineWidth: 0
-                        }
-                      },
-                      {
-                        percent: 1,
-                        style: {
-                          opacity: 0.9,
-                          lineWidth: 1.2
-                        }
-                      }
-                    ]
-                  },
-                  textContent: {
-                    style: {
-                      text: `${m.min}%`,
-                      fill: "#333",
-                      fontSize: 11,
-                      fontWeight: 600,
-                      backgroundColor: "rgba(255,255,255,0.9)",
-                      padding: [1, 4],
-                      borderRadius: 3,
-                      textShadowColor: "rgba(255,255,255,0.9)",
-                      textShadowBlur: 3
-                    }
-                  },
-                  textConfig: {
-                    position: "top",
-                    offset: [0, -5]
-                  }
-                };
-              },
-              data: it.metrics.map((_, idx) => ({
-                value: idx
-              }))
-            },
-
-            // === LÍNEA DE TIEMPO TRANSCURRIDO ===
-            {
-              name: "Tiempo transcurrido",
-              type: "custom",
-              coordinateSystem: "cartesian2d",
-              silent: true,
-              z: 890,
-              renderItem: function(params, api) {
-                const pct = Math.min(timePct, 120); // cap 120%
-                const y = api.coord([0, pct])[1];
-                const xStart = api.coord([0, 0])[0];
-
-                // borde derecho real del área de barras
-                const lastCenter = api.coord([it.metrics.length - 1, 0])[0];
-                const bandW = api.size([1, 0])[0];
-                const plotRight = lastCenter + bandW * 0.5;
-                const chartW = api.getWidth();
-
-                // margen dinámico: evita que el texto quede pegado
-                const labelX = Math.min(plotRight + 90, chartW - 10);
-
-                return {
-                  type: "group",
-                  children: [
-                    // Línea punteada elegante (animada)
-                    {
-                      type: "line",
-                      shape: {
-                        x1: xStart - 20, // empieza un poco antes
-                        y1: y,
-                        x2: chartW - 50, // hasta el borde derecho del canvas
-                        y2: y
-                      },
-                      style: {
-                        stroke: "#0a3bcfff",
-                        lineWidth: 1.2,
-                        lineDash: [6, 4],
-                        opacity: 0
-                      },
-                      keyframeAnimation: {
-                        duration: 400,
-                        delay: AFTER_OVERFLOW_ALL - 100, // aparece después del overflow
-                        easing: "cubicOut",
-                        keyframes: [{
-                            percent: 0,
-                            style: {
-                              opacity: 0,
-                              lineWidth: 0
-                            }
-                          },
-                          {
-                            percent: 1,
-                            style: {
-                              opacity: 0.8,
-                              lineWidth: 1.0
-                            }
-                          }
-                        ]
-                      }
-                    },
-                    // Texto a la derecha (animado)
-                    {
-                      type: "text",
-                      style: {
-                        x: labelX - 50, // corrige leve desplazamiento a la izquierda
-                        y: y - 500,
-                        text: `${pct.toFixed(1)}%`,
-                        fill: "#0a3bcfff",
-                        fontWeight: "bold",
-                        fontSize: 11.5,
-                        textAlign: "center",
-                        textVerticalAlign: "bottom",
-                        lineHeight: 16,
-                        textShadowColor: "rgba(255,255,255,0.7)",
-                        textShadowBlur: 3,
-                        opacity: 0
-                      },
-                      keyframeAnimation: {
-                        duration: 500,
-                        delay: AFTER_OVERFLOW_ALL, // luego de la línea
-                        easing: "cubicOut",
-                        keyframes: [{
-                            percent: 0,
-                            style: {
-                              opacity: 0,
-                              y: y + 6
-                            }
-                          },
-                          {
-                            percent: 1,
-                            style: {
-                              opacity: 1,
-                              y: y - 8
-                            }
-                          }
-                        ]
-                      }
-                    }
-                  ]
-                };
-              },
-              data: [{
-                value: 0
-              }]
-            },
-            //(OVERFLOW)
-            {
-              name: "Overflow",
-              type: "custom",
-              animationEasing: "cubicOut",
-              // Variante A: encadenado por barra (empieza al terminar su barra)
-              animationDuration: 1500,
-              animationDelay: idx => BAR_DELAY_PER_IDX(idx) + BAR_DURATION,
-              renderItem: function(params, api) {
-                const idx = api.value(0);
-                const m = it.metrics[idx];
-                if (!m) return null;
-                const barWidth = api.size([1, 0])[0] * 0.6;
-                const base = api.coord([idx, 100]); // base en 100%
-
-                // === CASO 1: SIN PLANIFICACIÓN (plan=0 y ejecutado>0)
-                // Azul infinito — sube más allá del 120% (representa trabajo fuera del plan)
-                if (m.planned === 0 && m.executedReal > 0) {
-                  const yTop = api.coord([idx, 160])[1]; // "infinito" visual (160%)
-                  const height = base[1] - yTop;
-                  return {
-                    type: "rect",
-                    shape: {
-                      x: base[0] - barWidth / 2,
-                      y: yTop,
-                      width: barWidth,
-                      height: height
-                    },
-                    enterFrom: {
-                      shape: {
-                        y: base[1],
-                        height: 0
-                      }
-                    },
-                    transition: ["shape"],
-                    style: {
-                      fill: "#007bff",
-                      opacity: 0.35,
-                      stroke: "#0056b3",
-                      lineWidth: 1
-                    },
-                    z: 25
-                  };
-                }
-                //CASO 2: se superó el 100% (normal, color verde)
-                if (m.executed > 100) {
-                  const base = api.coord([idx, 100]);
-                  const barWidth = api.size([1, 0])[0] * 0.6;
-                  const baseColor = colorSemaforo(m.executed, m.min, m.max);
-                  const lightColor = echarts.color.lift(baseColor, 0.3);
-                  const extraPct = Math.min((m.executed - 100) / 100, 0.5);
-                  const height = api.size([0, extraPct * 100])[1];
-                  const y = base[1] - height;
-
-                  return {
-                    type: "rect",
-                    shape: {
-                      x: base[0] - barWidth / 2,
-                      y,
-                      width: barWidth,
-                      height
-                    },
-                    enterFrom: {
-                      shape: {
-                        y: base[1],
-                        height: 0
-                      }
-                    },
-                    transition: ["shape"],
-                    style: {
-                      fill: lightColor,
-                      opacity: 0.6,
-                      stroke: baseColor,
-                      lineWidth: 0.5
-                    },
-                    z: 20
-                  };
-                }
-
-                return null;
-              },
-              data: it.metrics.map((_, idx) => idx)
+                lineStyle: {
+                  type: "dashed",
+                  color: "#6c757d"
+                },
+                data: [{
+                  yAxis: 100
+                }] // <-- debe quedar numérico
+              }
             }
           ]
         });
+      }
 
-        // Lista de métricas (abajo)
-        const metricsHtml = it.metrics
-          .map(m => `<span class="me-3"><b>#${m.id}</b> = ${m.nombre}</span>`)
-          .join(' ');
-        document.getElementById(`legend-metrics-${i}`).innerHTML = metricsHtml;
-      });
+      // ========== Cards de barras (izquierda/derecha) ==========
+      const row = document.getElementById("barsRow");
+      row.innerHTML = "";
 
-      // Redimensionamiento y actualización de gráficos
-      setTimeout(() => {
-        try {
-          trendChart.resize();
-        } catch (e) {}
-        window.dispatchEvent(new Event('resize'));
-      }, 200);
+      // ---- Card Izquierda: Anterior + selector ----
+      // Lista de iteraciones anteriores válidas respecto al inicio de la actual (si existe)
+      const anteriorLista = Array.isArray(DATA) ?
+        DATA.filter(d => {
+          if (ACTUAL && ACTUAL.inicio) return new Date(d.fin).getTime() < new Date(ACTUAL.inicio).getTime();
+          return new Date(d.fin).getTime() < Date.now();
+        }) : [];
 
-      setTimeout(() => window.dispatchEvent(new Event('resize')), 500);
-    };
+      if (anteriorLista.length === 0) {
+        // Mensaje de “No existen iteraciones anteriores.”
+        const colLeft = document.createElement("div");
+        colLeft.className = "col-12 col-xl-6";
+        colLeft.innerHTML = `
+          <div class="card h-100 d-flex justify-content-center align-items-center text-center text-muted">
+            <div class="p-3">${MSG_ANT || "No existen iteraciones anteriores."}</div>
+          </div>`;
+        row.appendChild(colLeft);
+      } else {
+        // Por defecto: la anterior a la actual (ANETERIOR del backend)
+        const defIter = ANTERIOR || anteriorLista[anteriorLista.length - 1];
+        const defIndex = DATA.findIndex(d => d.iteracion === defIter.iteracion);
+
+        const colLeft = document.createElement("div");
+        colLeft.className = "col-12 col-xl-6";
+        colLeft.innerHTML = `
+          <div class="card card-iteracion h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+              <div>
+                <div class="card-title-main" id="left-title">${defIter.iteracion}</div>
+                <div class="card-subtitle-dates" id="left-dates">Del ${defIter.inicio} al ${defIter.fin}</div>
+              </div>
+              <select id="hist-select" class="custom-select custom-select-sm" style="width:auto;">
+                ${anteriorLista.map(d => {
+                  const idx = DATA.findIndex(x => x.iteracion === d.iteracion);
+                  const sel = (idx === defIndex) ? 'selected' : '';
+                  return `<option value="${idx}" ${sel}>${d.iteracion}</option>`;
+                }).join('')}
+              </select>
+            </div>
+            <div class="card-body p-3">
+              <div class="chart-scroll mb-2"><div class="chart-stage"><div id="bars-anterior" class="chart"></div></div></div>
+              <div class="legend-colors mb-2">
+                <span class="legend-item"><span class="legend-dot" style="background:#28a745;"></span>Se cumplió</span>
+                <span class="legend-item"><span class="legend-dot" style="background:#ffc107;"></span>Dentro de umbral</span>
+                <span class="legend-item"><span class="legend-dot" style="background:#dc3545;"></span>Debajo de límite</span>
+                <span class="legend-item"><span class="legend-dot" style="background:#3b82f6;"></span>Planificado=0</span>
+                <span class="legend-item"><span class="legend-line"></span>Umbral</span>
+                <span class="legend-item"><span class="legend-dash"></span>Progreso iteración</span>
+              </div>
+              <div class="legend-bottom mt-3">
+                <div id="legend-metrics-anterior" class="mb-2"></div>
+              </div>
+            </div>
+          </div>`;
+        row.appendChild(colLeft);
+
+        // Render inicial
+        renderIteracionChart(defIter, "bars-anterior", "legend-metrics-anterior");
+
+        // Cambio de selección
+        document.addEventListener("change", e => {
+          if (e.target && e.target.id === "hist-select") {
+            const idx = parseInt(e.target.value, 10);
+            const chosen = DATA[idx];
+            document.getElementById("left-title").textContent = chosen.iteracion;
+            document.getElementById("left-dates").textContent = `Del ${chosen.inicio} al ${chosen.fin}`;
+            renderIteracionChart(chosen, "bars-anterior", "legend-metrics-anterior");
+          }
+        });
+      }
+
+      // ---- Card Derecha: Actual o mensaje ----
+      if (ACTUAL && Array.isArray(ACTUAL.metrics) && ACTUAL.metrics.length > 0) {
+        const colRight = document.createElement("div");
+        colRight.className = "col-12 col-xl-6";
+        colRight.innerHTML = `
+          <div class="card card-iteracion h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+              <div>
+                <div class="card-title-main">${ACTUAL.iteracion}</div>
+                <div class="card-subtitle-dates">Del ${ACTUAL.inicio} al ${ACTUAL.fin}</div>
+              </div>
+            </div>
+            <div class="card-body p-3">
+              <div class="chart-scroll mb-2"><div class="chart-stage"><div id="bars-actual" class="chart"></div></div></div>
+              <div class="legend-colors mb-2">
+                <span class="legend-item"><span class="legend-dot" style="background:#28a745;"></span>Se cumplió</span>
+                <span class="legend-item"><span class="legend-dot" style="background:#ffc107;"></span>Dentro de umbral</span>
+                <span class="legend-item"><span class="legend-dot" style="background:#dc3545;"></span>Debajo de límite</span>
+                <span class="legend-item"><span class="legend-dot" style="background:#3b82f6;"></span>Planificado=0</span>
+                <span class="legend-item"><span class="legend-line"></span>Umbral</span>
+                <span class="legend-item"><span class="legend-dash"></span>Progreso iteración</span>
+              </div>
+              <div class="legend-bottom mt-3">
+                <div id="legend-metrics-actual" class="mb-2"></div>
+              </div>
+            </div>
+          </div>`;
+        row.appendChild(colRight);
+
+        renderIteracionChart(ACTUAL, "bars-actual", "legend-metrics-actual");
+      } else {
+        // Mostrar mensaje sin borrar la card ni alterar tamaño (card placeholder)
+        const colRight = document.createElement("div");
+        colRight.className = "col-12 col-xl-6";
+        colRight.innerHTML = `
+          <div class="card card-iteracion h-100 d-flex justify-content-center align-items-center text-center text-muted">
+            <div class="p-3">${MSG_ACTUAL || "No se planificó la fase X (Iteración Y) para la fecha actual."}</div>
+          </div>`;
+        row.appendChild(colRight);
+      }
+    }
+
     document.addEventListener("DOMContentLoaded", initDashboard);
   </script>
 </body>
