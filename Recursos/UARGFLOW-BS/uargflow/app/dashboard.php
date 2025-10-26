@@ -1,8 +1,8 @@
 <?php
-// ============================
+// ============================a
 // Conexión a MariaDB
 // ============================
-$conexion = new mysqli("localhost", "root", "", "bd_codevit", 3308);
+$conexion = new mysqli("localhost", "root", "", "bd_prueba", 3308);
 if ($conexion->connect_error) {
   die("Error al conectar: " . $conexion->connect_error);
 }
@@ -11,7 +11,7 @@ if ($conexion->connect_error) {
 // ============================
 // Proyecto (puedes pasar ?proyecto=ID)
 // ============================
-$idProyecto = isset($_GET['proyecto']) ? (int)$_GET['proyecto'] : 1;
+$idProyecto = isset($_GET['proyecto']) ? (int)$_GET['proyecto'] : 4;
 
 $sqlProyecto = "SELECT nombre, estado FROM proyecto WHERE id_proyecto = $idProyecto";
 $resProyecto = $conexion->query($sqlProyecto);
@@ -531,19 +531,18 @@ $conexion->close();
       </div>
       <div class="col-6 col-md-4">
 
-      <div class="card stat-card h-100">
-        <div class="card-body">
-          <div class="stat-icon icon-bg-secondary">
-            <span class="oi oi-loop-circular"></span>
-          </div>
-          <div class="stat-content">
-            <span class="stat-label">Iteraciones</span>
-            <div class="stat-value text-dark"><?= (int)$totalIteraciones ?></div>
-            <span class="status-line text-muted">Totales registradas</span>
+        <div class="card stat-card h-100">
+          <div class="card-body">
+            <div class="stat-icon icon-bg-secondary">
+              <span class="oi oi-loop-circular"></span>
+            </div>
+            <div class="stat-content">
+              <span class="stat-label">Iteraciones</span>
+              <div class="stat-value text-dark"><?= (int)$totalIteraciones ?></div>
+            </div>
           </div>
         </div>
       </div>
-    </div>
     </div>
 
     <!-- Barras -->
@@ -609,7 +608,21 @@ $conexion->close();
       const dom = document.getElementById(chartId);
       const chart = echarts.init(dom);
       const labels = it.metrics.map(m => m.id);
-      const maxYBars = 120;
+
+      // === Configuración de máximos ===
+      const BAR_WIDTH = 40; // ancho barra base
+      const VISIBLE_MAX = 120; // tope visible
+      const OVERFLOW_TOP = 140; // “un poco” por encima
+      // Antes: const hasNoPlan = ...
+      // Nuevo: levantar eje oculto si hay cualquier overflow
+      const hasOverflow = it.metrics.some(m =>
+        (m.planned === 0 && m.executedReal > 0) || (Number(m.executed) > VISIBLE_MAX)
+      );
+      const OVERFLOW_MAX = hasOverflow ? OVERFLOW_TOP : VISIBLE_MAX; // eje oculto si hace falta
+
+      // Para las barras normales seguimos usando 120
+      const maxYBars = VISIBLE_MAX;
+
       const execData = it.metrics.map(m => ({
         value: Math.min(m.executed, maxYBars),
         meta: m
@@ -708,10 +721,10 @@ $conexion->close();
         },
 
         grid: {
-          left: 56, // antes 44
+          left: 56,
           right: 110,
-          top: 20,
-          bottom: 44, // antes 28
+          top: 30, // antes 20 → deja espacio para dibujar sobre 120%
+          bottom: 44,
           containLabel: true
         },
         xAxis: {
@@ -730,35 +743,50 @@ $conexion->close();
             margin: 2
           }
         },
-        yAxis: {
-          type: "value",
-          min: 0,
-          max: maxYBars,
-          name: "Cumplimiento (%)",
-          nameLocation: "middle",
-          nameGap: 46, // distancia del eje
-          nameRotate: 90, // rotado
-          nameTextStyle: {
-            fontSize: 12,
-            fontWeight: 600,
-            color: "#495057"
+        yAxis: [{
+            type: "value",
+            min: 0,
+            max: VISIBLE_MAX, // 120% visible
+            name: "Cumplimiento (%)",
+            nameLocation: "middle",
+            nameGap: 46,
+            nameRotate: 90,
+            nameTextStyle: {
+              fontSize: 12,
+              fontWeight: 600,
+              color: "#495057"
+            },
+            axisLabel: {
+              formatter: '{value}%',
+              margin: 6
+            }
           },
-          axisLabel: {
-            formatter: '{value}%',
-            margin: 6
-          }
-        },
-        series: [
-          // === BARRAS PRINCIPALES ===
           {
+            type: "value",
+            min: 0,
+            max: OVERFLOW_MAX, // 160% para overflow
+            show: false, // oculto
+            splitLine: {
+              show: false
+            },
+            axisTick: {
+              show: false
+            },
+            axisLine: {
+              show: false
+            }
+          }
+        ],
+        series: [{
             name: "Ejecutado",
             type: "bar",
+            yAxisIndex: 0, // usa el eje visible (120)
             data: execData.map(d => ({
-              value: 100, // todas llenan hasta 100%
+              value: 100,
               meta: d.meta,
-              fill: Math.min(d.value, 100) // % realmente ejecutado
+              fill: Math.min(d.value, 100)
             })),
-            barWidth: 40,
+            barWidth: BAR_WIDTH,
             z: 10,
             itemStyle: {
               borderColor: "#000",
@@ -907,8 +935,8 @@ $conexion->close();
             z: 890,
             renderItem: function(params, api) {
               const pct = Math.min(timePct, 120); // cap 120%
-              const y = api.coord([0, pct])[1];
-              const xStart = api.coord([0, 0])[0];
+              const y = api.coord([0, pct])[1]; // posición Y de la línea
+              const xStart = api.coord([0, 0])[0]; //
 
               // borde derecho real del área de barras
               const lastCenter = api.coord([it.metrics.length - 1, 0])[0];
@@ -926,7 +954,7 @@ $conexion->close();
                   {
                     type: "line",
                     shape: {
-                      x1: xStart - 20, // empieza un poco antes
+                      x1: api.coord([it.metrics[0]?.id || 0, 0])[0] - (api.size([1, 0])[0] * 0.5),
                       y1: y,
                       x2: chartW - 50, // hasta el borde derecho del canvas
                       y2: y
@@ -1003,92 +1031,85 @@ $conexion->close();
               value: 0
             }]
           },
-          //(OVERFLOW)
-          {
-            name: "Overflow",
-            type: "custom",
-            animationEasing: "cubicOut",
-            // Variante A: encadenado por barra (empieza al terminar su barra)
-            animationDuration: 1500,
-            animationDelay: idx => BAR_DELAY_PER_IDX(idx) + BAR_DURATION,
-            renderItem: function(params, api) {
-              const idx = api.value(0);
-              const m = it.metrics[idx];
-              if (!m) return null;
-              const barWidth = api.size([1, 0])[0] * 0.6;
-              const base = api.coord([idx, 100]); // base en 100%
+         {
+  name: "Overflow",
+  type: "custom",
+  coordinateSystem: "cartesian2d",
+  xAxisIndex: 0,
+  yAxisIndex: 0,          // usar el eje visible; calculamos la parte extra en píxeles
+  clip: false,            // permite dibujar por arriba del 120%
+  zlevel: 1,
+  animationEasing: "cubicOut",
+  animationDuration: 1500,
+  animationDelay: idx => BAR_DELAY_PER_IDX(idx) + BAR_DURATION,
+  renderItem: function (params, api) {
+    const idx = api.value(0);
+    const m = it.metrics[idx];
+    if (!m) return null;
 
-              // === CASO 1: SIN PLANIFICACIÓN (plan=0 y ejecutado>0)
-              // Azul infinito — sube más allá del 120% (representa trabajo fuera del plan)
-              if (m.planned === 0 && m.executedReal > 0) {
-                const yTop = api.coord([idx, 160])[1]; // "infinito" visual (160%)
-                const height = base[1] - yTop;
-                return {
-                  type: "rect",
-                  shape: {
-                    x: base[0] - barWidth / 2,
-                    y: yTop,
-                    width: barWidth,
-                    height: height
-                  },
-                  enterFrom: {
-                    shape: {
-                      y: base[1],
-                      height: 0
-                    }
-                  },
-                  transition: ["shape"],
-                  style: {
-                    fill: "#007bff",
-                    opacity: 0.35,
-                    stroke: "#0056b3",
-                    lineWidth: 1
-                  },
-                  z: 25
-                };
-              }
-              //CASO 2: se superó el 100% (normal, color verde)
-              if (m.executed > 100) {
-                const base = api.coord([idx, 100]);
-                const barWidth = api.size([1, 0])[0] * 0.6;
-                const baseColor = colorSemaforo(m.executed, m.min, m.max);
-                const lightColor = echarts.color.lift(baseColor, 0.3);
-                const extraPct = Math.min((m.executed - 100) / 100, 0.5);
-                const height = api.size([0, extraPct * 100])[1];
-                const y = base[1] - height;
+    const pct = Number(m.executed) || 0;
 
-                return {
-                  type: "rect",
-                  shape: {
-                    x: base[0] - barWidth / 2,
-                    y,
-                    width: barWidth,
-                    height
-                  },
-                  enterFrom: {
-                    shape: {
-                      y: base[1],
-                      height: 0
-                    }
-                  },
-                  transition: ["shape"],
-                  style: {
-                    fill: lightColor,
-                    opacity: 0.6,
-                    stroke: baseColor,
-                    lineWidth: 0.5
-                  },
-                  z: 20
-                };
-              }
+    // base en 100% (eje visible)
+    const base = api.coord([idx, 100]);
+    const baseY = base[1];
+    const xCenter = api.coord([idx, 0])[0];
+    const barWidth = BAR_WIDTH;
 
-              return null;
-            },
-            data: it.metrics.map((_, idx) => idx)
-          }
+    // altura “fuera de escala” hasta OVERFLOW_TOP (p.ej. 140%)
+    const overflowExtraPx = api.size([0, (OVERFLOW_TOP - 100)])[1];
+    const yToCanvasTop = baseY - overflowExtraPx; // por encima del 120%
+
+    // 1) plan=0 con ejecución → SIEMPRE al tope del canvas oculto
+    if (m.planned === 0 && m.executedReal > 0) {
+      const height = Math.max(0, overflowExtraPx);
+      return {
+        type: "rect",
+        shape: { x: xCenter - barWidth / 2, y: yToCanvasTop, width: barWidth, height },
+        enterFrom: { shape: { y: baseY, height: 0 } },
+        transition: ["shape"],
+        style: { fill: "#007bff", opacity: 0.35, stroke: "#0056b3", lineWidth: 1 },
+        z: 25
+      };
+    }
+
+    // 2) 100 < pct ≤ 120 → pintar hasta ese pct exacto
+    if (pct > 100 && pct <= VISIBLE_MAX) {
+      const yTop = api.coord([idx, pct])[1];
+      const height = Math.max(0, baseY - yTop);
+      const baseColor = colorSemaforo(pct, m.min, m.max);
+      const lightColor = echarts.color.lift(baseColor, 0.3);
+      return {
+        type: "rect",
+        shape: { x: xCenter - barWidth / 2, y: yTop, width: barWidth, height },
+        enterFrom: { shape: { y: baseY, height: 0 } },
+        transition: ["shape"],
+        style: { fill: lightColor, opacity: 0.55, stroke: baseColor, lineWidth: 0.8 },
+        z: 20
+      };
+    }
+
+    // 3) pct > 120 → llenar hasta el tope del canvas (por arriba del 120)
+    if (pct > VISIBLE_MAX) {
+      const height = Math.max(0, overflowExtraPx);
+      const baseColor = colorSemaforo(pct, m.min, m.max);
+      const lightColor = echarts.color.lift(baseColor, 0.3);
+      return {
+        type: "rect",
+        shape: { x: xCenter - barWidth / 2, y: yToCanvasTop, width: barWidth, height },
+        enterFrom: { shape: { y: baseY, height: 0 } },
+        transition: ["shape"],
+        style: { fill: lightColor, opacity: 0.55, stroke: baseColor, lineWidth: 0.8 },
+        z: 20
+      };
+    }
+
+    return null;
+  },
+  data: it.metrics.map((_, idx) => idx)
+},
+
         ]
       });
-
       // Leyenda de métricas
       if (legendId) {
         const legendDiv = document.getElementById(legendId);
