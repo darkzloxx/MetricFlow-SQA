@@ -2,27 +2,31 @@
 // ============================
 // Conexión a MariaDB
 // ============================
-$conexion = new mysqli("localhost", "root", "", "bd", 3308);
+$conexion = new mysqli("localhost", "root", "", "bd_codevit", 3308);
 if ($conexion->connect_error) {
   die("Error al conectar: " . $conexion->connect_error);
 }
+//include __DIR__ . '/../gui/footer.php'; // desde /app a /gui
 
 // ============================
 // Proyecto (puedes pasar ?proyecto=ID)
 // ============================
 $idProyecto = isset($_GET['proyecto']) ? (int)$_GET['proyecto'] : 1;
 
-// Resumen general
 $sqlProyecto = "SELECT nombre, estado FROM proyecto WHERE id_proyecto = $idProyecto";
 $resProyecto = $conexion->query($sqlProyecto);
+
 if ($resProyecto && $resProyecto->num_rows > 0) {
   $row = $resProyecto->fetch_assoc();
   $nombreProyecto = $row['nombre'];
   $estadoProyecto = $row['estado'];
+  $proyectoExiste = true;
 } else {
-  $nombreProyecto = "Proyecto";
-  $estadoProyecto = "Sin estado";
+  $proyectoExiste = false;
+  $nombreProyecto = "Proyecto no encontrado";
+  $estadoProyecto = "No disponible";
 }
+
 
 //cantidad de metricas con datos ejecutados
 $sqlMetricas = "SELECT COUNT(DISTINCT mi.id_metrica) AS total
@@ -43,15 +47,14 @@ $sqlIter = "SELECT COUNT(*) AS total
 $resIter = $conexion->query($sqlIter);
 $totalIteraciones = ($resIter && $resIter->num_rows > 0) ? (int)$resIter->fetch_assoc()['total'] : 0;
 
-// Desviación promedio calculado como AVG de |(Ejecutado - Planificado) / Planificado * 100|
-$sqlDesv = "SELECT AVG(ABS(((mi.valor_ejecutado - mi.valor_planificado)/NULLIF(mi.valor_planificado,0))*100)) AS desv
-            FROM metrica_iteracion mi
-            JOIN iteracion i ON mi.id_iteracion = i.id_iteracion
-            JOIN fase f ON f.id_fase = i.id_fase
-            JOIN proyecto_fase pf ON pf.id_fase = f.id_fase
-            WHERE pf.id_proyecto = $idProyecto";
-$resDesv = $conexion->query($sqlDesv);
-$desviacionPromedio = ($resDesv && $resDesv->num_rows > 0) ? round((float)$resDesv->fetch_assoc()['desv'], 2) : 0.0;
+// Verificar si hay iteraciones aunque no haya métricas
+$sqlHayIter = "SELECT COUNT(*) AS total
+               FROM iteracion i
+               JOIN fase f ON f.id_fase = i.id_fase
+               JOIN proyecto_fase pf ON pf.id_fase = f.id_fase
+               WHERE pf.id_proyecto = $idProyecto";
+$resHayIter = $conexion->query($sqlHayIter);
+$hayIteraciones = ($resHayIter && $resHayIter->num_rows > 0 && (int)$resHayIter->fetch_assoc()['total'] > 0);
 
 
 // Datos para los gráficos
@@ -380,15 +383,20 @@ $conexion->close();
       margin-right: 6px;
     }
 
+    .icon-bg-secondary {
+      background: linear-gradient(135deg, #6c757d 0%, #a0a4a8 100%);
+    }
+
     .legend-line {
       width: 22px;
       height: 0;
       border-top: 2px solid #000;
       margin-right: 6px;
     }
-.card-header + .card-header {
-  border-top: 1px solid rgba(0,0,0,0.05);
-}
+
+    .card-header+.card-header {
+      border-top: 1px solid rgba(0, 0, 0, 0.05);
+    }
 
     /* ======== CHART ======== */
     .chart-scroll {
@@ -450,6 +458,29 @@ $conexion->close();
 
   <div class="container my-4">
     <?php
+    // ============================
+    // Validar existencia de proyecto
+    // ============================
+    if (!$proyectoExiste) {
+      echo '
+      <div class="card my-5 text-center"
+           style="border:1px dashed rgba(220,53,69,0.25); background:rgba(220,53,69,0.03);">
+        <div class="card-body p-5">
+          <i class="oi oi-warning mb-3" style="font-size:2rem; color:#dc3545;"></i>
+          <h5 class="text-danger font-weight-bold mb-2">Proyecto no encontrado</h5>
+          <p class="text-muted mb-0">
+            No existe un proyecto con el identificador <b>ID ' . htmlspecialchars($idProyecto) . '</b>.<br>
+            Verifique el parámetro o cree un nuevo proyecto antes de continuar.
+          </p>
+        </div>
+      </div>';
+      echo '</div>   <footer class="footer">UARGFlow BS <span class="oi oi-globe"></span> UNPA-UARG</footer>
+'; // cerrar container
+
+      exit; // ✅ corta la ejecución del resto del dashboard
+    }
+    ?>
+    <?php
     // Colores de estado y desvío
     $estadoClass = 'badge-secondary';
     $estadoKey = strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)));
@@ -469,10 +500,6 @@ $conexion->close();
       default:
         $estadoClass = 'badge-secondary';
     }
-
-    $desvClass = 'text-success';
-    if ($desviacionPromedio >= 15)      $desvClass = 'text-danger';
-    elseif ($desviacionPromedio >= 5)   $desvClass = 'text-warning';
     ?>
     <!-- Nombre y estado de proyecto -->
     <div class="row g-3 mb-3">
@@ -498,24 +525,25 @@ $conexion->close();
             <div class="stat-content">
               <span class="stat-label">Métricas utilizadas</span>
               <div class="stat-value"><?= (int)$totalMetricas ?></div>
-              <span class="status-line text-muted">Totales con datos</span>
             </div>
           </div>
         </div>
       </div>
-
       <div class="col-6 col-md-4">
-        <div class="card stat-card h-100">
-          <div class="card-body">
-            <div class="stat-icon icon-bg-danger"><span class="oi oi-warning"></span></div>
-            <div class="stat-content">
-              <span class="stat-label">Desviación promedio</span>
-              <div class="stat-value <?= $desvClass ?>"><?= $desviacionPromedio ?>%</div>
-              <span class="status-line text-muted">Respecto al plan</span>
-            </div>
+
+      <div class="card stat-card h-100">
+        <div class="card-body">
+          <div class="stat-icon icon-bg-secondary">
+            <span class="oi oi-loop-circular"></span>
+          </div>
+          <div class="stat-content">
+            <span class="stat-label">Iteraciones</span>
+            <div class="stat-value text-dark"><?= (int)$totalIteraciones ?></div>
+            <span class="status-line text-muted">Totales registradas</span>
           </div>
         </div>
       </div>
+    </div>
     </div>
 
     <!-- Barras -->
@@ -539,6 +567,7 @@ $conexion->close();
   <script>
     // ========= Datos del backend =========
     const DATA = <?= json_encode($DATA, JSON_UNESCAPED_UNICODE | JSON_NUMERIC_CHECK); ?>;
+    const HAY_ITERACIONES = <?= $hayIteraciones ? 'true' : 'false'; ?>;
     const ACTUAL = <?= json_encode($actualIter, JSON_UNESCAPED_UNICODE | JSON_NUMERIC_CHECK); ?>;
     const ANTERIOR = <?= json_encode($anteriorIter, JSON_UNESCAPED_UNICODE | JSON_NUMERIC_CHECK); ?>;
     const MSG_ACTUAL = <?= json_encode($mensajeActual, JSON_UNESCAPED_UNICODE); ?>;
@@ -1066,13 +1095,64 @@ $conexion->close();
         legendDiv.innerHTML = it.metrics.map(m => `<span class="me-3"><b>#${m.id}</b> = ${m.nombre}</span>`).join(' ');
       }
     }
-    // Esperar a ECharts cargado
+
     function initDashboard() {
       if (typeof echarts === "undefined") {
         console.warn("ECharts no disponible aún, reintentando...");
         setTimeout(initDashboard, 200);
         return;
       }
+
+      const row = document.getElementById("barsRow");
+      row.innerHTML = "";
+      const trendCard = document.querySelector(".card.mb-4");
+
+      // VALIDACIONES GENERALES
+      // ==========================
+      if (!Array.isArray(DATA) || DATA.length === 0) {
+        if (HAY_ITERACIONES) {
+          // ⚠️ Caso 2: Hay iteraciones pero ninguna tiene métricas
+          if (trendCard) trendCard.style.display = "none";
+          row.innerHTML = `
+      <div class="col-12">
+        <div class="card h-100 d-flex flex-column justify-content-center align-items-center text-center"
+             style="border: 1px dashed rgba(13,110,253,0.25); background: rgba(13,110,253,0.05); min-height:340px;">
+          <div class="p-4">
+            <i class="oi oi-bar-chart mb-3" style="font-size:2rem; color:#0d6efd;"></i>
+            <h6 class="text-primary font-weight-bold mb-2">Faltan métricas asociadas</h6>
+            <p class="text-muted mb-0" style="max-width:460px;">
+              Espere a que el líder del proyecto o gerente de calidad vincule métrica/s a alguna iteración.
+            </p>
+          </div>
+        </div>
+      </div>`;
+        } else {
+          // ❌ Caso 1: No hay iteraciones en absoluto
+          if (trendCard) trendCard.style.display = "none";
+          row.innerHTML = `
+      <div class="col-12">
+        <div class="card h-100 d-flex flex-column justify-content-center align-items-center text-center"
+             style="border: 1px dashed rgba(108,117,125,0.25); background: rgba(248,249,250,0.7); min-height:340px;">
+          <div class="p-4">
+            <i class="oi oi-clock mb-3" style="font-size:2rem; color:#6c757d;"></i>
+            <h6 class="text-secondary font-weight-bold mb-2">No hay iteraciones cargadas</h6>
+            <p class="text-muted mb-0" style="max-width:420px;">
+              Espere al líder del proyecto.
+            </p>
+          </div>
+        </div>
+      </div>`;
+        }
+        return;
+      }
+
+      // ✅ Si pasa validaciones → mostrar la card
+      if (trendCard) trendCard.style.display = "";
+
+
+      // ==========================
+      // Si pasa las validaciones, renderizar normalmente
+      // ==========================
 
       // ========== Gráfico Tendencia (igual a tu original) ==========
       const trendWrap = document.getElementById("trendWrap");
@@ -1229,7 +1309,6 @@ $conexion->close();
       }
 
       // ========== Cards de barras (izquierda/derecha) ==========
-      const row = document.getElementById("barsRow");
       row.innerHTML = "";
 
       // ---- Card Izquierda: Anterior + selector ----
@@ -1240,35 +1319,36 @@ $conexion->close();
           return new Date(d.fin).getTime() < Date.now();
         }) : [];
 
-   if (anteriorLista.length === 0) {
-  const colLeft = document.createElement("div");
-  colLeft.className = "col-12 col-xl-6";
-  colLeft.innerHTML = `
-    <div class="card h-100 d-flex flex-column text-center align-items-center justify-content-center"
-         style="border: 1px dashed rgba(13,110,253,0.25); background: rgba(13,110,253,0.03);">
-      <div class="card-header bg-transparent border-0">
-        <div class="text-center" style="font-weight:600; color:#0d6efd;">
-          <i class="oi oi-layers mr-1"></i> Iteraciones anteriores
-        </div>
+      if (anteriorLista.length === 0) {
+        const colLeft = document.createElement("div");
+        colLeft.className = "col-12 col-xl-6";
+        colLeft.innerHTML = `
+  <div class="card card-iteracion h-100">
+    <div class="card-header bg-transparent border-0">
+      <div class="text-center" style="font-weight:600; color:#0d6efd;">
+        <i class="oi oi-layers mr-1"></i> Iteración anterior
       </div>
-      <div class="p-4">
-        <i class="oi oi-layers mb-2" style="font-size:1.8rem; color:#6c757d;"></i>
-        <p class="mb-1" style="font-weight:500; color:#adb5bd;">
-          No existen iteraciones anteriores
-        </p>
-        <p class="mb-0" style="font-size:0.9rem; color:#868e96;">
-          Las iteraciones previas aparecerán aquí automáticamente.
-        </p>
-      </div>
-    </div>`;
-  row.appendChild(colLeft);
-} else {
-  const defIter = ANTERIOR || anteriorLista[anteriorLista.length - 1];
-  const defIndex = DATA.findIndex(d => d.iteracion === defIter.iteracion);
+    </div>
 
-  const colLeft = document.createElement("div");
-  colLeft.className = "col-12 col-xl-6";
-  colLeft.innerHTML = `
+    <div class="card-body d-flex flex-column justify-content-center align-items-center text-center">
+      <i class="oi oi-layers mb-2" style="font-size:1.8rem; color:#6c757d;"></i>
+      <p class="mb-1" style="font-weight:600; color:#adb5bd;">
+        No existen iteraciones anteriores
+      </p>
+      <p class="mb-0" style="font-size:0.9rem; color:#868e96; max-width:420px;">
+        Las iteraciones previas aparecerán aquí automáticamente cuando el proyecto registre más de una iteración.
+      </p>
+    </div>
+  </div>`;
+
+        row.appendChild(colLeft);
+      } else {
+        const defIter = ANTERIOR || anteriorLista[anteriorLista.length - 1];
+        const defIndex = DATA.findIndex(d => d.iteracion === defIter.iteracion);
+
+        const colLeft = document.createElement("div");
+        colLeft.className = "col-12 col-xl-6";
+        colLeft.innerHTML = `
     <div class="card card-iteracion h-100">
       <div class="card-header bg-transparent border-0">
         <div class="text-center" style="font-weight:600; color:#0d6efd;">
@@ -1303,8 +1383,8 @@ $conexion->close();
         </div>
       </div>
     </div>`;
-  row.appendChild(colLeft);
-  renderIteracionChart(defIter, "bars-anterior", "legend-metrics-anterior");
+        row.appendChild(colLeft);
+        renderIteracionChart(defIter, "bars-anterior", "legend-metrics-anterior");
 
 
         // Cambio de selección
@@ -1325,8 +1405,8 @@ $conexion->close();
       colRight.className = "col-12 col-xl-6";
 
       // ✅ Caso 1: hay iteración actual y métricas cargadas
-     if (ACTUAL && Array.isArray(ACTUAL.metrics) && ACTUAL.metrics.length > 0) {
-  colRight.innerHTML = `
+      if (ACTUAL && Array.isArray(ACTUAL.metrics) && ACTUAL.metrics.length > 0) {
+        colRight.innerHTML = `
     <div class="card card-iteracion h-100">
       <div class="card-header bg-transparent border-0">
         <div class="text-center" style="font-weight:600; color:#198754;">
@@ -1354,8 +1434,8 @@ $conexion->close();
         </div>
       </div>
     </div>`;
-  row.appendChild(colRight);
-  renderIteracionChart(ACTUAL, "bars-actual", "legend-metrics-actual");
+        row.appendChild(colRight);
+        renderIteracionChart(ACTUAL, "bars-actual", "legend-metrics-actual");
 
 
       }
@@ -1378,16 +1458,24 @@ $conexion->close();
       // 🟥 Caso 3: no existe iteración actual planificada (según fecha)
       else {
         colRight.innerHTML = `
-    <div class="card card-iteracion h-100 d-flex flex-column justify-content-center align-items-center text-center"
-         style="border: 1px dashed rgba(220,53,69,0.25); background: rgba(220,53,69,0.03);">
-      <div class="p-4">
-        <i class="oi oi-ban mb-2" style="font-size:1.8rem; color:#dc3545;"></i>
-        <p class="mb-1" style="font-weight:600; color:#adb5bd;">No hay iteración activa</p>
-        <p class="mb-0" style="font-size:0.9rem; color:#868e96;">
-          ${MSG_ACTUAL || "El proyecto no tiene una iteración planificada para la fecha actual."}
-        </p>
+  <div class="card card-iteracion h-100">
+    <div class="card-header bg-transparent border-0">
+      <div class="text-center" style="font-weight:600; color:#198754;">
+          <i class="oi oi-play-circle mr-1"></i> Iteración actual
       </div>
-    </div>`;
+    </div>
+
+    <div class="card-body d-flex flex-column justify-content-center align-items-center text-center">
+<i class="oi oi-calendar mb-2" style="font-size:1.8rem; color:#6c757d;"></i>
+      <p class="mb-1" style="font-weight:600; color:#adb5bd;">
+        No hay iteración activa
+      </p>
+      <p class="mb-0" style="font-size:0.9rem; color:#868e96; max-width:420px;">
+        ${MSG_ACTUAL || "El proyecto no tiene una iteración planificada para la fecha actual."}
+      </p>
+    </div>
+  </div>`;
+
         row.appendChild(colRight);
       }
     }
