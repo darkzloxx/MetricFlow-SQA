@@ -107,12 +107,12 @@ if ($result) {
       $extra = $ejec;
     } elseif ($ejec > $plan) {
       // Se hizo más de lo planificado
-      $pct = round(($ejec / $plan) * 100, 2);
+      $pct = round(($ejec / $plan) * 100);
       $nota = "Supera planificado (+" . ($ejec - $plan) . ")";
       $extra = $ejec - $plan;
     } else {
       // Caso normal
-      $pct = round(($ejec / $plan) * 100, 2);
+      $pct = round(($ejec / $plan) * 100);
       $nota = "";
       $extra = 0;
     }
@@ -150,7 +150,8 @@ $DATA = array_values($iterMap);
   <link rel="stylesheet" href="../lib/bootstrap-4.1.1-dist/css/uargflow_footer.css" />
   <script src="../lib/JQuery/jquery-3.3.1.js"></script>
   <script src="../lib/bootstrap-4.1.1-dist/js/bootstrap.min.js"></script>
-
+  <!-- html2canvas para exportar PNG -->
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
   <!-- Carga única y segura de ECharts -->
   <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"
     onerror="this.onerror=null;this.src='../lib/echarts.min.js';"></script>
@@ -167,11 +168,99 @@ $DATA = array_values($iterMap);
       font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     }
 
+    .stat-card .card-body {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 16px 18px;
+    }
+
+    .stat-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex: 0 0 48px;
+      color: #fff;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, .12);
+    }
+
+    .stat-icon .oi {
+      font-size: 20px;
+      line-height: 1;
+    }
+
+    .icon-bg-primary {
+      background: linear-gradient(135deg, #007bff 0%, #5aa7ff 100%);
+    }
+
+    .icon-bg-success {
+      background: linear-gradient(135deg, #28a745 0%, #65d488 100%);
+    }
+
+    .icon-bg-danger {
+      background: linear-gradient(135deg, #dc3545 0%, #ff6b81 100%);
+    }
+
+    .stat-content {
+      text-align: left;
+      flex: 1 1 auto;
+    }
+
+    .stat-label {
+      display: block;
+      font-size: .8rem;
+      font-weight: 600;
+      color: #6c757d;
+      text-transform: uppercase;
+      letter-spacing: .02em;
+      margin-bottom: 2px;
+    }
+
+    .stat-value {
+      font-size: 1.75rem;
+      /* Bootstrap 4 no tiene display-6 */
+      font-weight: 700;
+      line-height: 1.1;
+      color: #212529;
+    }
+
+    .status-line {
+      display: block;
+      font-size: .85rem;
+      color: #6c757d;
+      margin-top: 2px;
+    }
+
+    .card.stat-card {
+      transition: box-shadow .2s ease;
+    }
+
+    .card.stat-card:hover {
+      box-shadow: 0 6px 18px rgba(0, 0, 0, .08);
+    }
+
     /* ======== TARJETAS ======== */
     .card {
       border: 1px solid rgba(0, 0, 0, 0.08);
       border-radius: 0.75rem;
       box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+      animation: fadeIn 0.5s ease-in;
+
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(8px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
     }
 
     .card-header {
@@ -198,6 +287,21 @@ $DATA = array_values($iterMap);
       font-size: 0.85rem;
       color: #495057;
     }
+
+    /* Solo para las cards de los gráficos */
+    .card-iteracion {
+      min-height: 620px;
+      /* altura unificada entre iteraciones */
+    }
+
+
+    .legend-metrics {
+      margin-top: 6px;
+      color: #444;
+      line-height: 1.5;
+      font-size: 0.85rem;
+    }
+
 
     .legend-colors {
       display: flex;
@@ -282,6 +386,7 @@ $DATA = array_values($iterMap);
       font-size: 0.9rem;
       color: #6c757d;
     }
+    
   </style>
 </head>
 
@@ -297,35 +402,83 @@ $DATA = array_values($iterMap);
   </nav>
 
   <div class="container my-4">
+    <?php
+    // Colores de estado y desvío 
+    $estadoClass = 'badge-secondary';
+    $estadoKey = strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)));
+    switch ($estadoKey) {
+      case 'REGISTRADO':
+        $estadoClass = 'badge-secondary'; // gris
+        break;
+      case 'EN_PROGRESO':
+        $estadoClass = 'badge-primary';   // azul
+        break;
+      case 'FINALIZADO':
+        $estadoClass = 'badge-success';   // verde
+        break;
+      case 'CANCELADO':
+        $estadoClass = 'badge-danger';    // rojo
+        break;
+      default:
+        $estadoClass = 'badge-secondary'; // fallback
+    }
+
+    $desvClass = 'text-success';
+    if ($desviacionPromedio >= 15)      $desvClass = 'text-danger';
+    elseif ($desviacionPromedio >= 5)   $desvClass = 'text-warning';
+    ?>
     <!-- Nombre y estado de proyecto -->
     <div class="row g-3 mb-3">
       <div class="col-12 col-md-4">
-        <div class="card h-100 text-center">
+        <div class="card stat-card h-100">
           <div class="card-body">
-            <h6 class="mb-1">Proyecto</h6>
-            <div class="fw-bold"><?= htmlspecialchars($nombreProyecto) ?></div>
-            <small class="text-muted">Estado: <?= htmlspecialchars($estadoProyecto) ?></small>
+            <div class="stat-icon icon-bg-primary">
+              <span class="oi oi-briefcase"></span>
+            </div>
+            <div class="stat-content">
+              <span class="stat-label">Proyecto</span>
+              <div class="stat-value"><?= htmlspecialchars($nombreProyecto) ?></div>
+              <span class="status-line">Estado:
+                <span class="badge badge-pill <?= $estadoClass ?>"><?= htmlspecialchars($estadoProyecto) ?></span>
+              </span>
+            </div>
           </div>
         </div>
       </div>
+
       <div class="col-6 col-md-4">
-        <div class="card h-100 text-center">
+        <div class="card stat-card h-100">
           <div class="card-body">
-            <h6 class="mb-1">Métricas utilizadas</h6>
-            <div class="display-6"><?= $totalMetricas ?></div>
+            <div class="stat-icon icon-bg-success">
+              <span class="oi oi-graph"></span>
+            </div>
+            <div class="stat-content">
+              <span class="stat-label">Métricas utilizadas</span>
+              <div class="stat-value"><?= (int)$totalMetricas ?></div>
+              <span class="status-line text-muted">Totales con datos</span>
+            </div>
           </div>
         </div>
       </div>
+
       <div class="col-6 col-md-4">
-        <div class="card h-100 text-center">
+        <div class="card stat-card h-100">
           <div class="card-body">
-            <h6 class="mb-1">Desviación promedio</h6>
-            <div class="display-6 text-danger"><?= $desviacionPromedio ?>%</div>
+            <div class="stat-icon icon-bg-danger">
+              <span class="oi oi-warning"></span>
+            </div>
+            <div class="stat-content">
+              <span class="stat-label">Desviación promedio</span>
+              <div class="stat-value <?= $desvClass ?>"><?= $desviacionPromedio ?>%</div>
+              <span class="status-line text-muted">Respecto al plan</span>
+            </div>
           </div>
         </div>
       </div>
     </div>
 
+    <!-- Barras -->
+    <div id="barsRow" class="row g-3"></div>
     <!-- Tendencia -->
     <div class="card mb-4">
       <div class="card-header">
@@ -338,8 +491,6 @@ $DATA = array_values($iterMap);
       </div>
     </div>
 
-    <!-- Barras -->
-    <div id="barsRow" class="row g-3"></div>
   </div>
 
   <footer class="footer">UARGFlow BS <span class="oi oi-globe"></span> UNPA-UARG</footer>
@@ -539,27 +690,34 @@ $DATA = array_values($iterMap);
         const col = document.createElement("div");
         col.className = "col-12 col-xl-6";
         col.innerHTML = `
-  <div class="card h-100">
+<div class="card card-iteracion h-100">
     <div class="card-header d-flex justify-content-between align-items-center">
       <div class="card-title-main">${it.iteracion}</div>
       <div class="card-subtitle-dates">Del ${it.inicio} al ${it.fin}</div>
     </div>
 
-    <div class="card-body p-3">
-      <!-- Leyenda superior fija -->
-      <div id="legend-colors-${i}" class="legend-top mb-2"></div>
-
-      <!-- Área scrolleable solo para el gráfico -->
-      <div class="chart-scroll">
-        <div class="chart-stage">
-          <div id="bars-${i}" class="chart"></div>
-        </div>
-      </div>
-
-      <!-- Leyenda inferior fija -->
-      <div id="legend-metrics-${i}" class="legend-bottom mt-3"></div>
+ <div class="card-body p-3">
+  <div class="chart-scroll mb-2">
+    <div class="chart-stage">
+      <div id="bars-${i}" class="chart"></div>
     </div>
   </div>
+
+  <!-- Leyendas compactas de colores -->
+  <div class="legend-colors mb-2">
+    <span class="legend-item"><span class="legend-dot" style="background:#28a745;"></span>Se cumplió</span>
+    <span class="legend-item"><span class="legend-dot" style="background:#ffc107;"></span>Dentro de umbral</span>
+    <span class="legend-item"><span class="legend-dot" style="background:#dc3545;"></span>Debajo de límite</span>
+    <span class="legend-item"><span class="legend-dot" style="background:#007bff;"></span>Plan=0</span>
+    <span class="legend-item"><span class="legend-line"></span>Umbral</span>
+    <span class="legend-item"><span class="legend-dash"></span>Progreso</span>
+  </div>
+<!-- Leyendas unificadas abajo -->
+<div class="legend-bottom mt-3">
+  <div id="legend-metrics-${i}" class="mb-2"></div>
+</div>
+  </div>
+
 `;
         row.appendChild(col);
 
@@ -578,21 +736,33 @@ $DATA = array_values($iterMap);
         const OVERFLOW_DURATION = 1500; // el rect “extra” que aparece arriba
         const lastDelay = BAR_DELAY_PER_IDX(it.metrics.length - 1);
         const AFTER_OVERFLOW_ALL = lastDelay + BAR_DURATION + OVERFLOW_DURATION + 150;
-        // --- SCROLL HORIZONTAL Y ANCHO DINÁMICO ---
-        const container = dom.parentElement; // el <div> que contiene la gráfica
-        container.style.overflowX = "auto"; // habilita scroll horizontal
+        // --- ANCHO ADAPTATIVO SIN MÁRGENES VACÍOS ---
+        const container = dom.parentElement;
+        const containerWidth = container.clientWidth || 600;
+        const metricsCount = it.metrics.length;
 
-        const perMetricPx = 110; // ancho mínimo por barra (ajustable)
-        const minWidth = container.clientWidth || 600;
-        dom.style.width = Math.max(minWidth, it.metrics.length * perMetricPx) + "px";
+        // calculamos ancho total ideal (90 px por barra como referencia)
+        const totalBarsWidth = metricsCount * 90;
 
-        // si hay scroll, ECharts necesita recalcular
+        // si entra todo, ocupar 100% del contenedor y eliminar scroll
+        if (totalBarsWidth <= containerWidth) {
+          dom.style.width = "100%";
+          container.style.overflowX = "hidden";
+        } else {
+          // si no entra, habilitar scroll y expandir solo lo necesario
+          dom.style.width = totalBarsWidth + "px";
+          container.style.overflowX = "auto";
+        }
+
         chart.resize();
+
+
         // umbrales y tiempo aparecerán después de esto
         chart.setOption({
           tooltip: {
             trigger: "axis",
             appendToBody: true,
+            boundaryGap: false,
             backgroundColor: "rgba(255,255,255,0.95)",
             borderColor: "#ccc",
             borderWidth: 1,
@@ -629,12 +799,12 @@ $DATA = array_values($iterMap);
           },
 
           grid: {
-  left: 56,          // antes 44
-  right: 110,
-  top: 20,
-  bottom: 44,        // antes 28
-  containLabel: true
-},
+            left: 56, // antes 44
+            right: 110,
+            top: 20,
+            bottom: 44, // antes 28
+            containLabel: true
+          },
           xAxis: {
             type: "category",
             data: labels,
@@ -651,17 +821,24 @@ $DATA = array_values($iterMap);
               margin: 2
             }
           },
-        yAxis: {
-  type: "value",
-  min: 0,
-  max: maxYBars,
-  name: "Cumplimiento (%)",
-  nameLocation: "middle",
-  nameGap: 46,       // distancia del eje
-  nameRotate: 90,    // rotado
-  nameTextStyle: { fontSize: 12, fontWeight: 600, color: "#495057" },
-  axisLabel: { formatter: '{value}%', margin: 6 }
-},
+          yAxis: {
+            type: "value",
+            min: 0,
+            max: maxYBars,
+            name: "Cumplimiento (%)",
+            nameLocation: "middle",
+            nameGap: 46, // distancia del eje
+            nameRotate: 90, // rotado
+            nameTextStyle: {
+              fontSize: 12,
+              fontWeight: 600,
+              color: "#495057"
+            },
+            axisLabel: {
+              formatter: '{value}%',
+              margin: 6
+            }
+          },
           series: [
             // === BARRAS PRINCIPALES ===
             {
@@ -917,8 +1094,6 @@ $DATA = array_values($iterMap);
                 value: 0
               }]
             },
-
-
             //(OVERFLOW)
             {
               name: "Overflow",
@@ -931,9 +1106,7 @@ $DATA = array_values($iterMap);
                 const idx = api.value(0);
                 const m = it.metrics[idx];
                 if (!m) return null;
-
-
-                const barWidth = api.size([1, 0])[0] * 0.5;
+                const barWidth = api.size([1, 0])[0] * 0.6;
                 const base = api.coord([idx, 100]); // base en 100%
 
                 // === CASO 1: SIN PLANIFICACIÓN (plan=0 y ejecutado>0)
@@ -965,12 +1138,10 @@ $DATA = array_values($iterMap);
                     z: 25
                   };
                 }
-
-
                 //CASO 2: se superó el 100% (normal, color verde)
                 if (m.executed > 100) {
                   const base = api.coord([idx, 100]);
-                  const barWidth = api.size([1, 0])[0] * 0.5;
+                  const barWidth = api.size([1, 0])[0] * 0.6;
                   const baseColor = colorSemaforo(m.executed, m.min, m.max);
                   const lightColor = echarts.color.lift(baseColor, 0.3);
                   const extraPct = Math.min((m.executed - 100) / 100, 0.5);
@@ -1009,19 +1180,6 @@ $DATA = array_values($iterMap);
           ]
         });
 
-        // Leyenda de colores (arriba)
-        const legendColorsHtml = `
-    <div class="legend-colors">
-      <span class="legend-item"><span class="legend-dot" style="background:#28a745;"></span>Ejecutado ≥ Planificado</span>
-      <span class="legend-item"><span class="legend-dot" style="background:#ffc107;"></span>Dentro del límite de desviación</span>
-      <span class="legend-item"><span class="legend-dot" style="background:#dc3545;"></span>Cumplimiento < límite de desviación</span>
-      <span class="legend-item"><span class="legend-dot" style="background:#007bff;"></span>Ejecutado sin planificación (plan=0)</span>
-      <span class="legend-item"><span class="legend-line"></span>Límite de desviación</span> <!-- línea negra -->
-      <span class="legend-item"><span class="legend-dash"></span>Progreso de iteración</span>
-
-      </div>
-  `;
-        document.getElementById(`legend-colors-${i}`).innerHTML = legendColorsHtml;
         // Lista de métricas (abajo)
         const metricsHtml = it.metrics
           .map(m => `<span class="me-3"><b>#${m.id}</b> = ${m.nombre}</span>`)
