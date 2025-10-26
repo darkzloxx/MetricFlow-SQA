@@ -2,7 +2,7 @@
 // ============================a
 // Conexión a MariaDB
 // ============================
-$conexion = new mysqli("localhost", "root", "", "bd_prueba", 3308);
+$conexion = new mysqli("localhost", "root", "", "bd_codevit", 3308);
 if ($conexion->connect_error) {
   die("Error al conectar: " . $conexion->connect_error);
 }
@@ -11,7 +11,7 @@ if ($conexion->connect_error) {
 // ============================
 // Proyecto (puedes pasar ?proyecto=ID)
 // ============================
-$idProyecto = isset($_GET['proyecto']) ? (int)$_GET['proyecto'] : 4;
+$idProyecto = isset($_GET['proyecto']) ? (int)$_GET['proyecto'] : 1;
 
 $sqlProyecto = "SELECT nombre, estado FROM proyecto WHERE id_proyecto = $idProyecto";
 $resProyecto = $conexion->query($sqlProyecto);
@@ -648,279 +648,292 @@ $conexion->close();
       chart.resize();
       // umbrales y tiempo aparecerán después de esto
       chart.setOption({
-        tooltip: {
-          trigger: "axis",
-          appendToBody: true,
-          boundaryGap: false,
-          backgroundColor: "rgba(255,255,255,0.95)",
-          borderColor: "#ccc",
-          borderWidth: 1,
-          textStyle: {
-            color: "#222",
-            fontSize: 13,
-          },
-          extraCssText: "box-shadow: 0 2px 8px rgba(0,0,0,0.2); border-radius: 6px;",
-          axisPointer: {
-            type: "none"
-          },
-          formatter: params => {
-            const p = params[0];
-            const m = p.data.meta;
-            let html = `<b>#${p.axisValue} - ${m.nombre}</b><br>`;
-            html += `Límite Desviación: ${m.min}%<br>`;
-            html += `Ejecutado: ${m.executed}% (${m.executedReal} de ${m.planned})<br>`;
+          tooltip: {
+            trigger: "axis",
+            appendToBody: true,
+            boundaryGap: false,
+            backgroundColor: "rgba(255,255,255,0.95)",
+            borderColor: "#ccc",
+            borderWidth: 1,
+            textStyle: {
+              color: "#222",
+              fontSize: 13,
+            },
+            extraCssText: "box-shadow: 0 2px 8px rgba(0,0,0,0.2); border-radius: 6px;",
+            axisPointer: {
+              type: "none"
+            },
+            formatter: params => {
+              const p = params[0];
+              const m = p.data.meta;
+              let html = `<b>#${p.axisValue} - ${m.nombre}</b><br>`;
+              html += `Límite Desviación: ${m.min}%<br>`;
+              html += `Ejecutado: ${m.executed}% (${m.executedReal} de ${m.planned})<br>`;
 
-            const pct = (m.planned > 0) ?
-              (m.executedReal / m.planned) * 100 :
-              (m.executedReal > 0 ? 100 : 100); // ✅ ahora si plan=0 y ejec=0 → 100%
+              const pct = (m.planned > 0) ?
+                (m.executedReal / m.planned) * 100 :
+                (m.executedReal > 0 ? 100 : 100); // ✅ ahora si plan=0 y ejec=0 → 100%
 
-            switch (true) {
-              // ✅ planificado 0 y ejecutado > 0 → se planificó 0 pero se hizo algo
-              case (m.planned === 0 && m.executedReal > 0):
-                html += `<span style="color:#17a2b8;font-weight:bold;">ℹ️ Se planificó 0 (+${m.executedReal})</span><br>`;
-                break;
+              switch (true) {
+                // ✅ planificado 0 y ejecutado > 0 → se planificó 0 pero se hizo algo
+                case (m.planned === 0 && m.executedReal > 0):
+                  html += `<span style="color:#17a2b8;font-weight:bold;">ℹ️ Se planificó 0 (+${m.executedReal})</span><br>`;
+                  break;
 
-                // ✅ planificado 0 y ejecutado 0 → se cumplió
-              case (m.planned === 0 && m.executedReal === 0):
-                html += `<span style="color:#198754;font-weight:bold;">✔️ Cumple lo planificado (0/0)</span><br>`;
-                break;
+                  // ✅ planificado 0 y ejecutado 0 → se cumplió
+                case (m.planned === 0 && m.executedReal === 0):
+                  html += `<span style="color:#198754;font-weight:bold;">✔️ Cumple lo planificado (0/0)</span><br>`;
+                  break;
 
-                // Superó lo planificado
-              case (m.planned > 0 && pct > 100):
-                html += `<span style="color:#28a745;font-weight:bold;">▲ Supera lo planificado (+${(m.executedReal - m.planned).toFixed(0)})</span><br>`;
-                break;
+                  // Superó lo planificado
+                case (m.planned > 0 && pct > 100):
+                  html += `<span style="color:#28a745;font-weight:bold;">▲ Supera lo planificado (+${(m.executedReal - m.planned).toFixed(0)})</span><br>`;
+                  break;
 
-                // Cumplió exactamente lo planificado
-              case (m.planned > 0 && Math.round(pct) === 100):
-                html += `<span style="color:#198754;font-weight:bold;">✔️ Cumple lo planificado (=${m.planned})</span><br>`;
-                break;
+                  // Cumplió exactamente lo planificado
+                case (m.planned > 0 && Math.round(pct) === 100):
+                  html += `<span style="color:#198754;font-weight:bold;">✔️ Cumple lo planificado (=${m.planned})</span><br>`;
+                  break;
 
-                // Dentro del umbral permitido (amarillo)
-              case (m.planned > 0 && pct >= m.min && pct < 100):
-                html += `<span style="color:#ffc107;font-weight:bold;">⚠️ Dentro del umbral (${pct.toFixed(1)}%)</span><br>`;
-                break;
+                  // Dentro del umbral permitido (amarillo)
+                case (m.planned > 0 && pct >= m.min && pct < 100):
+                  html += `<span style="color:#ffc107;font-weight:bold;">⚠️ Dentro del umbral (${pct.toFixed(1)}%)</span><br>`;
+                  break;
 
-                // Por debajo del umbral (rojo)
-              case (m.planned > 0 && pct > 0 && pct < m.min):
-                html += `<span style="color:#dc3545;font-weight:bold;">▼ Por debajo del plan (-${(m.planned - m.executedReal).toFixed(0)})</span><br>`;
-                break;
+                  // Por debajo del umbral (rojo)
+                case (m.planned > 0 && pct > 0 && pct < m.min):
+                  html += `<span style="color:#dc3545;font-weight:bold;">▼ Por debajo del plan (-${(m.planned - m.executedReal).toFixed(0)})</span><br>`;
+                  break;
 
-                // Sin ejecución (plan > 0 y ejec = 0)
-              case (m.planned > 0 && m.executedReal === 0):
-                html += `<span style="color:#6c757d;font-weight:bold;">⛔ Sin ejecución (0/${m.planned})</span><br>`;
-                break;
+                  // Sin ejecución (plan > 0 y ejec = 0)
+                case (m.planned > 0 && m.executedReal === 0):
+                  html += `<span style="color:#6c757d;font-weight:bold;">⛔ Sin ejecución (0/${m.planned})</span><br>`;
+                  break;
 
-                // Sin datos o casos no contemplados
-              default:
-                html += `<span style="color:#999;">❔ Sin datos disponibles</span><br>`;
+                  // Sin datos o casos no contemplados
+                default:
+                  html += `<span style="color:#999;">❔ Sin datos disponibles</span><br>`;
+              }
+
+              html += `Progreso temporal: ${timePct.toFixed(1)}%`;
+              return html;
             }
-
-            html += `Progreso temporal: ${timePct.toFixed(1)}%`;
-            return html;
-          }
-        },
-
-        grid: {
-          left: 56,
-          right: 110,
-          top: 30, // antes 20 → deja espacio para dibujar sobre 120%
-          bottom: 44,
-          containLabel: true
-        },
-        xAxis: {
-          type: "category",
-          data: labels,
-          name: "Métricas",
-          nameLocation: "middle",
-          nameGap: 28,
-          nameTextStyle: {
-            fontSize: 12,
-            fontWeight: 600,
-            color: "#495057"
           },
-          axisLabel: {
-            formatter: v => `#${v}`,
-            margin: 2
-          }
-        },
-        yAxis: [{
-            type: "value",
-            min: 0,
-            max: VISIBLE_MAX, // 120% visible
-            name: "Cumplimiento (%)",
+
+          grid: {
+            left: 56,
+            right: 110,
+            top: 30, // antes 20 → deja espacio para dibujar sobre 120%
+            bottom: 44,
+            containLabel: true
+          },
+          xAxis: {
+            type: "category",
+            data: labels,
+            name: "Métricas",
             nameLocation: "middle",
-            nameGap: 46,
-            nameRotate: 90,
+            nameGap: 28,
             nameTextStyle: {
               fontSize: 12,
               fontWeight: 600,
               color: "#495057"
             },
             axisLabel: {
-              formatter: '{value}%',
-              margin: 6
+              formatter: v => `#${v}`,
+              margin: 2
             }
           },
-          {
-            type: "value",
-            min: 0,
-            max: OVERFLOW_MAX, // 160% para overflow
-            show: false, // oculto
-            splitLine: {
-              show: false
-            },
-            axisTick: {
-              show: false
-            },
-            axisLine: {
-              show: false
-            }
-          }
-        ],
-        series: [{
-            name: "Ejecutado",
-            type: "bar",
-            yAxisIndex: 0, // usa el eje visible (120)
-            data: execData.map(d => ({
-              value: 100,
-              meta: d.meta,
-              fill: Math.min(d.value, 100)
-            })),
-            barWidth: BAR_WIDTH,
-            z: 10,
-            itemStyle: {
-              borderColor: "#000",
-              borderWidth: 2,
-              color: params => {
-                const m = params.data.meta;
-                const baseColor = colorSemaforo(m.executed, m.min, m.max);
-                const fillPct = Math.min(m.executed, 100) / 100;
-                return new echarts.graphic.LinearGradient(0, 1, 0, 0, [{
-                    offset: 0,
-                    color: baseColor
-                  },
-                  {
-                    offset: fillPct,
-                    color: baseColor
-                  },
-                  {
-                    offset: fillPct,
-                    color: "rgba(255,255,255,0)"
-                  },
-                  {
-                    offset: 1,
-                    color: "rgba(255,255,255,0)"
-                  }
-                ]);
-              }
-            },
-            label: {
-              show: true,
-              position: "top",
-              align: "center",
-              verticalAlign: "bottom",
-              distance: 4,
-              formatter: p => {
-                const m = p.data.meta;
-                let label = "";
-                label += `{main|${m.executed}%}\n{small|${m.executedReal}/${m.planned}}`;
-                return label;
+          yAxis: [{
+              type: "value",
+              min: 0,
+              max: VISIBLE_MAX, // 120% visible
+              name: "Cumplimiento (%)",
+              nameLocation: "middle",
+              nameGap: 46,
+              nameRotate: 90,
+              nameTextStyle: {
+                fontSize: 12,
+                fontWeight: 600,
+                color: "#495057"
               },
-              rich: {
-                extra: {
-                  color: "#28a745",
-                  fontSize: 12,
-                  fontWeight: "bold",
-                  align: "center"
-                },
-                main: {
-                  color: "#000",
-                  fontSize: 14,
-                  fontWeight: "bold",
-                  align: "center"
-                },
-                small: {
-                  color: "#555",
-                  fontSize: 11,
-                  align: "center"
-                },
-
+              axisLabel: {
+                formatter: '{value}%',
+                margin: 6
               }
             },
-            animationDuration: BAR_DURATION,
-            animationEasing: "cubicOut",
-            animationDelay: BAR_DELAY_PER_IDX,
-          },
-
-          // === LÍNEAS DE UMBRAL (mejor contraste y estilo más liviano) ===
-          {
-            name: "Límites de desviación",
-            type: "custom",
-            coordinateSystem: "cartesian2d",
-            silent: true,
-            z: 900,
-            renderItem: function(params, api) {
-              const idx = api.value(0);
-              const m = it.metrics[idx];
-              if (!m) return null;
-
-              const yPx = api.coord([idx, m.min])[1];
-              const xCenter = api.coord([idx, m.min])[0];
-              const half = (api.size([1, 0])[0] || 30) * 0.35;
-
-              return {
-                type: "line",
-                shape: {
-                  x1: xCenter - half,
-                  y1: yPx,
-                  x2: xCenter + half,
-                  y2: yPx
-                },
-                style: {
-                  stroke: "#000000",
-                  lineWidth: 1.5,
-                  lineWidth: 1.2,
-                  opacity: 0
-                },
-                keyframeAnimation: {
-                  duration: 700,
-                  delay: 1800,
-                  easing: "cubicOut",
-                  keyframes: [{
-                      percent: 0,
-                      style: {
-                        opacity: 0,
-                        lineWidth: 0
-                      }
+            {
+              type: "value",
+              min: 0,
+              max: OVERFLOW_MAX, // 160% para overflow
+              show: false, // oculto
+              splitLine: {
+                show: false
+              },
+              axisTick: {
+                show: false
+              },
+              axisLine: {
+                show: false
+              }
+            }
+          ],
+          series: [{
+              name: "Ejecutado",
+              type: "bar",
+              yAxisIndex: 0, // usa el eje visible (120)
+              data: execData.map(d => ({
+                value: 100,
+                meta: d.meta,
+                fill: Math.min(d.value, 100)
+              })),
+              barWidth: BAR_WIDTH,
+              z: 10,
+              itemStyle: {
+                borderColor: "#000",
+                borderWidth: 2,
+                color: params => {
+                  const m = params.data.meta;
+                  const baseColor = colorSemaforo(m.executed, m.min, m.max);
+                  const fillPct = Math.min(m.executed, 100) / 100;
+                  return new echarts.graphic.LinearGradient(0, 1, 0, 0, [{
+                      offset: 0,
+                      color: baseColor
                     },
                     {
-                      percent: 1,
-                      style: {
-                        opacity: 0.9,
-                        lineWidth: 1.2
-                      }
+                      offset: fillPct,
+                      color: baseColor
+                    },
+                    {
+                      offset: fillPct,
+                      color: "rgba(255,255,255,0)"
+                    },
+                    {
+                      offset: 1,
+                      color: "rgba(255,255,255,0)"
                     }
-                  ]
-                },
-                textContent: {
-                  style: {
-                    text: `${m.min}%`,
-                    fill: "#333",
-                    fontSize: 11,
-                    fontWeight: 600,
-                    backgroundColor: "rgba(255,255,255,0.9)",
-                    padding: [1, 4],
-                    borderRadius: 3,
-                    textShadowColor: "rgba(255,255,255,0.9)",
-                    textShadowBlur: 3
-                  }
-                },
-                textConfig: {
-                  position: "top",
-                  offset: [0, -5]
+                  ]);
                 }
-              };
+              },
+              label: {
+                show: true,
+                position: "top",
+                align: "center",
+                verticalAlign: "bottom",
+                distance: 4,
+                formatter: p => {
+                  const m = p.data.meta;
+                  let label = "";
+                  label += `{main|${m.executed}%}\n{small|${m.executedReal}/${m.planned}}`;
+                  return label;
+                },
+                rich: {
+                  extra: {
+                    color: "#28a745",
+                    fontSize: 12,
+                    fontWeight: "bold",
+                    align: "center"
+                  },
+                  main: {
+                    color: "#000",
+                    fontSize: 14,
+                    fontWeight: "bold",
+                    align: "center"
+                  },
+                  small: {
+                    color: "#555",
+                    fontSize: 11,
+                    align: "center"
+                  },
+
+                }
+              },
+              animationDuration: BAR_DURATION,
+              animationEasing: "cubicOut",
+              animationDelay: BAR_DELAY_PER_IDX,
             },
+
+            // === LÍNEAS DE UMBRAL (mejor contraste y estilo más liviano) ===
+            {
+              name: "Límites de desviación",
+              type: "custom",
+              coordinateSystem: "cartesian2d",
+              silent: true,
+              z: 900,
+              renderItem: function(params, api) {
+                const idx = api.value(0);
+                const m = it.metrics[idx];
+                if (!m) return null;
+
+                // Posición del umbral en Y y centro de la categoría en X
+                const yPx = api.coord([idx, m.min])[1];
+                const xCenter = api.coord([idx, 0])[0];
+
+                // Ancho EXACTO de la barra "Ejecutado"
+                const bandW = api.size([1, 0])[0] || 30;
+                let barW;
+                if (typeof BAR_WIDTH === 'number') {
+                  barW = BAR_WIDTH;
+                } else if (typeof BAR_WIDTH === 'string' && BAR_WIDTH.endsWith('%')) {
+                  barW = bandW * (parseFloat(BAR_WIDTH) / 100);
+                } else {
+                  barW = bandW * 0.6; // fallback
+                }
+                const half = barW / 2;
+
+                return {
+                  type: "line",
+                  // +0.5 para nitidez en pantallas 1x (pixel snapping)
+                  shape: {
+                    x1: Math.round(xCenter - half) + 0.5,
+                    y1: yPx,
+                    x2: Math.round(xCenter + half) + 0.5,
+                    y2: yPx
+                  },
+                  style: {
+                    stroke: "#000000",
+                    lineWidth: 1.2,
+                    opacity: 0
+                  },
+                  keyframeAnimation: {
+                    duration: 700,
+                    delay: 1800,
+                    easing: "cubicOut",
+                    keyframes: [{
+                        percent: 0,
+                        style: {
+                          opacity: 0,
+                          lineWidth: 0
+                        }
+                      },
+                      {
+                        percent: 1,
+                        style: {
+                          opacity: 0.9,
+                          lineWidth: 1.2
+                        }
+                      }
+                    ]
+                  },
+                  textContent: {
+                    style: {
+                      text: `${m.min}%`,
+                      fill: "#333",
+                      fontSize: 11,
+                      fontWeight: 600,
+                      backgroundColor: "rgba(255,255,255,0.9)",
+                      padding: [1, 4],
+                      borderRadius: 3,
+                      textShadowColor: "rgba(255,255,255,0.9)",
+                      textShadowBlur: 3
+                    }
+                  },
+                  textConfig: {
+                    position: "top",
+                    offset: [0, -5]
+                  }
+                };
+              },
+            
             data: it.metrics.map((_, idx) => ({
               value: idx
             }))
@@ -1031,90 +1044,135 @@ $conexion->close();
               value: 0
             }]
           },
-         {
-  name: "Overflow",
-  type: "custom",
-  coordinateSystem: "cartesian2d",
-  xAxisIndex: 0,
-  yAxisIndex: 0,          // usar el eje visible; calculamos la parte extra en píxeles
-  clip: false,            // permite dibujar por arriba del 120%
-  zlevel: 1,
-  animationEasing: "cubicOut",
-  animationDuration: 1500,
-  animationDelay: idx => BAR_DELAY_PER_IDX(idx) + BAR_DURATION,
-  renderItem: function (params, api) {
-    const idx = api.value(0);
-    const m = it.metrics[idx];
-    if (!m) return null;
+          {
+            name: "Overflow",
+            type: "custom",
+            coordinateSystem: "cartesian2d",
+            xAxisIndex: 0,
+            yAxisIndex: 0, // usar el eje visible; calculamos la parte extra en píxeles
+            clip: false, // permite dibujar por arriba del 120%
+            zlevel: 1,
+            animationEasing: "cubicOut",
+            animationDuration: 1500,
+            animationDelay: idx => BAR_DELAY_PER_IDX(idx) + BAR_DURATION,
+            renderItem: function(params, api) {
+              const idx = api.value(0);
+              const m = it.metrics[idx];
+              if (!m) return null;
 
-    const pct = Number(m.executed) || 0;
+              const pct = Number(m.executed) || 0;
 
-    // base en 100% (eje visible)
-    const base = api.coord([idx, 100]);
-    const baseY = base[1];
-    const xCenter = api.coord([idx, 0])[0];
-    const barWidth = BAR_WIDTH;
+              // base en 100% (eje visible)
+              const base = api.coord([idx, 100]);
+              const baseY = base[1];
+              const xCenter = api.coord([idx, 0])[0];
+              const barWidth = BAR_WIDTH;
 
-    // altura “fuera de escala” hasta OVERFLOW_TOP (p.ej. 140%)
-    const overflowExtraPx = api.size([0, (OVERFLOW_TOP - 100)])[1];
-    const yToCanvasTop = baseY - overflowExtraPx; // por encima del 120%
+              // altura “fuera de escala” hasta OVERFLOW_TOP (p.ej. 140%)
+              const overflowExtraPx = api.size([0, (OVERFLOW_TOP - 100)])[1];
+              const yToCanvasTop = baseY - overflowExtraPx; // por encima del 120%
 
-    // 1) plan=0 con ejecución → SIEMPRE al tope del canvas oculto
-    if (m.planned === 0 && m.executedReal > 0) {
-      const height = Math.max(0, overflowExtraPx);
-      return {
-        type: "rect",
-        shape: { x: xCenter - barWidth / 2, y: yToCanvasTop, width: barWidth, height },
-        enterFrom: { shape: { y: baseY, height: 0 } },
-        transition: ["shape"],
-        style: { fill: "#007bff", opacity: 0.35, stroke: "#0056b3", lineWidth: 1 },
-        z: 25
-      };
-    }
+              // 1) plan=0 con ejecución → SIEMPRE al tope del canvas oculto
+              if (m.planned === 0 && m.executedReal > 0) {
+                const height = Math.max(0, overflowExtraPx);
+                return {
+                  type: "rect",
+                  shape: {
+                    x: xCenter - barWidth / 2,
+                    y: yToCanvasTop,
+                    width: barWidth,
+                    height
+                  },
+                  enterFrom: {
+                    shape: {
+                      y: baseY,
+                      height: 0
+                    }
+                  },
+                  transition: ["shape"],
+                  style: {
+                    fill: "#007bff",
+                    opacity: 0.35,
+                    stroke: "#0056b3",
+                    lineWidth: 1
+                  },
+                  z: 25
+                };
+              }
 
-    // 2) 100 < pct ≤ 120 → pintar hasta ese pct exacto
-    if (pct > 100 && pct <= VISIBLE_MAX) {
-      const yTop = api.coord([idx, pct])[1];
-      const height = Math.max(0, baseY - yTop);
-      const baseColor = colorSemaforo(pct, m.min, m.max);
-      const lightColor = echarts.color.lift(baseColor, 0.3);
-      return {
-        type: "rect",
-        shape: { x: xCenter - barWidth / 2, y: yTop, width: barWidth, height },
-        enterFrom: { shape: { y: baseY, height: 0 } },
-        transition: ["shape"],
-        style: { fill: lightColor, opacity: 0.55, stroke: baseColor, lineWidth: 0.8 },
-        z: 20
-      };
-    }
+              // 2) 100 < pct ≤ 120 → pintar hasta ese pct exacto
+              if (pct > 100 && pct <= VISIBLE_MAX) {
+                const yTop = api.coord([idx, pct])[1];
+                const height = Math.max(0, baseY - yTop);
+                const baseColor = colorSemaforo(pct, m.min, m.max);
+                const lightColor = echarts.color.lift(baseColor, 0.3);
+                return {
+                  type: "rect",
+                  shape: {
+                    x: xCenter - barWidth / 2,
+                    y: yTop,
+                    width: barWidth,
+                    height
+                  },
+                  enterFrom: {
+                    shape: {
+                      y: baseY,
+                      height: 0
+                    }
+                  },
+                  transition: ["shape"],
+                  style: {
+                    fill: lightColor,
+                    opacity: 0.55,
+                    stroke: baseColor,
+                    lineWidth: 0.8
+                  },
+                  z: 20
+                };
+              }
 
-    // 3) pct > 120 → llenar hasta el tope del canvas (por arriba del 120)
-    if (pct > VISIBLE_MAX) {
-      const height = Math.max(0, overflowExtraPx);
-      const baseColor = colorSemaforo(pct, m.min, m.max);
-      const lightColor = echarts.color.lift(baseColor, 0.3);
-      return {
-        type: "rect",
-        shape: { x: xCenter - barWidth / 2, y: yToCanvasTop, width: barWidth, height },
-        enterFrom: { shape: { y: baseY, height: 0 } },
-        transition: ["shape"],
-        style: { fill: lightColor, opacity: 0.55, stroke: baseColor, lineWidth: 0.8 },
-        z: 20
-      };
-    }
+              // 3) pct > 120 → llenar hasta el tope del canvas (por arriba del 120)
+              if (pct > VISIBLE_MAX) {
+                const height = Math.max(0, overflowExtraPx);
+                const baseColor = colorSemaforo(pct, m.min, m.max);
+                const lightColor = echarts.color.lift(baseColor, 0.3);
+                return {
+                  type: "rect",
+                  shape: {
+                    x: xCenter - barWidth / 2,
+                    y: yToCanvasTop,
+                    width: barWidth,
+                    height
+                  },
+                  enterFrom: {
+                    shape: {
+                      y: baseY,
+                      height: 0
+                    }
+                  },
+                  transition: ["shape"],
+                  style: {
+                    fill: lightColor,
+                    opacity: 0.55,
+                    stroke: baseColor,
+                    lineWidth: 0.8
+                  },
+                  z: 20
+                };
+              }
 
-    return null;
-  },
-  data: it.metrics.map((_, idx) => idx)
-},
+              return null;
+            },
+            data: it.metrics.map((_, idx) => idx)
+          },
 
         ]
       });
-      // Leyenda de métricas
-      if (legendId) {
-        const legendDiv = document.getElementById(legendId);
-        legendDiv.innerHTML = it.metrics.map(m => `<span class="me-3"><b>#${m.id}</b> = ${m.nombre}</span>`).join(' ');
-      }
+    // Leyenda de métricas
+    if (legendId) {
+      const legendDiv = document.getElementById(legendId);
+      legendDiv.innerHTML = it.metrics.map(m => `<span class="me-3"><b>#${m.id}</b> = ${m.nombre}</span>`).join(' ');
+    }
     }
 
     function initDashboard() {
