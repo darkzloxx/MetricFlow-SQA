@@ -1,14 +1,8 @@
-/**
-* Genera el panel de control del proyecto seleccionado mostrando estadísticas generales,
-* métricas por iteración y gráficos de tendencia utilizando datos extraídos desde MariaDB.
-* Se soporta la selección dinámica de proyectos (?proyecto=ID) y se distingue entre
-* iteraciones actuales y anteriores para facilitar el análisis del cumplimiento planificado.
-*/
 <?php
 // ============================
 // Conexión a MariaDB
 // ============================
-$conexion = new mysqli("localhost", "root", "", "bd_codevit", 3308);
+$conexion = new mysqli("localhost", "root", "", "bd", 3308);
 if ($conexion->connect_error) {
   die("Error al conectar: " . $conexion->connect_error);
 }
@@ -137,18 +131,18 @@ $DATA = array_values($iterMap);
 // Lógica de iteraciones actual y anterior
 // ============================
 $hoy = date('Y-m-d');
-$actualIndex = -1;
 $actualIter = null;
 $anteriorIter = null;
 $mensajeActual = '';
 $mensajeAnterior = '';
 
 if (count($DATA) === 0) {
-  // Caso 1
+  // Caso 1: No hay fases ni iteraciones
   $mensajeActual = 'No se encontraron fases ni iteraciones registradas en este proyecto.';
   $mensajeAnterior = 'Sin datos históricos disponibles.';
 } else {
-  // Buscar actual por rango de fechas
+  // Buscar si hay iteración actual (por fechas)
+  $actualIndex = null;
   foreach ($DATA as $idx => $it) {
     if ($it['inicio'] <= $hoy && $it['fin'] >= $hoy) {
       $actualIndex = $idx;
@@ -156,37 +150,34 @@ if (count($DATA) === 0) {
     }
   }
 
-  if ($actualIndex === -1) {
-    // Caso 2: no hay actual para hoy → usar la última como referencia y armar mensaje
-    $actualIndex = count($DATA) - 1;
-    $fase = $DATA[$actualIndex]['fase'] ?? 'Desconocida';
-    $num  = $DATA[$actualIndex]['numero'] ?? '?';
-    $mensajeActual = "No se planificó la fase <b>$fase</b> (Iteración $num) para la fecha actual.";
-  }
-
-  $actualIter = $DATA[$actualIndex] ?? null;
-
-  // Buscar la anterior más cercana por inicio, con fin < inicio actual
-  $anteriorIndex = null;
-  $fechaActualInicio = $actualIter ? $actualIter['inicio'] : $hoy;
-  $minDiff = PHP_INT_MAX;
-  foreach ($DATA as $idx => $it) {
-    if ($it['fin'] < $fechaActualInicio) {
-      $diff = abs(strtotime($fechaActualInicio) - strtotime($it['inicio']));
-      if ($diff < $minDiff) {
-        $minDiff = $diff;
-        $anteriorIndex = $idx;
-      }
-    }
-  }
-
-  if ($anteriorIndex === null) {
-    // Caso 3
-    $mensajeAnterior = 'No existen iteraciones anteriores.';
+  if ($actualIndex !== null) {
+    // ✅ Hay iteración actual (en curso)
+    $actualIter = $DATA[$actualIndex];
   } else {
-    $anteriorIter = $DATA[$anteriorIndex];
+    // ❌ No hay iteración actual → la última registrada pasa a ser la "más reciente anterior"
+    $mensajeActual = 'No hay ninguna iteración activa en la fecha actual.';
+  }
+
+  // Buscar anterior (todas con fin < inicio actual o, si no hay actual, todas)
+  $fechaReferencia = $actualIter ? $actualIter['inicio'] : $hoy;
+  $anteriores = array_filter($DATA, fn($it) => $it['fin'] < $fechaReferencia);
+
+  if (count($anteriores) === 0) {
+    if ($actualIter) {
+      $mensajeAnterior = 'Esta es la primera iteración registrada del proyecto.';
+    } else {
+      $mensajeAnterior = 'El proyecto tiene iteraciones registradas, pero ninguna está activa actualmente.';
+    }
+  } else {
+    $anteriorIter = end($anteriores); // la última anterior
+  }
+
+  // Caso: iteración actual sin métricas
+  if ($actualIter && empty($actualIter['metrics'])) {
+    $mensajeActual = "La iteración <b>{$actualIter['iteracion']}</b> no tiene métricas planificadas aún.";
   }
 }
+
 
 $conexion->close();
 ?>
@@ -395,6 +386,9 @@ $conexion->close();
       border-top: 2px solid #000;
       margin-right: 6px;
     }
+.card-header + .card-header {
+  border-top: 1px solid rgba(0,0,0,0.05);
+}
 
     /* ======== CHART ======== */
     .chart-scroll {
@@ -1246,56 +1240,72 @@ $conexion->close();
           return new Date(d.fin).getTime() < Date.now();
         }) : [];
 
-      if (anteriorLista.length === 0) {
-        // Mensaje de “No existen iteraciones anteriores.”
-        const colLeft = document.createElement("div");
-        colLeft.className = "col-12 col-xl-6";
-        colLeft.innerHTML = `
-          <div class="card h-100 d-flex justify-content-center align-items-center text-center text-muted">
-            <div class="p-3">${MSG_ANT || "No existen iteraciones anteriores."}</div>
-          </div>`;
-        row.appendChild(colLeft);
-      } else {
-        // Por defecto: la anterior a la actual (ANETERIOR del backend)
-        const defIter = ANTERIOR || anteriorLista[anteriorLista.length - 1];
-        const defIndex = DATA.findIndex(d => d.iteracion === defIter.iteracion);
+   if (anteriorLista.length === 0) {
+  const colLeft = document.createElement("div");
+  colLeft.className = "col-12 col-xl-6";
+  colLeft.innerHTML = `
+    <div class="card h-100 d-flex flex-column text-center align-items-center justify-content-center"
+         style="border: 1px dashed rgba(13,110,253,0.25); background: rgba(13,110,253,0.03);">
+      <div class="card-header bg-transparent border-0">
+        <div class="text-center" style="font-weight:600; color:#0d6efd;">
+          <i class="oi oi-layers mr-1"></i> Iteraciones anteriores
+        </div>
+      </div>
+      <div class="p-4">
+        <i class="oi oi-layers mb-2" style="font-size:1.8rem; color:#6c757d;"></i>
+        <p class="mb-1" style="font-weight:500; color:#adb5bd;">
+          No existen iteraciones anteriores
+        </p>
+        <p class="mb-0" style="font-size:0.9rem; color:#868e96;">
+          Las iteraciones previas aparecerán aquí automáticamente.
+        </p>
+      </div>
+    </div>`;
+  row.appendChild(colLeft);
+} else {
+  const defIter = ANTERIOR || anteriorLista[anteriorLista.length - 1];
+  const defIndex = DATA.findIndex(d => d.iteracion === defIter.iteracion);
 
-        const colLeft = document.createElement("div");
-        colLeft.className = "col-12 col-xl-6";
-        colLeft.innerHTML = `
-          <div class="card card-iteracion h-100">
-            <div class="card-header d-flex justify-content-between align-items-center">
-              <div>
-                <div class="card-title-main" id="left-title">${defIter.iteracion}</div>
-                <div class="card-subtitle-dates" id="left-dates">Del ${defIter.inicio} al ${defIter.fin}</div>
-              </div>
-              <select id="hist-select" class="custom-select custom-select-sm" style="width:auto;">
-                ${anteriorLista.map(d => {
-                  const idx = DATA.findIndex(x => x.iteracion === d.iteracion);
-                  const sel = (idx === defIndex) ? 'selected' : '';
-                  return `<option value="${idx}" ${sel}>${d.iteracion}</option>`;
-                }).join('')}
-              </select>
-            </div>
-            <div class="card-body p-3">
-              <div class="chart-scroll mb-2"><div class="chart-stage"><div id="bars-anterior" class="chart"></div></div></div>
-              <div class="legend-colors mb-2">
-                <span class="legend-item"><span class="legend-dot" style="background:#28a745;"></span>Se cumplió</span>
-                <span class="legend-item"><span class="legend-dot" style="background:#ffc107;"></span>Dentro de umbral</span>
-                <span class="legend-item"><span class="legend-dot" style="background:#dc3545;"></span>Debajo de límite</span>
-                <span class="legend-item"><span class="legend-dot" style="background:#3b82f6;"></span>Planificado=0</span>
-                <span class="legend-item"><span class="legend-line"></span>Umbral</span>
-                <span class="legend-item"><span class="legend-dash"></span>Progreso iteración</span>
-              </div>
-              <div class="legend-bottom mt-3">
-                <div id="legend-metrics-anterior" class="mb-2"></div>
-              </div>
-            </div>
-          </div>`;
-        row.appendChild(colLeft);
+  const colLeft = document.createElement("div");
+  colLeft.className = "col-12 col-xl-6";
+  colLeft.innerHTML = `
+    <div class="card card-iteracion h-100">
+      <div class="card-header bg-transparent border-0">
+        <div class="text-center" style="font-weight:600; color:#0d6efd;">
+          <i class="oi oi-layers mr-1"></i> Iteración anterior
+        </div>
+      </div>
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <div>
+          <div class="card-title-main" id="left-title">${defIter.iteracion}</div>
+          <div class="card-subtitle-dates" id="left-dates">Del ${defIter.inicio} al ${defIter.fin}</div>
+        </div>
+        <select id="hist-select" class="custom-select custom-select-sm" style="width:auto;">
+          ${anteriorLista.map(d => {
+            const idx = DATA.findIndex(x => x.iteracion === d.iteracion);
+            const sel = (idx === defIndex) ? 'selected' : '';
+            return `<option value="${idx}" ${sel}>${d.iteracion}</option>`;
+          }).join('')}
+        </select>
+      </div>
+      <div class="card-body p-3">
+        <div class="chart-scroll mb-2"><div class="chart-stage"><div id="bars-anterior" class="chart"></div></div></div>
+        <div class="legend-colors mb-2">
+          <span class="legend-item"><span class="legend-dot" style="background:#28a745;"></span>Se cumplió</span>
+          <span class="legend-item"><span class="legend-dot" style="background:#ffc107;"></span>Dentro de umbral</span>
+          <span class="legend-item"><span class="legend-dot" style="background:#dc3545;"></span>Debajo de límite</span>
+          <span class="legend-item"><span class="legend-dot" style="background:#3b82f6;"></span>Planificado=0</span>
+          <span class="legend-item"><span class="legend-line"></span>Umbral</span>
+          <span class="legend-item"><span class="legend-dash"></span>Progreso iteración</span>
+        </div>
+        <div class="legend-bottom mt-3">
+          <div id="legend-metrics-anterior" class="mb-2"></div>
+        </div>
+      </div>
+    </div>`;
+  row.appendChild(colLeft);
+  renderIteracionChart(defIter, "bars-anterior", "legend-metrics-anterior");
 
-        // Render inicial
-        renderIteracionChart(defIter, "bars-anterior", "legend-metrics-anterior");
 
         // Cambio de selección
         document.addEventListener("change", e => {
@@ -1310,47 +1320,77 @@ $conexion->close();
       }
 
       // ---- Card Derecha: Actual o mensaje ----
-      if (ACTUAL && Array.isArray(ACTUAL.metrics) && ACTUAL.metrics.length > 0) {
-        const colRight = document.createElement("div");
-        colRight.className = "col-12 col-xl-6";
-        colRight.innerHTML = `
-          <div class="card card-iteracion h-100">
-            <div class="card-header d-flex justify-content-between align-items-center">
-              <div>
-                <div class="card-title-main">${ACTUAL.iteracion}</div>
-                <div class="card-subtitle-dates">Del ${ACTUAL.inicio} al ${ACTUAL.fin}</div>
-              </div>
-            </div>
-            <div class="card-body p-3">
-              <div class="chart-scroll mb-2"><div class="chart-stage"><div id="bars-actual" class="chart"></div></div></div>
-              <div class="legend-colors mb-2">
-                <span class="legend-item"><span class="legend-dot" style="background:#28a745;"></span>Se cumplió</span>
-                <span class="legend-item"><span class="legend-dot" style="background:#ffc107;"></span>Dentro de umbral</span>
-                <span class="legend-item"><span class="legend-dot" style="background:#dc3545;"></span>Debajo de límite</span>
-                <span class="legend-item"><span class="legend-dot" style="background:#3b82f6;"></span>Planificado=0</span>
-                <span class="legend-item"><span class="legend-line"></span>Umbral</span>
-                <span class="legend-item"><span class="legend-dash"></span>Progreso iteración</span>
-              </div>
-              <div class="legend-bottom mt-3">
-                <div id="legend-metrics-actual" class="mb-2"></div>
-              </div>
-            </div>
-          </div>`;
-        row.appendChild(colRight);
+      // ---- Card Derecha: Actual (3 casos) ----
+      const colRight = document.createElement("div");
+      colRight.className = "col-12 col-xl-6";
 
-        renderIteracionChart(ACTUAL, "bars-actual", "legend-metrics-actual");
-      } else {
-        // Mostrar mensaje sin borrar la card ni alterar tamaño (card placeholder)
-        const colRight = document.createElement("div");
-        colRight.className = "col-12 col-xl-6";
+      // ✅ Caso 1: hay iteración actual y métricas cargadas
+     if (ACTUAL && Array.isArray(ACTUAL.metrics) && ACTUAL.metrics.length > 0) {
+  colRight.innerHTML = `
+    <div class="card card-iteracion h-100">
+      <div class="card-header bg-transparent border-0">
+        <div class="text-center" style="font-weight:600; color:#198754;">
+          <i class="oi oi-play-circle mr-1"></i> Iteración actual
+        </div>
+      </div>
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <div>
+          <div class="card-title-main">${ACTUAL.iteracion}</div>
+          <div class="card-subtitle-dates">Del ${ACTUAL.inicio} al ${ACTUAL.fin}</div>
+        </div>
+      </div>
+      <div class="card-body p-3">
+        <div class="chart-scroll mb-2"><div class="chart-stage"><div id="bars-actual" class="chart"></div></div></div>
+        <div class="legend-colors mb-2">
+          <span class="legend-item"><span class="legend-dot" style="background:#28a745;"></span>Se cumplió</span>
+          <span class="legend-item"><span class="legend-dot" style="background:#ffc107;"></span>Dentro de umbral</span>
+          <span class="legend-item"><span class="legend-dot" style="background:#dc3545;"></span>Debajo de límite</span>
+          <span class="legend-item"><span class="legend-dot" style="background:#3b82f6;"></span>Planificado=0</span>
+          <span class="legend-item"><span class="legend-line"></span>Umbral</span>
+          <span class="legend-item"><span class="legend-dash"></span>Progreso iteración</span>
+        </div>
+        <div class="legend-bottom mt-3">
+          <div id="legend-metrics-actual" class="mb-2"></div>
+        </div>
+      </div>
+    </div>`;
+  row.appendChild(colRight);
+  renderIteracionChart(ACTUAL, "bars-actual", "legend-metrics-actual");
+
+
+      }
+      // ⚠️ Caso 2: existe iteración actual pero sin métricas planificadas
+      else if (ACTUAL && (!ACTUAL.metrics || ACTUAL.metrics.length === 0)) {
         colRight.innerHTML = `
-          <div class="card card-iteracion h-100 d-flex justify-content-center align-items-center text-center text-muted">
-            <div class="p-3">${MSG_ACTUAL || "No se planificó la fase X (Iteración Y) para la fecha actual."}</div>
-          </div>`;
+    <div class="card card-iteracion h-100 d-flex flex-column justify-content-center align-items-center text-center"
+         style="border: 1px dashed rgba(13,110,253,0.25); background: rgba(13,110,253,0.03);">
+      <div class="p-4">
+        <i class="oi oi-bar-chart mb-2" style="font-size:1.8rem; color:#0d6efd;"></i>
+        <p class="mb-1" style="font-weight:600; color:#adb5bd;">Iteración sin métricas</p>
+        <p class="mb-0" style="font-size:0.9rem; color:#868e96;">
+          No se han planificado métricas para esta fase (${ACTUAL.iteracion}).
+        </p>
+      </div>
+    </div>`;
+        row.appendChild(colRight);
+      }
+
+      // 🟥 Caso 3: no existe iteración actual planificada (según fecha)
+      else {
+        colRight.innerHTML = `
+    <div class="card card-iteracion h-100 d-flex flex-column justify-content-center align-items-center text-center"
+         style="border: 1px dashed rgba(220,53,69,0.25); background: rgba(220,53,69,0.03);">
+      <div class="p-4">
+        <i class="oi oi-ban mb-2" style="font-size:1.8rem; color:#dc3545;"></i>
+        <p class="mb-1" style="font-weight:600; color:#adb5bd;">No hay iteración activa</p>
+        <p class="mb-0" style="font-size:0.9rem; color:#868e96;">
+          ${MSG_ACTUAL || "El proyecto no tiene una iteración planificada para la fecha actual."}
+        </p>
+      </div>
+    </div>`;
         row.appendChild(colRight);
       }
     }
-
     document.addEventListener("DOMContentLoaded", initDashboard);
   </script>
 </body>
