@@ -2,7 +2,7 @@
 // ============================a
 // Conexión a MariaDB
 // ============================
-$conexion = new mysqli("localhost", "root", "", "bd_codevit", 3308);
+$conexion = new mysqli("localhost", "root", "", "bd_prueba", 3308);
 if ($conexion->connect_error) {
   die("Error al conectar: " . $conexion->connect_error);
 }
@@ -265,6 +265,27 @@ $conexion->close();
       text-transform: uppercase;
       letter-spacing: .02em;
       margin-bottom: 2px;
+    }
+
+    .echarts-legend {
+      display: flex !important;
+      flex-wrap: wrap !important;
+      justify-content: center !important;
+      gap: 10px 24px !important;
+      max-width: 96% !important;
+      margin: 8px auto 0 !important;
+    }
+
+
+    #trendWrap {
+      overflow: hidden !important;
+      /* evita scroll lateral/vertical temporario */
+      position: relative;
+    }
+
+    #trendChart {
+      overflow: visible !important;
+      /* permite que el tooltip y las líneas sobresalgan */
     }
 
     .stat-value {
@@ -648,292 +669,292 @@ $conexion->close();
       chart.resize();
       // umbrales y tiempo aparecerán después de esto
       chart.setOption({
-          tooltip: {
-            trigger: "axis",
-            appendToBody: true,
-            boundaryGap: false,
-            backgroundColor: "rgba(255,255,255,0.95)",
-            borderColor: "#ccc",
-            borderWidth: 1,
-            textStyle: {
-              color: "#222",
-              fontSize: 13,
-            },
-            extraCssText: "box-shadow: 0 2px 8px rgba(0,0,0,0.2); border-radius: 6px;",
-            axisPointer: {
-              type: "none"
-            },
-            formatter: params => {
-              const p = params[0];
-              const m = p.data.meta;
-              let html = `<b>#${p.axisValue} - ${m.nombre}</b><br>`;
-              html += `Límite Desviación: ${m.min}%<br>`;
-              html += `Ejecutado: ${m.executed}% (${m.executedReal} de ${m.planned})<br>`;
+        tooltip: {
+          trigger: "axis",
+          appendToBody: true,
+          boundaryGap: false,
+          backgroundColor: "rgba(255,255,255,0.95)",
+          borderColor: "#ccc",
+          borderWidth: 1,
+          textStyle: {
+            color: "#222",
+            fontSize: 13,
+          },
+          extraCssText: "box-shadow: 0 2px 8px rgba(0,0,0,0.2); border-radius: 6px;",
+          axisPointer: {
+            type: "none"
+          },
+          formatter: params => {
+            const p = params[0];
+            const m = p.data.meta;
+            let html = `<b>#${p.axisValue} - ${m.nombre}</b><br>`;
+            html += `Límite Desviación: ${m.min}%<br>`;
+            html += `Ejecutado: ${m.executed}% (${m.executedReal} de ${m.planned})<br>`;
 
-              const pct = (m.planned > 0) ?
-                (m.executedReal / m.planned) * 100 :
-                (m.executedReal > 0 ? 100 : 100); // ✅ ahora si plan=0 y ejec=0 → 100%
+            const pct = (m.planned > 0) ?
+              (m.executedReal / m.planned) * 100 :
+              (m.executedReal > 0 ? 100 : 100); // ✅ ahora si plan=0 y ejec=0 → 100%
 
-              switch (true) {
-                // ✅ planificado 0 y ejecutado > 0 → se planificó 0 pero se hizo algo
-                case (m.planned === 0 && m.executedReal > 0):
-                  html += `<span style="color:#17a2b8;font-weight:bold;">ℹ️ Se planificó 0 (+${m.executedReal})</span><br>`;
-                  break;
+            switch (true) {
+              // ✅ planificado 0 y ejecutado > 0 → se planificó 0 pero se hizo algo
+              case (m.planned === 0 && m.executedReal > 0):
+                html += `<span style="color:#17a2b8;font-weight:bold;">ℹ️ Se planificó 0 (+${m.executedReal})</span><br>`;
+                break;
 
-                  // ✅ planificado 0 y ejecutado 0 → se cumplió
-                case (m.planned === 0 && m.executedReal === 0):
-                  html += `<span style="color:#198754;font-weight:bold;">✔️ Cumple lo planificado (0/0)</span><br>`;
-                  break;
+                // ✅ planificado 0 y ejecutado 0 → se cumplió
+              case (m.planned === 0 && m.executedReal === 0):
+                html += `<span style="color:#198754;font-weight:bold;">✔️ Cumple lo planificado (0/0)</span><br>`;
+                break;
 
-                  // Superó lo planificado
-                case (m.planned > 0 && pct > 100):
-                  html += `<span style="color:#28a745;font-weight:bold;">▲ Supera lo planificado (+${(m.executedReal - m.planned).toFixed(0)})</span><br>`;
-                  break;
+                // Superó lo planificado
+              case (m.planned > 0 && pct > 100):
+                html += `<span style="color:#28a745;font-weight:bold;">▲ Supera lo planificado (+${(m.executedReal - m.planned).toFixed(0)})</span><br>`;
+                break;
 
-                  // Cumplió exactamente lo planificado
-                case (m.planned > 0 && Math.round(pct) === 100):
-                  html += `<span style="color:#198754;font-weight:bold;">✔️ Cumple lo planificado (=${m.planned})</span><br>`;
-                  break;
+                // Cumplió exactamente lo planificado
+              case (m.planned > 0 && Math.round(pct) === 100):
+                html += `<span style="color:#198754;font-weight:bold;">✔️ Cumple lo planificado (=${m.planned})</span><br>`;
+                break;
 
-                  // Dentro del umbral permitido (amarillo)
-                case (m.planned > 0 && pct >= m.min && pct < 100):
-                  html += `<span style="color:#ffc107;font-weight:bold;">⚠️ Dentro del umbral (${pct.toFixed(1)}%)</span><br>`;
-                  break;
+                // Dentro del umbral permitido (amarillo)
+              case (m.planned > 0 && pct >= m.min && pct < 100):
+                html += `<span style="color:#ffc107;font-weight:bold;">⚠️ Dentro del umbral (${pct.toFixed(1)}%)</span><br>`;
+                break;
 
-                  // Por debajo del umbral (rojo)
-                case (m.planned > 0 && pct > 0 && pct < m.min):
-                  html += `<span style="color:#dc3545;font-weight:bold;">▼ Por debajo del plan (-${(m.planned - m.executedReal).toFixed(0)})</span><br>`;
-                  break;
+                // Por debajo del umbral (rojo)
+              case (m.planned > 0 && pct > 0 && pct < m.min):
+                html += `<span style="color:#dc3545;font-weight:bold;">▼ Por debajo del plan (-${(m.planned - m.executedReal).toFixed(0)})</span><br>`;
+                break;
 
-                  // Sin ejecución (plan > 0 y ejec = 0)
-                case (m.planned > 0 && m.executedReal === 0):
-                  html += `<span style="color:#6c757d;font-weight:bold;">⛔ Sin ejecución (0/${m.planned})</span><br>`;
-                  break;
+                // Sin ejecución (plan > 0 y ejec = 0)
+              case (m.planned > 0 && m.executedReal === 0):
+                html += `<span style="color:#6c757d;font-weight:bold;">⛔ Sin ejecución (0/${m.planned})</span><br>`;
+                break;
 
-                  // Sin datos o casos no contemplados
-                default:
-                  html += `<span style="color:#999;">❔ Sin datos disponibles</span><br>`;
-              }
-
-              html += `Progreso temporal: ${timePct.toFixed(1)}%`;
-              return html;
+                // Sin datos o casos no contemplados
+              default:
+                html += `<span style="color:#999;">❔ Sin datos disponibles</span><br>`;
             }
-          },
 
-          grid: {
-            left: 56,
-            right: 110,
-            top: 30, // antes 20 → deja espacio para dibujar sobre 120%
-            bottom: 44,
-            containLabel: true
+            html += `Progreso temporal: ${timePct.toFixed(1)}%`;
+            return html;
+          }
+        },
+
+        grid: {
+          left: 56,
+          right: 110,
+          top: 30, // antes 20 → deja espacio para dibujar sobre 120%
+          bottom: 44,
+          containLabel: true
+        },
+        xAxis: {
+          type: "category",
+          data: labels,
+          name: "Métricas",
+          nameLocation: "middle",
+          nameGap: 28,
+          nameTextStyle: {
+            fontSize: 12,
+            fontWeight: 600,
+            color: "#495057"
           },
-          xAxis: {
-            type: "category",
-            data: labels,
-            name: "Métricas",
+          axisLabel: {
+            formatter: v => `#${v}`,
+            margin: 2
+          }
+        },
+        yAxis: [{
+            type: "value",
+            min: 0,
+            max: VISIBLE_MAX, // 120% visible
+            name: "Cumplimiento (%)",
             nameLocation: "middle",
-            nameGap: 28,
+            nameGap: 46,
+            nameRotate: 90,
             nameTextStyle: {
               fontSize: 12,
               fontWeight: 600,
               color: "#495057"
             },
             axisLabel: {
-              formatter: v => `#${v}`,
-              margin: 2
+              formatter: '{value}%',
+              margin: 6
             }
           },
-          yAxis: [{
-              type: "value",
-              min: 0,
-              max: VISIBLE_MAX, // 120% visible
-              name: "Cumplimiento (%)",
-              nameLocation: "middle",
-              nameGap: 46,
-              nameRotate: 90,
-              nameTextStyle: {
-                fontSize: 12,
-                fontWeight: 600,
-                color: "#495057"
-              },
-              axisLabel: {
-                formatter: '{value}%',
-                margin: 6
-              }
+          {
+            type: "value",
+            min: 0,
+            max: OVERFLOW_MAX, // 160% para overflow
+            show: false, // oculto
+            splitLine: {
+              show: false
             },
-            {
-              type: "value",
-              min: 0,
-              max: OVERFLOW_MAX, // 160% para overflow
-              show: false, // oculto
-              splitLine: {
-                show: false
-              },
-              axisTick: {
-                show: false
-              },
-              axisLine: {
-                show: false
-              }
+            axisTick: {
+              show: false
+            },
+            axisLine: {
+              show: false
             }
-          ],
-          series: [{
-              name: "Ejecutado",
-              type: "bar",
-              yAxisIndex: 0, // usa el eje visible (120)
-              data: execData.map(d => ({
-                value: 100,
-                meta: d.meta,
-                fill: Math.min(d.value, 100)
-              })),
-              barWidth: BAR_WIDTH,
-              z: 10,
-              itemStyle: {
-                borderColor: "#000",
-                borderWidth: 2,
-                color: params => {
-                  const m = params.data.meta;
-                  const baseColor = colorSemaforo(m.executed, m.min, m.max);
-                  const fillPct = Math.min(m.executed, 100) / 100;
-                  return new echarts.graphic.LinearGradient(0, 1, 0, 0, [{
-                      offset: 0,
-                      color: baseColor
-                    },
-                    {
-                      offset: fillPct,
-                      color: baseColor
-                    },
-                    {
-                      offset: fillPct,
-                      color: "rgba(255,255,255,0)"
-                    },
-                    {
-                      offset: 1,
-                      color: "rgba(255,255,255,0)"
-                    }
-                  ]);
-                }
+          }
+        ],
+        series: [{
+            name: "Ejecutado",
+            type: "bar",
+            yAxisIndex: 0, // usa el eje visible (120)
+            data: execData.map(d => ({
+              value: 100,
+              meta: d.meta,
+              fill: Math.min(d.value, 100)
+            })),
+            barWidth: BAR_WIDTH,
+            z: 10,
+            itemStyle: {
+              borderColor: "#000",
+              borderWidth: 2,
+              color: params => {
+                const m = params.data.meta;
+                const baseColor = colorSemaforo(m.executed, m.min, m.max);
+                const fillPct = Math.min(m.executed, 100) / 100;
+                return new echarts.graphic.LinearGradient(0, 1, 0, 0, [{
+                    offset: 0,
+                    color: baseColor
+                  },
+                  {
+                    offset: fillPct,
+                    color: baseColor
+                  },
+                  {
+                    offset: fillPct,
+                    color: "rgba(255,255,255,0)"
+                  },
+                  {
+                    offset: 1,
+                    color: "rgba(255,255,255,0)"
+                  }
+                ]);
+              }
+            },
+            label: {
+              show: true,
+              position: "top",
+              align: "center",
+              verticalAlign: "bottom",
+              distance: 4,
+              formatter: p => {
+                const m = p.data.meta;
+                let label = "";
+                label += `{main|${m.executed}%}\n{small|${m.executedReal}/${m.planned}}`;
+                return label;
               },
-              label: {
-                show: true,
-                position: "top",
-                align: "center",
-                verticalAlign: "bottom",
-                distance: 4,
-                formatter: p => {
-                  const m = p.data.meta;
-                  let label = "";
-                  label += `{main|${m.executed}%}\n{small|${m.executedReal}/${m.planned}}`;
-                  return label;
+              rich: {
+                extra: {
+                  color: "#28a745",
+                  fontSize: 12,
+                  fontWeight: "bold",
+                  align: "center"
                 },
-                rich: {
-                  extra: {
-                    color: "#28a745",
-                    fontSize: 12,
-                    fontWeight: "bold",
-                    align: "center"
-                  },
-                  main: {
-                    color: "#000",
-                    fontSize: 14,
-                    fontWeight: "bold",
-                    align: "center"
-                  },
-                  small: {
-                    color: "#555",
-                    fontSize: 11,
-                    align: "center"
-                  },
+                main: {
+                  color: "#000",
+                  fontSize: 14,
+                  fontWeight: "bold",
+                  align: "center"
+                },
+                small: {
+                  color: "#555",
+                  fontSize: 11,
+                  align: "center"
+                },
 
+              }
+            },
+            animationDuration: BAR_DURATION,
+            animationEasing: "cubicOut",
+            animationDelay: BAR_DELAY_PER_IDX,
+          },
+
+          // === LÍNEAS DE UMBRAL (mejor contraste y estilo más liviano) ===
+          {
+            name: "Límites de desviación",
+            type: "custom",
+            coordinateSystem: "cartesian2d",
+            silent: true,
+            z: 900,
+            renderItem: function(params, api) {
+              const idx = api.value(0);
+              const m = it.metrics[idx];
+              if (!m) return null;
+
+              // Posición del umbral en Y y centro de la categoría en X
+              const yPx = api.coord([idx, m.min])[1];
+              const xCenter = api.coord([idx, 0])[0];
+
+              // Ancho EXACTO de la barra "Ejecutado"
+              const bandW = api.size([1, 0])[0] || 30;
+              let barW;
+              if (typeof BAR_WIDTH === 'number') {
+                barW = BAR_WIDTH;
+              } else if (typeof BAR_WIDTH === 'string' && BAR_WIDTH.endsWith('%')) {
+                barW = bandW * (parseFloat(BAR_WIDTH) / 100);
+              } else {
+                barW = bandW * 0.6; // fallback
+              }
+              const half = barW / 2;
+
+              return {
+                type: "line",
+                // +0.5 para nitidez en pantallas 1x (pixel snapping)
+                shape: {
+                  x1: Math.round(xCenter - half) + 0.5,
+                  y1: yPx,
+                  x2: Math.round(xCenter + half) + 0.5,
+                  y2: yPx
+                },
+                style: {
+                  stroke: "#000000",
+                  lineWidth: 1.2,
+                  opacity: 0
+                },
+                keyframeAnimation: {
+                  duration: 700,
+                  delay: 1800,
+                  easing: "cubicOut",
+                  keyframes: [{
+                      percent: 0,
+                      style: {
+                        opacity: 0,
+                        lineWidth: 0
+                      }
+                    },
+                    {
+                      percent: 1,
+                      style: {
+                        opacity: 0.9,
+                        lineWidth: 1.2
+                      }
+                    }
+                  ]
+                },
+                textContent: {
+                  style: {
+                    text: `${m.min}%`,
+                    fill: "#333",
+                    fontSize: 11,
+                    fontWeight: 600,
+                    backgroundColor: "rgba(255,255,255,0.9)",
+                    padding: [1, 4],
+                    borderRadius: 3,
+                    textShadowColor: "rgba(255,255,255,0.9)",
+                    textShadowBlur: 3
+                  }
+                },
+                textConfig: {
+                  position: "top",
+                  offset: [0, -5]
                 }
-              },
-              animationDuration: BAR_DURATION,
-              animationEasing: "cubicOut",
-              animationDelay: BAR_DELAY_PER_IDX,
+              };
             },
 
-            // === LÍNEAS DE UMBRAL (mejor contraste y estilo más liviano) ===
-            {
-              name: "Límites de desviación",
-              type: "custom",
-              coordinateSystem: "cartesian2d",
-              silent: true,
-              z: 900,
-              renderItem: function(params, api) {
-                const idx = api.value(0);
-                const m = it.metrics[idx];
-                if (!m) return null;
-
-                // Posición del umbral en Y y centro de la categoría en X
-                const yPx = api.coord([idx, m.min])[1];
-                const xCenter = api.coord([idx, 0])[0];
-
-                // Ancho EXACTO de la barra "Ejecutado"
-                const bandW = api.size([1, 0])[0] || 30;
-                let barW;
-                if (typeof BAR_WIDTH === 'number') {
-                  barW = BAR_WIDTH;
-                } else if (typeof BAR_WIDTH === 'string' && BAR_WIDTH.endsWith('%')) {
-                  barW = bandW * (parseFloat(BAR_WIDTH) / 100);
-                } else {
-                  barW = bandW * 0.6; // fallback
-                }
-                const half = barW / 2;
-
-                return {
-                  type: "line",
-                  // +0.5 para nitidez en pantallas 1x (pixel snapping)
-                  shape: {
-                    x1: Math.round(xCenter - half) + 0.5,
-                    y1: yPx,
-                    x2: Math.round(xCenter + half) + 0.5,
-                    y2: yPx
-                  },
-                  style: {
-                    stroke: "#000000",
-                    lineWidth: 1.2,
-                    opacity: 0
-                  },
-                  keyframeAnimation: {
-                    duration: 700,
-                    delay: 1800,
-                    easing: "cubicOut",
-                    keyframes: [{
-                        percent: 0,
-                        style: {
-                          opacity: 0,
-                          lineWidth: 0
-                        }
-                      },
-                      {
-                        percent: 1,
-                        style: {
-                          opacity: 0.9,
-                          lineWidth: 1.2
-                        }
-                      }
-                    ]
-                  },
-                  textContent: {
-                    style: {
-                      text: `${m.min}%`,
-                      fill: "#333",
-                      fontSize: 11,
-                      fontWeight: 600,
-                      backgroundColor: "rgba(255,255,255,0.9)",
-                      padding: [1, 4],
-                      borderRadius: 3,
-                      textShadowColor: "rgba(255,255,255,0.9)",
-                      textShadowBlur: 3
-                    }
-                  },
-                  textConfig: {
-                    position: "top",
-                    offset: [0, -5]
-                  }
-                };
-              },
-            
             data: it.metrics.map((_, idx) => ({
               value: idx
             }))
@@ -1168,11 +1189,11 @@ $conexion->close();
 
         ]
       });
-    // Leyenda de métricas
-    if (legendId) {
-      const legendDiv = document.getElementById(legendId);
-      legendDiv.innerHTML = it.metrics.map(m => `<span class="me-3"><b>#${m.id}</b> = ${m.nombre}</span>`).join(' ');
-    }
+      // Leyenda de métricas
+      if (legendId) {
+        const legendDiv = document.getElementById(legendId);
+        legendDiv.innerHTML = it.metrics.map(m => `<span class="me-3"><b>#${m.id}</b> = ${m.nombre}</span>`).join(' ');
+      }
     }
 
     function initDashboard() {
@@ -1180,6 +1201,292 @@ $conexion->close();
         console.warn("ECharts no disponible aún, reintentando...");
         setTimeout(initDashboard, 200);
         return;
+      }
+
+      // DOM y datos base
+      const trendWrap = document.getElementById("trendWrap");
+      const trendChartDom = document.getElementById("trendChart");
+
+      const METRIC_KEYS = [...new Set((Array.isArray(DATA) ? DATA : [])
+        .flatMap(it => (it.metrics || []).map(m => m.nombre)))];
+
+      const palette = [
+        "#007bff", "#28a745", "#dc3545", "#ffc107", "#17a2b8",
+        "#6f42c1", "#fd7e14", "#20c997", "#6610f2", "#e83e8c",
+        "#343a40", "#8b8f98", "#00c2ff", "#b07ef2", "#ff9f40"
+      ];
+      const iterLabels = (Array.isArray(DATA) ? DATA : []).map(d => d.iteracion);
+
+      // Crear chart + responsive ancho por cantidad de iteraciones
+      const perIterPx = 160;
+      const trendChart = echarts.init(trendChartDom);
+
+      function resizeTrend() {
+        const wrapW = trendWrap.clientWidth || 800;
+        const needed = Math.max(wrapW, (DATA?.length || 1) * perIterPx);
+        trendChartDom.style.width = needed + "px";
+        trendChart.resize();
+      }
+      resizeTrend();
+      window.addEventListener("resize", resizeTrend);
+
+      // Si no hay datos, mostrar aviso y salir
+      if (!Array.isArray(DATA) || DATA.length === 0) {
+        trendChart.clear();
+        trendChartDom.innerHTML = '<div class="text-muted">No hay datos para mostrar.</div>';
+      } else {
+        // Series + overflow >200%
+        const TREND_VISIBLE_MAX = 200;
+        const legendType = METRIC_KEYS.length > 6 ? "scroll" : "plain";
+        const overflowTrendPoints = [];
+
+        const lineSeries = METRIC_KEYS.map((name, sIdx) => ({
+          name,
+          type: "line",
+          smooth: true,
+          showSymbol: true,
+          symbol: "circle",
+          symbolSize: 7,
+          lineStyle: {
+            width: 2.5,
+            color: palette[sIdx % palette.length],
+            shadowColor: "rgba(0,0,0,0.08)",
+            shadowBlur: 3
+          },
+          itemStyle: {
+            color: palette[sIdx % palette.length],
+            borderColor: "#fff",
+            borderWidth: 1
+          },
+          emphasis: {
+            focus: "series",
+            lineStyle: {
+              width: 3.2
+            }
+          },
+          blur: {
+            lineStyle: {
+              opacity: 0.25
+            },
+            itemStyle: {
+              opacity: 0.25
+            }
+          },
+          data: DATA.map((it, iterIdx) => {
+            const m = (it.metrics || []).find(mm => mm.nombre === name);
+            if (!m) return {
+              value: 0,
+              meta: null
+            };
+            const real = Number(m.executed) || 0;
+            const shown = Math.min(real, TREND_VISIBLE_MAX);
+            if (real > TREND_VISIBLE_MAX) {
+              overflowTrendPoints.push({
+                iterIdx,
+                value: real,
+                color: palette[sIdx % palette.length],
+                name
+              });
+            }
+            return {
+              value: shown,
+              meta: {
+                nombre: m.nombre,
+                executedReal: m.executedReal,
+                planned: m.planned,
+                unit: m.unit,
+                noPlan: m.noPlan,
+                extra: m.extra,
+                realPct: real
+              }
+            };
+          })
+        }));
+
+        trendChart.setOption({
+          backgroundColor: "#fff",
+          tooltip: {
+            trigger: "axis",
+            appendToBody: true, // ✅ permite que el tooltip se renderice fuera del canvas
+            confine: false, // ✅ no lo recorta dentro del contenedor
+            backgroundColor: "rgba(255,255,255,0.95)",
+            borderColor: "#ddd",
+            borderWidth: 1,
+            textStyle: {
+              color: "#222",
+              fontSize: 13
+            },
+            extraCssText: `
+    box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+    border-radius: 6px;
+    max-width: 340px;             /* ancho controlado, evita desbordar toda la pantalla */
+    white-space: normal;          /* permite saltos de línea */
+    z-index: 9999;                /* sobre otros elementos */
+  `,
+            axisPointer: {
+              type: "line"
+            },
+            formatter: function(params) {
+              const idx = params[0]?.dataIndex ?? 0;
+              const iter = iterLabels[idx] || "";
+              let html = `<b>${iter}</b><br/>`;
+              params.forEach(p => {
+                if (p.seriesName === "Referencia 100%" || p.seriesName === "Overflow trend labels") return;
+                const meta = p.data?.meta;
+                const ejec = meta?.executedReal ?? "—";
+                const plan = meta?.planned ?? "—";
+                const pct = meta?.realPct ?? p.value ?? 0;
+                const dot = `<span style="display:inline-block;margin-right:6px;width:10px;height:10px;background:${p.color};border-radius:50%"></span>`;
+                html += `${dot}${p.seriesName}: <b>${pct}%</b> (${ejec}/${plan})<br/>`;
+              });
+              return html;
+            }
+          },
+          legend: {
+            type: "plain", // 🔹 fuerza modo normal, sin scroll
+            data: METRIC_KEYS,
+            bottom: 0,
+            left: "center",
+            itemGap: 18,
+            itemWidth: 12,
+            itemHeight: 12,
+            icon: "circle",
+            align: "auto",
+            orient: "horizontal", // 🔹 mantiene horizontal, pero permite wrap
+            textStyle: {
+              color: "#444",
+              fontSize: 12.5,
+              fontWeight: 500
+            },
+            padding: [8, 10, 8, 10],
+            formatter: name => name.length > 30 ? name.slice(0, 30) + "…" : name
+          },
+          grid: {
+            left: 48,
+            right: 84,
+            top: 56,
+            bottom: 130, // 🔹 más espacio para que quepan múltiples líneas
+            containLabel: true
+          },
+
+          xAxis: {
+            type: "category",
+            data: iterLabels,
+            axisLine: {
+              lineStyle: {
+                color: "#aaa"
+              }
+            },
+            axisLabel: {
+              color: "#555",
+              fontWeight: 500,
+              margin: 18
+            },
+            splitLine: {
+              show: true,
+              lineStyle: {
+                color: "rgba(0,0,0,0.08)", // color tenue gris
+                type: "solid", // línea continua
+                width: 1
+              }
+            },
+            splitArea: {
+              show: false
+            }
+          },
+          yAxis: {
+            type: "value",
+            min: 0,
+            max: 200,
+            axisLine: {
+              show: false
+            },
+            axisTick: {
+              show: false
+            },
+            splitLine: {
+              show: true,
+              lineStyle: {
+                color: "rgba(0,0,0,0.06)"
+              }
+            },
+            axisLabel: {
+              formatter: "{value}%",
+              color: "#666"
+            }
+          },
+          series: [
+            ...lineSeries,
+            {
+              name: "Referencia 100%",
+              type: "line",
+              silent: true,
+              symbol: "none",
+              lineStyle: {
+                type: "dashed",
+                color: "#6c757d"
+              },
+              data: iterLabels.map(() => 100),
+              z: 5
+            },
+
+            // Etiquetas por encima de 200% (manteniendo tope Y = 200)
+            {
+              name: "Overflow trend labels",
+              type: "custom",
+              coordinateSystem: "cartesian2d",
+              xAxisIndex: 0,
+              yAxisIndex: 0,
+              silent: true,
+              clip: false,
+              z: 1000,
+              renderItem: function(params, api) {
+                const d = params.data;
+                const x = api.coord([d.iterIdx, TREND_VISIBLE_MAX])[0];
+                const yTop = api.coord([d.iterIdx, TREND_VISIBLE_MAX])[1];
+                const color = d.color || "#333";
+                return {
+                  type: "group",
+                  children: [{
+                      type: "polygon",
+                      shape: {
+                        points: [
+                          [x - 5, yTop - 1],
+                          [x + 5, yTop - 1],
+                          [x, yTop - 10]
+                        ]
+                      },
+                      style: {
+                        fill: echarts.color.lift(color, 0.2),
+                        stroke: color,
+                        lineWidth: 1
+                      }
+                    },
+                    {
+                      type: "text",
+                      style: {
+                        x,
+                        y: yTop - 16,
+                        text: `${d.value}%`,
+                        fill: color,
+                        fontSize: 11,
+                        fontWeight: 700,
+                        textAlign: "center",
+                        textBaseline: "bottom",
+                        backgroundColor: "rgba(255,255,255,.9)",
+                        padding: [1, 4],
+                        borderRadius: 3,
+                        shadowColor: "rgba(0,0,0,.1)",
+                        shadowBlur: 2
+                      }
+                    }
+                  ]
+                };
+              },
+              data: overflowTrendPoints
+            }
+          ]
+        });
       }
 
       const row = document.getElementById("barsRow");
@@ -1233,9 +1540,8 @@ $conexion->close();
       // Si pasa las validaciones, renderizar normalmente
       // ==========================
 
-      // ========== Gráfico Tendencia (igual a tu original) ==========
-      const trendWrap = document.getElementById("trendWrap");
-      const trendChartDom = document.getElementById("trendChart");
+      // ========== Gráfico Tendencia ==========
+
       if (!Array.isArray(DATA) || DATA.length === 0) {
         trendChartDom.innerHTML = '<div class="text-muted">No hay datos para mostrar.</div>';
       } else {
@@ -1306,9 +1612,30 @@ $conexion->close();
           Math.ceil(Math.max(...DATA.flatMap(it => it.metrics.map(m => Math.max(m.max, m.executed)))) / 10) * 10
         );
         // Configuración del gráfico de tendencia
+        // === GRÁFICO DE TENDENCIA MEJORADO (sin semáforo) ===
         trendChart.setOption({
+          backgroundColor: "#fff",
           tooltip: {
             trigger: "axis",
+            appendToBody: true,
+            confine: false,
+            backgroundColor: "rgba(255,255,255,0.95)",
+            borderColor: "#ddd",
+            borderWidth: 1,
+            textStyle: {
+              color: "#222",
+              fontSize: 13
+            },
+            extraCssText: `
+              box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+              border-radius: 6px;
+              max-width: 340px;
+              white-space: normal;
+              z-index: 9999;
+            `,
+            axisPointer: {
+              type: "line"
+            },
             formatter: function(params) {
               const idx = params[0]?.dataIndex ?? 0;
               const iter = iterLabels[idx] || "";
@@ -1320,71 +1647,157 @@ $conexion->close();
                 const ejec = meta?.executedReal ?? "—";
                 const plan = meta?.planned ?? "—";
                 const dot = `<span style="display:inline-block;margin-right:6px;width:10px;height:10px;background:${p.color};border-radius:50%"></span>`;
-                let detalle = "";
-                if (meta) {
-                  if (meta.noPlan && ejec > 0) {
-                    detalle = `( +${meta.extra} ${meta.unit || 'u'} sin plan )`;
-                  } else {
-                    detalle = `(${ejec} / ${plan})`;
-                  }
-                }
-                html += `${dot}${p.seriesName}: ${pct}% ${detalle}<br/>`;
+                html += `${dot}${p.seriesName}: <b>${pct}%</b> (${ejec}/${plan})<br/>`;
               });
               return html;
             }
           },
           legend: {
+            type: "plain", // sin scroll
             data: METRIC_KEYS,
-            top: 8,
-            itemGap: 18
+            bottom: 10,
+            left: "center",
+            width: "96%", // fuerza wrap en varias filas
+            itemWidth: 10,
+            itemHeight: 10,
+            icon: "circle",
+            itemGap: 18,
+            padding: [6, 10, 6, 10],
+            textStyle: {
+              fontSize: 12.5,
+              color: "#444"
+            },
+            animation: false
           },
           grid: {
             left: 48,
             right: 84,
-            top: 88,
-            bottom: 40,
+            top: 56,
+            bottom: 130,
             containLabel: true
           },
-          xAxis: {
+           xAxis: {
             type: "category",
-            data: iterLabels
+            data: iterLabels,
+            axisLine: {
+              show: true,
+              lineStyle: { color: "#6c757d", width: 1.2 }
+            },
+            axisTick: {
+              show: true,
+              alignWithLabel: true,
+              length: 8,
+              lineStyle: { color: "#6c757d" }
+            },
+            axisLabel: {
+              color: "#555",
+              fontWeight: 500,
+              margin: 18
+            },
+            splitLine: {
+              show: false // quitar líneas secundarias verticales
+            },
+            splitArea: { show: false }
           },
           yAxis: {
             type: "value",
             min: 0,
-            max: maxYTrend,
+            max: 200, // tope fijo
+            axisLine: {
+              show: false
+            },
+            axisTick: {
+              show: false
+            },
+            splitLine: {
+              show: true,
+              lineStyle: {
+                color: "rgba(0,0,0,0.06)"
+              }
+            },
             axisLabel: {
-              formatter: '{value}%'
+              formatter: "{value}%",
+              color: "#666"
             }
           },
           series: [
-            ...lineSeries,
+            ...lineSeries.map(serie => ({
+              ...serie,
+              smooth: true,
+              symbolSize: 8,
+              lineStyle: {
+                width: 2.5,
+                color: serie.lineStyle.color,
+                shadowColor: "rgba(0,0,0,0.08)",
+                shadowBlur: 3
+              },
+              itemStyle: {
+                color: serie.itemStyle.color,
+                borderColor: "#fff",
+                borderWidth: 1
+              },
+              label: {
+                show: true,
+                position: "top",
+                distance: 6,
+                fontSize: 11,
+                color: "#333",
+                formatter: function(p) {
+                  const val = p.value;
+                  return val > 200 ? `${val}%` : "";
+                }
+              },
+              markPoint: {
+                symbol: "roundRect",
+                symbolSize: [38, 20],
+                label: {
+                  show: true,
+                  color: "#fff",
+                  fontSize: 11,
+                  formatter: p => `${p.value}%`
+                },
+                itemStyle: {
+                  color: serie.lineStyle.color,
+                  shadowColor: "rgba(0,0,0,0.2)",
+                  shadowBlur: 2
+                },
+                data: serie.data
+                  .map((d, idx) => (d.value > 200 ? {
+                      value: d.value,
+                      xAxis: idx,
+                      yAxis: 200
+                    } :
+                    null))
+                  .filter(Boolean)
+              }
+            })),
             {
               name: "Referencia 100%",
               type: "line",
               silent: true,
               symbol: "none",
+              lineStyle: {
+                type: "dashed",
+                color: "#6c757d"
+              },
               markLine: {
                 symbol: "none",
                 label: {
                   show: true,
                   position: "end",
-                  formatter: "100%", // <-- se muestra como 100%
+                  formatter: "100%",
                   color: "#6c757d",
                   backgroundColor: "rgba(255,255,255,.6)",
                   padding: [2, 4]
                 },
-                lineStyle: {
-                  type: "dashed",
-                  color: "#6c757d"
-                },
                 data: [{
                   yAxis: 100
-                }] // <-- debe quedar numérico
+                }]
               }
             }
           ]
         });
+
       }
 
       // ========== Cards de barras (izquierda/derecha) ==========
