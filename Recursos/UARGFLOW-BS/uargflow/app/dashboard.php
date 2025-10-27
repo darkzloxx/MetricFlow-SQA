@@ -16,7 +16,7 @@
 // ============================a
 // Conexión a MariaDB
 // ============================
-$conexion = new mysqli("localhost", "root", "", "bd_prueba2", 3308);
+$conexion = new mysqli("localhost", "root", "", "bd_CU12_1", 3308);
 // Si algo falla aquí, no hay dashboard: aborta con un mensaje explícito.
 if ($conexion->connect_error) {
   die("Error al conectar: " . $conexion->connect_error);
@@ -1385,6 +1385,38 @@ $conexion->close();
       }
     }
 
+    // ===== Helpers para el gráfico de tendencia =====
+    // Calcula filas estimadas de la leyenda y ajusta la altura del contenedor del chart
+    function adjustTrendHeightForLegend(chart, chartDom, legendKeys) {
+      try {
+        const base = 380; // altura base del gráfico (sin contar leyenda)
+        const w = (chart && typeof chart.getWidth === 'function') ? chart.getWidth() : (chartDom?.clientWidth || 800);
+        const n = Array.isArray(legendKeys) ? legendKeys.length : 0;
+        if (n === 0) {
+          if (chartDom) chartDom.style.height = base + 'px';
+          if (chart) chart.resize();
+          return 0;
+        }
+        // Ancho promedio por item (marker + texto + gap); conservador para nombres largos
+        const avgItem = 120; // px
+        const usable = Math.max(200, Math.floor(w * 0.92));
+        const cols = Math.max(1, Math.floor(usable / avgItem));
+        const rows = Math.max(1, Math.ceil(n / cols));
+        // Altura extra por fila (alto texto ~18-20 + márgenes)
+        const extraPerRow = 26; // px
+        const padding = 16; // holgura adicional
+        const extra = Math.max(0, (rows * extraPerRow) + padding);
+        if (chartDom) chartDom.style.height = (base + extra) + 'px';
+        if (chart) chart.resize();
+        return rows;
+      } catch (e) {
+        // fallback seguro
+        if (chartDom) chartDom.style.height = '380px';
+        if (chart) chart.resize();
+        return 0;
+      }
+    }
+
     function initDashboard() {
       if (typeof echarts === "undefined") {
         console.warn("ECharts no disponible aún, reintentando...");
@@ -1664,6 +1696,10 @@ $conexion->close();
             chart.off('mousemove');
             chart.clear();
 
+            // Ajuste dinámico de altura según cantidad de series en la leyenda
+            const legendRowsLocal = adjustTrendHeightForLegend(chart, chartDom, localMetricKeys);
+            const dynamicBottomLocal = Math.max(90, 70 + (legendRowsLocal * 26));
+
             chart.setOption({
               backgroundColor: '#fff',
               tooltip: {
@@ -1722,7 +1758,7 @@ $conexion->close();
                 left: 70,
                 right: 90,
                 top: 56,
-                bottom: 130,
+                bottom: dynamicBottomLocal,
                 containLabel: true
               },
               xAxis: {
@@ -1973,7 +2009,7 @@ $conexion->close();
       // Crear chart + responsive ancho por cantidad de iteraciones
       const oldTrend = echarts.getInstanceByDom(trendChartDom);
       if (oldTrend) oldTrend.dispose();
-      const trendChart = echarts.init(trendChartDom);
+  const trendChart = echarts.init(trendChartDom);
 
       function resizeTrend() {
         if (trendStage) {
@@ -1985,7 +2021,21 @@ $conexion->close();
         if (trendWrap) {
           trendWrap.style.overflowX = "hidden";
         }
-        trendChart.resize();
+        // Recalcular altura según leyenda actual en cada resize
+        try {
+          const instance = echarts.getInstanceByDom(trendChartDom);
+          if (instance) {
+            const opt = instance.getOption();
+            const keys = (opt && opt.legend && opt.legend[0] && opt.legend[0].data) ? opt.legend[0].data : [];
+            const rows = adjustTrendHeightForLegend(instance, trendChartDom, keys);
+            const dynamicBottom = Math.max(90, 70 + (rows * 26));
+            instance.setOption({ grid: { bottom: dynamicBottom } }, { lazyUpdate: true });
+          } else {
+            trendChart.resize();
+          }
+        } catch (e) {
+          trendChart.resize();
+        }
       }
       resizeTrend();
       window.addEventListener("resize", resizeTrend);
@@ -1995,7 +2045,7 @@ $conexion->close();
         trendChart.clear();
         trendChartDom.innerHTML = '<div class="text-muted">No hay datos para mostrar.</div>';
       } else {
-        const legendType = "plain";
+  const legendType = "plain";
 
         const allTrendValues = DATA.flatMap(it => (it.metricas || []).map(m => Number(m.executed) || 0));
         const realMaxValue = allTrendValues.length ? Math.max(...allTrendValues) : 0;
@@ -2182,7 +2232,11 @@ $conexion->close();
           z: 99
         };
 
-        trendChart.setOption({
+  // Ajustar altura para que la leyenda no se superponga (calcula filas estimadas)
+  const legendRows = adjustTrendHeightForLegend(trendChart, trendChartDom, METRIC_KEYS);
+  const dynamicBottom = Math.max(90, 70 + (legendRows * 26));
+
+  trendChart.setOption({
           backgroundColor: "#fff",
           tooltip: {
             trigger: "axis",
@@ -2229,6 +2283,7 @@ $conexion->close();
             }
           },
           legend: {
+            // En muchos ítems dejamos que haga varias filas; si prefieres paginación, cambia a 'scroll'
             type: legendType,
             data: METRIC_KEYS,
             bottom: 10,
@@ -2238,17 +2293,14 @@ $conexion->close();
             itemHeight: 10,
             itemGap: 18,
             selectorPosition: "start",
-            textStyle: {
-              fontSize: 12.5,
-              color: "#444"
-            },
+            textStyle: { fontSize: 12.5, color: "#444" },
             animation: false
           },
           grid: {
             left: 70,
             right: 90,
             top: 56,
-            bottom: 130,
+            bottom: dynamicBottom,
             containLabel: true
           },
           xAxis: {
