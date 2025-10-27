@@ -240,6 +240,16 @@ $conexion->close();
       line-height: 1;
     }
 
+    .card-header-center {
+      text-align: center;
+    }
+
+    .card-header-center h5 {
+      margin: 0;
+      font-weight: 600;
+      color: #212529;
+    }
+
     .icon-bg-primary {
       background: linear-gradient(135deg, #007bff 0%, #5aa7ff 100%);
     }
@@ -278,7 +288,6 @@ $conexion->close();
 
 
     #trendWrap {
-      overflow: hidden !important;
       /* evita scroll lateral/vertical temporario */
       position: relative;
     }
@@ -436,6 +445,72 @@ $conexion->close();
       height: 380px;
     }
 
+    .chart-controls {
+      position: absolute;
+      top: 12px;
+      right: 16px;
+      z-index: 10;
+    }
+
+    .btn-toggle {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: #0d6efd;
+      color: #fff;
+      border: none;
+      font-weight: 500;
+      padding: 6px 14px;
+      font-size: 13px;
+      border-radius: 30px;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+      transition: all 0.25s ease;
+    }
+
+    .btn-toggle i {
+      font-size: 14px;
+      transition: transform 0.3s ease;
+    }
+
+    .btn-toggle:hover {
+      background: #0b5ed7;
+      transform: translateY(-1px);
+    }
+
+    .btn-toggle.off {
+      background: #f8f9fa;
+      color: #333;
+      border: 1px solid #ccc;
+    }
+
+    .btn-toggle.off:hover {
+      background: #e9ecef;
+    }
+
+    .btn-toggle.off i {
+      transform: rotate(180deg);
+    }
+
+
+    /* === Leyenda mejorada === */
+    .echarts-legend {
+      display: flex !important;
+      flex-wrap: wrap !important;
+      justify-content: center !important;
+      gap: 10px 20px !important;
+      background: rgba(255, 255, 255, 0.85);
+      border-radius: 12px;
+      box-shadow: 0 1px 5px rgba(0, 0, 0, 0.08);
+      padding: 8px 16px !important;
+      margin: 12px auto 0 !important;
+      width: fit-content !important;
+    }
+
+    .echarts-legend-item {
+      font-size: 13px;
+      color: #444;
+    }
+
     @media (max-width: 768px) {
       .chart {
         height: 300px;
@@ -571,13 +646,24 @@ $conexion->close();
 
     <!-- Tendencia -->
     <div class="card mb-4">
-      <div class="card-header">
+      <div class="card-header card-header-center">
         <h5 class="mb-0">Tendencia por iteración</h5>
       </div>
+
       <div class="card-body">
-        <div id="trendWrap" style="overflow-x:auto;">
-          <div id="trendChart" class="chart"></div>
+        <div class="chart-controls">
+          <button id="toggleLegendBtn" class="btn-toggle">
+            <i class="oi oi-eye"></i> <span>Ocultar todo</span>
+          </button>
         </div>
+
+
+        <div id="trendWrap" class="chart-scroll">
+          <div class="chart-stage">
+            <div id="trendChart" class="chart"></div>
+          </div>
+        </div>
+        <div id="trendLegend" class="legend-colors mt-2"></div>
       </div>
     </div>
   </div>
@@ -616,6 +702,16 @@ $conexion->close();
       if (!isFinite(s) || !isFinite(e) || e <= s) return 100;
       return clamp(((now - s) / (e - s)) * 100, 0, 100);
     }
+    // Fix inicialización cuando hay muchos datos (scroll)
+    window.addEventListener("load", () => {
+      const charts = document.querySelectorAll(".chart");
+      charts.forEach(c => {
+        if (c.clientWidth === 0) {
+          c.style.width = (window.innerWidth - 100) + "px";
+        }
+      });
+    });
+
     //aca se inicializa el dashboard
     function renderIteracionChart(it, chartId, legendId) {
       //si no hay métricas
@@ -627,6 +723,8 @@ $conexion->close();
         return;
       }
       const dom = document.getElementById(chartId);
+      const prev = echarts.getInstanceByDom(dom);
+      if (prev) prev.dispose();
       const chart = echarts.init(dom);
       const labels = it.metrics.map(m => m.id);
 
@@ -634,6 +732,7 @@ $conexion->close();
       const BAR_WIDTH = 40; // ancho barra base
       const VISIBLE_MAX = 120; // tope visible
       const OVERFLOW_TOP = 140; // “un poco” por encima
+
       // Antes: const hasNoPlan = ...
       // Nuevo: levantar eje oculto si hay cualquier overflow
       const hasOverflow = it.metrics.some(m =>
@@ -655,16 +754,15 @@ $conexion->close();
       const AFTER_OVERFLOW_ALL = lastDelay + BAR_DURATION + OVERFLOW_DURATION + 150;
       const timePct = pctTiempoIter(it.inicio, it.fin);
 
-      // Ancho adaptativo
-      const container = dom.parentElement;
-      const containerWidth = container.clientWidth || 600;
-      const totalBarsWidth = it.metrics.length * 90;
-      if (totalBarsWidth <= containerWidth) {
-        dom.style.width = "100%";
-        container.style.overflowX = "hidden";
-      } else {
-        dom.style.width = totalBarsWidth + "px";
-        container.style.overflowX = "auto";
+      const scroll = dom.closest(".chart-scroll");
+      const stage = dom.parentElement; // .chart-stage
+      const visibleW = scroll ? scroll.clientWidth : 600;
+      const neededW = Math.max(visibleW, it.metrics.length * 90);
+      if (stage) stage.style.width = `${neededW}px`;
+      dom.style.width = "100%";
+      if (scroll) {
+        scroll.style.overflowX = neededW > visibleW ? "auto" : "hidden";
+        scroll.style.overflowY = "hidden";
       }
       chart.resize();
       // umbrales y tiempo aparecerán después de esto
@@ -798,6 +896,7 @@ $conexion->close();
             }
           }
         ],
+
         series: [{
             name: "Ejecutado",
             type: "bar",
@@ -884,6 +983,7 @@ $conexion->close();
               const idx = api.value(0);
               const m = it.metrics[idx];
               if (!m) return null;
+              const isHighThreshold = m.min >= 95;
 
               // Posición del umbral en Y y centro de la categoría en X
               const yPx = api.coord([idx, m.min])[1];
@@ -949,8 +1049,8 @@ $conexion->close();
                   }
                 },
                 textConfig: {
-                  position: "top",
-                  offset: [0, -5]
+                  position: isHighThreshold ? "bottom" : "top",
+                  offset: [0, isHighThreshold ? 1 : -4]
                 }
               };
             },
@@ -1189,6 +1289,7 @@ $conexion->close();
 
         ]
       });
+
       // Leyenda de métricas
       if (legendId) {
         const legendDiv = document.getElementById(legendId);
@@ -1205,26 +1306,41 @@ $conexion->close();
 
       // DOM y datos base
       const trendWrap = document.getElementById("trendWrap");
+      const trendStage = trendWrap.querySelector(".chart-stage");
       const trendChartDom = document.getElementById("trendChart");
-
       const METRIC_KEYS = [...new Set((Array.isArray(DATA) ? DATA : [])
         .flatMap(it => (it.metrics || []).map(m => m.nombre)))];
 
       const palette = [
-        "#007bff", "#28a745", "#dc3545", "#ffc107", "#17a2b8",
-        "#6f42c1", "#fd7e14", "#20c997", "#6610f2", "#e83e8c",
-        "#343a40", "#8b8f98", "#00c2ff", "#b07ef2", "#ff9f40"
+        "#007bff", "#1b9437ff", "#dc3545", "#b98b00ff", "#0d8092ff",
+        "#6f42c1", "#fd7e14", "#147b5cff", "#6610f2", "#e83e8c",
+        "#343a40", "#582349ff", "#00c2ff", "#b07ef2", "#ff9f40"
       ];
       const iterLabels = (Array.isArray(DATA) ? DATA : []).map(d => d.iteracion);
+      const compactIterLabels = (Array.isArray(DATA) ? DATA : []).map(d => {
+        const full = typeof d.iteracion === "string" ? d.iteracion.trim() : "";
+        if (!full) return "";
+        const firstChar = full.replace(/^\s+/, "").charAt(0).toUpperCase();
+        const numberMatch = full.match(/(\d+)(?!.*\d)/);
+        const numberPart = numberMatch ? numberMatch[1] : "";
+        return `${firstChar}${numberPart}`;
+      });
 
       // Crear chart + responsive ancho por cantidad de iteraciones
-      const perIterPx = 160;
+      const oldTrend = echarts.getInstanceByDom(trendChartDom);
+      if (oldTrend) oldTrend.dispose();
       const trendChart = echarts.init(trendChartDom);
 
       function resizeTrend() {
-        const wrapW = trendWrap.clientWidth || 800;
-        const needed = Math.max(wrapW, (DATA?.length || 1) * perIterPx);
-        trendChartDom.style.width = needed + "px";
+        if (trendStage) {
+          trendStage.style.width = "100%";
+        }
+        if (trendChartDom) {
+          trendChartDom.style.width = "100%";
+        }
+        if (trendWrap) {
+          trendWrap.style.overflowX = "hidden";
+        }
         trendChart.resize();
       }
       resizeTrend();
@@ -1235,20 +1351,73 @@ $conexion->close();
         trendChart.clear();
         trendChartDom.innerHTML = '<div class="text-muted">No hay datos para mostrar.</div>';
       } else {
-        // Series + overflow >200%
-        const TREND_VISIBLE_MAX = 200;
-        const legendType = METRIC_KEYS.length > 6 ? "scroll" : "plain";
-        const overflowTrendPoints = [];
+        const legendType = "plain";
+
+        // Segmentación del eje Y (axis break por defecto)
+        const BREAK_START = 130;
+        const BREAK_END = 200;
+        const BREAK_COMPRESS = 0.18;
+
+        const allTrendValues = DATA.flatMap(it => (it.metrics || []).map(m => Number(m.executed) || 0));
+        const realMax = allTrendValues.length ? Math.max(120, Math.max(...allTrendValues)) : 120;
+        const useLogScale = realMax > 500;
+        const LOG_MIN = 0.1;
+
+        const candidateTicks = [10, 50, 100, 200, 500, 1000, 2000, 5000, 10000];
+        const discreteTicks = [0];
+        const upperBound = Math.max(realMax, 130);
+        candidateTicks.forEach(tick => {
+          if (tick <= upperBound) discreteTicks.push(tick);
+        });
+        if (discreteTicks[discreteTicks.length - 1] < realMax) {
+          const magnitude = Math.pow(10, Math.floor(Math.log10(realMax)));
+          const rounded = Math.ceil(realMax / magnitude) * magnitude;
+          if (!discreteTicks.includes(rounded)) {
+            discreteTicks.push(rounded);
+          }
+        }
+        const topTick = discreteTicks[discreteTicks.length - 1];
+
+        const projectValue = val => {
+          const numeric = Number(val) || 0;
+          if (useLogScale) {
+            return numeric > 0 ? numeric : LOG_MIN;
+          }
+          if (numeric <= BREAK_START) return numeric;
+          if (numeric < BREAK_END) {
+            return BREAK_START + (numeric - BREAK_START) * BREAK_COMPRESS;
+          }
+          const compressedGap = (BREAK_END - BREAK_START) * BREAK_COMPRESS;
+          return BREAK_START + compressedGap + (numeric - BREAK_END) * BREAK_COMPRESS;
+        };
+
+        const restoreValue = axisVal => {
+          const numeric = Number(axisVal) || 0;
+          if (useLogScale) {
+            if (numeric <= LOG_MIN + 1e-6) return 0;
+            return numeric;
+          }
+          if (numeric <= BREAK_START) return numeric;
+          const compressedGap = (BREAK_END - BREAK_START) * BREAK_COMPRESS;
+          if (numeric <= BREAK_START + compressedGap) {
+            return BREAK_START + (numeric - BREAK_START) / BREAK_COMPRESS;
+          }
+          return BREAK_END + (numeric - BREAK_START - compressedGap) / BREAK_COMPRESS;
+        };
+
+        const projectedMax = useLogScale ?
+          topTick * 1.05 :
+          projectValue(topTick) + 6;
 
         const lineSeries = METRIC_KEYS.map((name, sIdx) => ({
           name,
           type: "line",
-          smooth: true,
+          smooth: false,
           showSymbol: true,
           symbol: "circle",
-          symbolSize: 7,
+          symbolSize: 10,
           lineStyle: {
-            width: 2.5,
+            width: 3.5,
             color: palette[sIdx % palette.length],
             shadowColor: "rgba(0,0,0,0.08)",
             shadowBlur: 3
@@ -1262,53 +1431,63 @@ $conexion->close();
             focus: "series",
             lineStyle: {
               width: 3.2
+            },
+            label: {
+              show: true,
+              position: "top",
+              distance: 6,
+              backgroundColor: "rgba(255,255,255,0.9)",
+              borderColor: "#ddd",
+              borderWidth: 1,
+              borderRadius: 4,
+              padding: [2, 4],
+              color: "#111",
+              fontSize: 12,
+              fontWeight: 600,
+              formatter: function(p) {
+                const raw = typeof p.data?.realValue === "number" ? p.data.realValue : 0;
+                const num = Number(raw);
+                if (!Number.isFinite(num)) return "";
+                const display = Math.abs(num) >= 100 ? Math.round(num) : Number(num.toFixed(1));
+                return display + "%";
+              }
             }
           },
           blur: {
             lineStyle: {
-              opacity: 0.25
+              opacity: 0.10
             },
             itemStyle: {
-              opacity: 0.25
+              opacity: 0.10
             }
           },
-          data: DATA.map((it, iterIdx) => {
-            const m = (it.metrics || []).find(mm => mm.nombre === name);
-            if (!m) return {
-              value: 0,
-              meta: null
-            };
-            const real = Number(m.executed) || 0;
-            const shown = Math.min(real, TREND_VISIBLE_MAX);
-            if (real > TREND_VISIBLE_MAX) {
-              overflowTrendPoints.push({
-                iterIdx,
-                value: real,
-                color: palette[sIdx % palette.length],
-                name
-              });
-            }
+          data: DATA.map(it => {
+            const m = it.metrics.find(mm => mm.nombre === name);
+            const real = m ? Number(m.executed) || 0 : 0;
             return {
-              value: shown,
-              meta: {
+              value: projectValue(real),
+              realValue: real,
+              meta: m ? {
                 nombre: m.nombre,
                 executedReal: m.executedReal,
                 planned: m.planned,
                 unit: m.unit,
                 noPlan: m.noPlan,
-                extra: m.extra,
-                realPct: real
-              }
+                extra: m.extra
+              } : null
             };
-          })
+          }),
+          label: {
+            show: false
+          }
         }));
 
         trendChart.setOption({
           backgroundColor: "#fff",
           tooltip: {
             trigger: "axis",
-            appendToBody: true, // ✅ permite que el tooltip se renderice fuera del canvas
-            confine: false, // ✅ no lo recorta dentro del contenedor
+            appendToBody: true,
+            confine: false,
             backgroundColor: "rgba(255,255,255,0.95)",
             borderColor: "#ddd",
             borderWidth: 1,
@@ -1317,64 +1496,104 @@ $conexion->close();
               fontSize: 13
             },
             extraCssText: `
-    box-shadow: 0 2px 8px rgba(0,0,0,0.12);
-    border-radius: 6px;
-    max-width: 340px;             /* ancho controlado, evita desbordar toda la pantalla */
-    white-space: normal;          /* permite saltos de línea */
-    z-index: 9999;                /* sobre otros elementos */
-  `,
+              box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+              border-radius: 6px;
+              max-width: 340px;
+              white-space: normal;
+              z-index: 9999;
+            `,
             axisPointer: {
-              type: "line"
+              type: "line",
+              label: {
+                formatter: ({
+                  value
+                }) => {
+                  const restored = restoreValue(value);
+                  const num = Number(restored);
+                  if (!Number.isFinite(num)) return "—";
+                  const display = Math.abs(num) >= 100 ?
+                    Math.round(num) :
+                    Number(num.toFixed(1));
+                  return `${display}%`;
+                }
+              }
             },
             formatter: function(params) {
               const idx = params[0]?.dataIndex ?? 0;
               const iter = iterLabels[idx] || "";
               let html = `<b>${iter}</b><br/>`;
               params.forEach(p => {
-                if (p.seriesName === "Referencia 100%" || p.seriesName === "Overflow trend labels") return;
+                if (p.seriesName === "Referencia 100%") return;
                 const meta = p.data?.meta;
+                const pctRaw = typeof p.data?.realValue === "number" ?
+                  p.data.realValue :
+                  restoreValue(p.value ?? 0);
+                const pctNum = Number(pctRaw);
+                const pctLabel = Number.isFinite(pctNum) ?
+                  `${(Math.abs(pctNum) >= 100 ? Math.round(pctNum) : Number(pctNum.toFixed(1)))}%` :
+                  "—";
                 const ejec = meta?.executedReal ?? "—";
                 const plan = meta?.planned ?? "—";
-                const pct = meta?.realPct ?? p.value ?? 0;
                 const dot = `<span style="display:inline-block;margin-right:6px;width:10px;height:10px;background:${p.color};border-radius:50%"></span>`;
-                html += `${dot}${p.seriesName}: <b>${pct}%</b> (${ejec}/${plan})<br/>`;
+                html += `${dot}${p.seriesName}: <b>${pctLabel}</b> (${ejec}/${plan})<br/>`;
               });
               return html;
             }
           },
           legend: {
-            type: "plain", // 🔹 fuerza modo normal, sin scroll
+            type: legendType,
             data: METRIC_KEYS,
-            bottom: 0,
+            bottom: 10,
             left: "center",
-            itemGap: 18,
-            itemWidth: 12,
-            itemHeight: 12,
+            width: "96%",
+            itemWidth: 10,
+            itemHeight: 10,
             icon: "circle",
-            align: "auto",
-            orient: "horizontal", // 🔹 mantiene horizontal, pero permite wrap
-            textStyle: {
-              color: "#444",
-              fontSize: 12.5,
-              fontWeight: 500
+            itemGap: 18,
+            padding: [6, 10, 6, 10],
+
+            selectorLabel: {
+              color: "#0d6efd",
+              fontWeight: 600
             },
-            padding: [8, 10, 8, 10],
-            formatter: name => name.length > 30 ? name.slice(0, 30) + "…" : name
+            selectorPosition: "start",
+            textStyle: {
+              fontSize: 12.5,
+              color: "#444"
+            },
+            animation: false
           },
           grid: {
-            left: 48,
-            right: 84,
+            left: 70,
+            right: 90,
             top: 56,
-            bottom: 130, // 🔹 más espacio para que quepan múltiples líneas
+            bottom: 130,
             containLabel: true
           },
-
           xAxis: {
             type: "category",
-            data: iterLabels,
+            data: compactIterLabels,
+            name: "Iteración",
+            nameLocation: "middle",
+            nameGap: 40,
+            nameTextStyle: {
+              fontSize: 12,
+              fontWeight: 600,
+              color: "#495057"
+            },
             axisLine: {
+              show: true,
               lineStyle: {
-                color: "#aaa"
+                color: "#6c757d",
+                width: 1.2
+              }
+            },
+            axisTick: {
+              show: true,
+              alignWithLabel: true,
+              length: 8,
+              lineStyle: {
+                color: "#6c757d"
               }
             },
             axisLabel: {
@@ -1383,25 +1602,87 @@ $conexion->close();
               margin: 18
             },
             splitLine: {
-              show: true,
-              lineStyle: {
-                color: "rgba(0,0,0,0.08)", // color tenue gris
-                type: "solid", // línea continua
-                width: 1
-              }
+              show: false
             },
             splitArea: {
               show: false
             }
           },
-          yAxis: {
-            type: "value",
-            min: 0,
-            max: 200,
+          yAxis: useLogScale ? {
+            type: "log",
+            logBase: 10,
+            min: LOG_MIN,
+            max: topTick,
+            name: "Cumplimiento (%)",
+            nameLocation: "middle",
+            nameGap: 60,
+            nameRotate: 90,
+            nameTextStyle: {
+              fontSize: 12,
+              fontWeight: 600,
+              color: "#495057"
+            },
             axisLine: {
-              show: false
+              show: true,
+              lineStyle: {
+                color: "#6c757d",
+                width: 1.2
+              }
             },
             axisTick: {
+              show: true,
+              inside: false,
+              length: 4
+            },
+            splitLine: {
+              show: true,
+              lineStyle: {
+                color: "rgba(0,0,0,0.08)"
+              }
+            },
+            minorTick: {
+              show: false
+            },
+            minorSplitLine: {
+              show: false
+            },
+            axisLabel: {
+              margin: 16,
+              formatter: function(val) {
+                if (val <= LOG_MIN + 1e-6) return "0%";
+                const epsilon = val < 10 ? 0.5 : Math.max(1, val * 0.08);
+                const match = discreteTicks.find(t => Math.abs(val - t) <= epsilon);
+                if (match !== undefined) {
+                  const isTop = match === topTick && realMax > match;
+                  return `${isTop ? "≥" : ""}${match}%`;
+                }
+                return "";
+              }
+            }
+          } : {
+            type: "value",
+            min: 0,
+            max: projectedMax,
+            name: "Cumplimiento (%)",
+            nameLocation: "middle",
+            nameGap: 60,
+            nameRotate: 90,
+            nameTextStyle: {
+              fontSize: 12,
+              fontWeight: 600,
+              color: "#495057"
+            },
+            axisLine: {
+              show: true,
+              lineStyle: {
+                color: "#6c757d",
+                width: 1.2
+              }
+            },
+            axisTick: {
+              show: false
+            },
+            minorTick: {
               show: false
             },
             splitLine: {
@@ -1410,9 +1691,36 @@ $conexion->close();
                 color: "rgba(0,0,0,0.06)"
               }
             },
+            minorSplitLine: {
+              show: false
+            },
             axisLabel: {
-              formatter: "{value}%",
-              color: "#666"
+              margin: 16,
+              formatter: function(val) {
+                const real = restoreValue(val);
+                if (Math.abs(real - BREAK_START) < 0.5) {
+                  return `{tick|${Math.round(real)}%}\n{break|//}`;
+                }
+                const epsilon = real < 10 ? 0.5 : Math.max(1, real * 0.06);
+                const match = discreteTicks.find(t => Math.abs(real - t) <= epsilon);
+                if (match !== undefined) {
+                  const isTop = match === topTick && realMax > match;
+                  return `{tick|${isTop ? "≥" : ""}${match}%}`;
+                }
+                return "";
+              },
+              rich: {
+                tick: {
+                  color: "#666",
+                  fontSize: 11,
+                  fontWeight: 500
+                },
+                break: {
+                  color: "#888",
+                  fontSize: 11,
+                  lineHeight: 12
+                }
+              }
             }
           },
           series: [
@@ -1424,69 +1732,123 @@ $conexion->close();
               symbol: "none",
               lineStyle: {
                 type: "dashed",
-                color: "#6c757d"
+                color: "#6c757d",
+                width: 3.5,
+                opacity: 0.95
               },
-              data: iterLabels.map(() => 100),
-              z: 5
-            },
-
-            // Etiquetas por encima de 200% (manteniendo tope Y = 200)
-            {
-              name: "Overflow trend labels",
-              type: "custom",
-              coordinateSystem: "cartesian2d",
-              xAxisIndex: 0,
-              yAxisIndex: 0,
-              silent: true,
-              clip: false,
-              z: 1000,
-              renderItem: function(params, api) {
-                const d = params.data;
-                const x = api.coord([d.iterIdx, TREND_VISIBLE_MAX])[0];
-                const yTop = api.coord([d.iterIdx, TREND_VISIBLE_MAX])[1];
-                const color = d.color || "#333";
-                return {
-                  type: "group",
-                  children: [{
-                      type: "polygon",
-                      shape: {
-                        points: [
-                          [x - 5, yTop - 1],
-                          [x + 5, yTop - 1],
-                          [x, yTop - 10]
-                        ]
-                      },
-                      style: {
-                        fill: echarts.color.lift(color, 0.2),
-                        stroke: color,
-                        lineWidth: 1
-                      }
-                    },
-                    {
-                      type: "text",
-                      style: {
-                        x,
-                        y: yTop - 16,
-                        text: `${d.value}%`,
-                        fill: color,
-                        fontSize: 11,
-                        fontWeight: 700,
-                        textAlign: "center",
-                        textBaseline: "bottom",
-                        backgroundColor: "rgba(255,255,255,.9)",
-                        padding: [1, 4],
-                        borderRadius: 3,
-                        shadowColor: "rgba(0,0,0,.1)",
-                        shadowBlur: 2
-                      }
-                    }
-                  ]
-                };
-              },
-              data: overflowTrendPoints
+              markLine: {
+                symbol: "none",
+                lineStyle: {
+                  type: "dashed",
+                  color: "#6c757d",
+                  width: 1.7,
+                  opacity: 0.95
+                },
+                label: {
+                  show: true,
+                  position: "end",
+                  formatter: "100%",
+                  color: "#6c757d",
+                  backgroundColor: "rgba(255,255,255,.6)",
+                  padding: [2, 4],
+                  show: false
+                },
+                data: [{
+                  yAxis: projectValue(100)
+                }]
+              }
             }
           ]
         });
+
+        // Mostrar etiquetas de TODOS los puntos al pasar por encima de la línea o su leyenda
+        (function() {
+          let lastLabeledSeries = null;
+
+          function setSeriesLabelsVisible(seriesIdx, visible) {
+            const opt = trendChart.getOption();
+            if (!opt || !opt.series || !opt.series[seriesIdx]) return;
+            const s = opt.series[seriesIdx];
+            if (s.type !== 'line' || s.name === 'Referencia 100%') return;
+
+            const labelCfg = {
+              show: !!visible,
+              position: 'top',
+              distance: 6,
+              backgroundColor: 'rgba(255,255,255,0.9)',
+              borderColor: '#ddd',
+              borderWidth: 1,
+              borderRadius: 4,
+              padding: [2, 4],
+              color: '#111',
+              fontSize: 12,
+              fontWeight: 600,
+              formatter: function(p) {
+                const raw = typeof p.data?.realValue === 'number' ? p.data.realValue : 0;
+                const num = Number(raw);
+                if (!Number.isFinite(num)) return '';
+                const display = Math.abs(num) >= 100 ? Math.round(num) : Number(num.toFixed(1));
+                return display + '%';
+              }
+            };
+            s.label = Object.assign({}, s.label || {}, labelCfg);
+            trendChart.setOption({
+              series: opt.series
+            }, {
+              lazyUpdate: true
+            });
+          }
+
+          // Hover sobre segmentos/símbolos de la serie
+          trendChart.getZr().on('mousemove', function() {
+            /* noop to keep ZR active */ });
+          trendChart.on('mouseover', function(params) {
+            if (params && params.componentType === 'series' && params.seriesType === 'line' && params.seriesName !== 'Referencia 100%') {
+              const idx = params.seriesIndex;
+              if (lastLabeledSeries !== idx) {
+                if (lastLabeledSeries !== null) setSeriesLabelsVisible(lastLabeledSeries, false);
+                setSeriesLabelsVisible(idx, true);
+                lastLabeledSeries = idx;
+              }
+            }
+          });
+          trendChart.on('mouseout', function(params) {
+            if (params && params.componentType === 'series' && params.seriesType === 'line' && params.seriesName !== 'Referencia 100%') {
+              const idx = params.seriesIndex;
+              setSeriesLabelsVisible(idx, false);
+              if (lastLabeledSeries === idx) lastLabeledSeries = null;
+            }
+          });
+
+          // Hover desde la leyenda (legend hover dispara highlight/downplay)
+          trendChart.on('highlight', function(params) {
+            if (params && params.seriesType === 'line' && params.seriesName !== 'Referencia 100%') {
+              const idx = params.seriesIndex;
+              if (lastLabeledSeries !== idx) {
+                if (lastLabeledSeries !== null) setSeriesLabelsVisible(lastLabeledSeries, false);
+                setSeriesLabelsVisible(idx, true);
+                lastLabeledSeries = idx;
+              }
+            }
+          });
+          trendChart.on('downplay', function(params) {
+            if (params && params.seriesType === 'line' && params.seriesName !== 'Referencia 100%') {
+              const idx = params.seriesIndex;
+              setSeriesLabelsVisible(idx, false);
+              if (lastLabeledSeries === idx) lastLabeledSeries = null;
+            }
+          });
+
+          // Salida global del lienzo
+          trendChart.on('globalout', function() {
+            if (lastLabeledSeries !== null) {
+              setSeriesLabelsVisible(lastLabeledSeries, false);
+              lastLabeledSeries = null;
+            }
+          });
+        })();
+
+        window.__TREND_ALREADY_RENDERED = true;
       }
 
       const row = document.getElementById("barsRow");
@@ -1535,270 +1897,6 @@ $conexion->close();
       // ✅ Si pasa validaciones → mostrar la card
       if (trendCard) trendCard.style.display = "";
 
-
-      // ==========================
-      // Si pasa las validaciones, renderizar normalmente
-      // ==========================
-
-      // ========== Gráfico Tendencia ==========
-
-      if (!Array.isArray(DATA) || DATA.length === 0) {
-        trendChartDom.innerHTML = '<div class="text-muted">No hay datos para mostrar.</div>';
-      } else {
-        const METRIC_KEYS = [...new Set(DATA.flatMap(it => it.metrics.map(m => m.nombre)))];
-        //paleta de colores dinamica porque puede haber muchas métricas
-        const palette = [
-          "#007bff", "#28a745", "#dc3545", "#ffc107", "#17a2b8",
-          "#6f42c1", "#fd7e14", "#20c997", "#6610f2", "#e83e8c",
-          "#343a40", "#fd7e14", "#20c997", "#6f42c1", "#e83e8c"
-        ];
-        const iterLabels = DATA.map(d => d.iteracion);
-        const perIterPx = 160;
-        const trendChart = echarts.init(trendChartDom);
-
-        function resizeTrend() {
-          const wrapW = trendWrap.clientWidth || 800;
-          const needed = Math.max(wrapW, DATA.length * perIterPx);
-          trendChartDom.style.width = needed + "px";
-          trendChart.resize();
-        }
-        resizeTrend();
-        window.addEventListener("resize", resizeTrend);
-
-        const lineSeries = METRIC_KEYS.map((name, idx) => ({
-          name,
-          type: "line",
-          smooth: false,
-          showSymbol: true,
-          lineStyle: {
-            width: 2,
-            color: palette[idx % palette.length]
-          },
-          itemStyle: {
-            color: palette[idx % palette.length]
-          },
-          emphasis: {
-            focus: "series"
-          },
-          blur: {
-            lineStyle: {
-              opacity: 0.25
-            },
-            itemStyle: {
-              opacity: 0.25
-            }
-          },
-          data: DATA.map(it => {
-            const m = it.metrics.find(mm => mm.nombre === name);
-            return m ? {
-              value: m.executed,
-              meta: {
-                nombre: m.nombre,
-                executedReal: m.executedReal,
-                planned: m.planned,
-                unit: m.unit,
-                noPlan: m.noPlan,
-                extra: m.extra
-              }
-            } : {
-              value: 0,
-              meta: null
-            };
-          })
-        }));
-
-        const maxYTrend = Math.max(
-          120,
-          Math.ceil(Math.max(...DATA.flatMap(it => it.metrics.map(m => Math.max(m.max, m.executed)))) / 10) * 10
-        );
-        // Configuración del gráfico de tendencia
-        // === GRÁFICO DE TENDENCIA MEJORADO (sin semáforo) ===
-        trendChart.setOption({
-          backgroundColor: "#fff",
-          tooltip: {
-            trigger: "axis",
-            appendToBody: true,
-            confine: false,
-            backgroundColor: "rgba(255,255,255,0.95)",
-            borderColor: "#ddd",
-            borderWidth: 1,
-            textStyle: {
-              color: "#222",
-              fontSize: 13
-            },
-            extraCssText: `
-              box-shadow: 0 2px 8px rgba(0,0,0,0.12);
-              border-radius: 6px;
-              max-width: 340px;
-              white-space: normal;
-              z-index: 9999;
-            `,
-            axisPointer: {
-              type: "line"
-            },
-            formatter: function(params) {
-              const idx = params[0]?.dataIndex ?? 0;
-              const iter = iterLabels[idx] || "";
-              let html = `<b>${iter}</b><br/>`;
-              params.forEach(p => {
-                if (p.seriesName === "Referencia 100%") return;
-                const meta = p.data?.meta;
-                const pct = typeof p.value === "number" ? p.value : (p.data?.value ?? 0);
-                const ejec = meta?.executedReal ?? "—";
-                const plan = meta?.planned ?? "—";
-                const dot = `<span style="display:inline-block;margin-right:6px;width:10px;height:10px;background:${p.color};border-radius:50%"></span>`;
-                html += `${dot}${p.seriesName}: <b>${pct}%</b> (${ejec}/${plan})<br/>`;
-              });
-              return html;
-            }
-          },
-          legend: {
-            type: "plain", // sin scroll
-            data: METRIC_KEYS,
-            bottom: 10,
-            left: "center",
-            width: "96%", // fuerza wrap en varias filas
-            itemWidth: 10,
-            itemHeight: 10,
-            icon: "circle",
-            itemGap: 18,
-            padding: [6, 10, 6, 10],
-            textStyle: {
-              fontSize: 12.5,
-              color: "#444"
-            },
-            animation: false
-          },
-          grid: {
-            left: 48,
-            right: 84,
-            top: 56,
-            bottom: 130,
-            containLabel: true
-          },
-           xAxis: {
-            type: "category",
-            data: iterLabels,
-            axisLine: {
-              show: true,
-              lineStyle: { color: "#6c757d", width: 1.2 }
-            },
-            axisTick: {
-              show: true,
-              alignWithLabel: true,
-              length: 8,
-              lineStyle: { color: "#6c757d" }
-            },
-            axisLabel: {
-              color: "#555",
-              fontWeight: 500,
-              margin: 18
-            },
-            splitLine: {
-              show: false // quitar líneas secundarias verticales
-            },
-            splitArea: { show: false }
-          },
-          yAxis: {
-            type: "value",
-            min: 0,
-            max: 200, // tope fijo
-            axisLine: {
-              show: false
-            },
-            axisTick: {
-              show: false
-            },
-            splitLine: {
-              show: true,
-              lineStyle: {
-                color: "rgba(0,0,0,0.06)"
-              }
-            },
-            axisLabel: {
-              formatter: "{value}%",
-              color: "#666"
-            }
-          },
-          series: [
-            ...lineSeries.map(serie => ({
-              ...serie,
-              smooth: true,
-              symbolSize: 8,
-              lineStyle: {
-                width: 2.5,
-                color: serie.lineStyle.color,
-                shadowColor: "rgba(0,0,0,0.08)",
-                shadowBlur: 3
-              },
-              itemStyle: {
-                color: serie.itemStyle.color,
-                borderColor: "#fff",
-                borderWidth: 1
-              },
-              label: {
-                show: true,
-                position: "top",
-                distance: 6,
-                fontSize: 11,
-                color: "#333",
-                formatter: function(p) {
-                  const val = p.value;
-                  return val > 200 ? `${val}%` : "";
-                }
-              },
-              markPoint: {
-                symbol: "roundRect",
-                symbolSize: [38, 20],
-                label: {
-                  show: true,
-                  color: "#fff",
-                  fontSize: 11,
-                  formatter: p => `${p.value}%`
-                },
-                itemStyle: {
-                  color: serie.lineStyle.color,
-                  shadowColor: "rgba(0,0,0,0.2)",
-                  shadowBlur: 2
-                },
-                data: serie.data
-                  .map((d, idx) => (d.value > 200 ? {
-                      value: d.value,
-                      xAxis: idx,
-                      yAxis: 200
-                    } :
-                    null))
-                  .filter(Boolean)
-              }
-            })),
-            {
-              name: "Referencia 100%",
-              type: "line",
-              silent: true,
-              symbol: "none",
-              lineStyle: {
-                type: "dashed",
-                color: "#6c757d"
-              },
-              markLine: {
-                symbol: "none",
-                label: {
-                  show: true,
-                  position: "end",
-                  formatter: "100%",
-                  color: "#6c757d",
-                  backgroundColor: "rgba(255,255,255,.6)",
-                  padding: [2, 4]
-                },
-                data: [{
-                  yAxis: 100
-                }]
-              }
-            }
-          ]
-        });
-
-      }
 
       // ========== Cards de barras (izquierda/derecha) ==========
       row.innerHTML = "";
@@ -1971,7 +2069,41 @@ $conexion->close();
         row.appendChild(colRight);
       }
     }
+
     document.addEventListener("DOMContentLoaded", initDashboard);
+    document.addEventListener("DOMContentLoaded", function() {
+      const trendChartInstance = echarts.getInstanceByDom(document.getElementById("trendChart"));
+      const toggleBtn = document.getElementById("toggleLegendBtn");
+      const toggleIcon = toggleBtn.querySelector("i");
+      const toggleText = toggleBtn.querySelector("span");
+      let allVisible = true;
+
+      if (trendChartInstance && toggleBtn) {
+        toggleBtn.addEventListener("click", function() {
+          const option = trendChartInstance.getOption();
+          if (!option.legend || !option.legend[0]) return;
+
+          const selected = {};
+          option.legend[0].data.forEach(name => {
+            selected[name] = !allVisible; // alterna visibilidad
+          });
+          option.legend[0].selected = selected;
+          trendChartInstance.setOption(option);
+          allVisible = !allVisible;
+
+          // Actualiza texto, icono y estilo
+          if (allVisible) {
+            toggleText.textContent = "Ocultar todo";
+            toggleIcon.className = "oi oi-eye";
+            toggleBtn.classList.remove("off");
+          } else {
+            toggleText.textContent = "Mostrar todo";
+            toggleIcon.className = "oi oi-eye-slash";
+            toggleBtn.classList.add("off");
+          }
+        });
+      }
+    });
   </script>
 </body>
 
