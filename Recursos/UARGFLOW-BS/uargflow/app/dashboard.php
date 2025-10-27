@@ -551,6 +551,42 @@ $conexion->close();
       font-size: 0.9rem;
       color: #6c757d;
     }
+
+    /* ======== LEYENDA DE FASES (arriba del gráfico de tendencia) ======== */
+    .legend-phases {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.95rem;
+      color: #495057;
+      margin-bottom: 12px;
+    }
+
+    .legend-phases .phase-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      background: #ffffff;
+      border: 1px solid rgba(0,0,0,0.06);
+      border-radius: 10px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    }
+
+    .legend-phases .phase-letter {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 22px;
+      height: 22px;
+      border-radius: 6px;
+      background: #0d6efd;
+      color: #fff;
+      font-weight: 700;
+      font-size: 0.9rem;
+    }
   </style>
 </head>
 
@@ -670,6 +706,8 @@ $conexion->close();
           </button>
         </div>
 
+        <!-- Leyenda de fases (arriba del gráfico) -->
+        <div id="phaseLegend" class="legend-phases" aria-hidden="true"></div>
 
         <div id="trendWrap" class="chart-scroll">
           <div class="chart-stage">
@@ -1338,6 +1376,45 @@ $conexion->close();
         const numberPart = numberMatch ? numberMatch[1] : "";
         return `${firstChar}${numberPart}`;
       });
+
+      // Construye la leyenda de letras 
+      try {
+        const phaseLegend = document.getElementById("phaseLegend");
+        if (phaseLegend) {
+          // Mapa letra 
+          const letterToPhase = new Map();
+          (Array.isArray(DATA) ? DATA : []).forEach(d => {
+            const faseRaw = (d && d.fase ? String(d.fase) : "").trim();
+            if (!faseRaw) return;
+            const baseName = faseRaw.split(/\s+/)[0]; // p.ej. "Elaboración I" -> "Elaboración"
+            const letter = baseName.charAt(0).toUpperCase();
+            if (!letterToPhase.has(letter)) {
+              letterToPhase.set(letter, baseName);
+            }
+          });
+
+          // Si no hubiera datos, mostramos las fases estándar de RUP como ayuda
+          if (letterToPhase.size === 0) {
+            [
+              ["I", "Inicio"],
+              ["E", "Elaboración"],
+              ["C", "Construcción"],
+              ["T", "Transición"]
+            ].forEach(([l, n]) => letterToPhase.set(l, n));
+          }
+
+          phaseLegend.innerHTML = Array.from(letterToPhase.entries())
+            .map(([letter, name]) => `
+              <span class="phase-item">
+                <span class="phase-letter">${letter}</span>
+                <span>= ${name}</span>
+              </span>
+            `)
+            .join("\n");
+        }
+      } catch (e) {
+        console.warn("No se pudo construir la leyenda de fases", e);
+      }
 
       // Crear chart + responsive ancho por cantidad de iteraciones
       const oldTrend = echarts.getInstanceByDom(trendChartDom);
