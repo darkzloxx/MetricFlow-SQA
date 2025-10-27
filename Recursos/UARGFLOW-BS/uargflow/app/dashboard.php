@@ -2,7 +2,7 @@
 // ============================a
 // Conexión a MariaDB
 // ============================
-$conexion = new mysqli("localhost", "root", "", "bd_prueba", 3308);
+$conexion = new mysqli("localhost", "root", "", "bd_codevit", 3308);
 if ($conexion->connect_error) {
   die("Error al conectar: " . $conexion->connect_error);
 }
@@ -1353,61 +1353,32 @@ $conexion->close();
       } else {
         const legendType = "plain";
 
-        // Segmentación del eje Y (axis break por defecto)
-        const BREAK_START = 130;
-        const BREAK_END = 200;
-        const BREAK_COMPRESS = 0.18;
-
         const allTrendValues = DATA.flatMap(it => (it.metrics || []).map(m => Number(m.executed) || 0));
-        const realMax = allTrendValues.length ? Math.max(120, Math.max(...allTrendValues)) : 120;
-        const useLogScale = realMax > 500;
-        const LOG_MIN = 0.1;
+        const realMaxValue = allTrendValues.length ? Math.max(...allTrendValues) : 0;
 
-        const candidateTicks = [10, 50, 100, 200, 500, 1000, 2000, 5000, 10000];
-        const discreteTicks = [0];
-        const upperBound = Math.max(realMax, 130);
-        candidateTicks.forEach(tick => {
-          if (tick <= upperBound) discreteTicks.push(tick);
-        });
-        if (discreteTicks[discreteTicks.length - 1] < realMax) {
-          const magnitude = Math.pow(10, Math.floor(Math.log10(realMax)));
-          const rounded = Math.ceil(realMax / magnitude) * magnitude;
-          if (!discreteTicks.includes(rounded)) {
-            discreteTicks.push(rounded);
-          }
+        const yScale = (() => {
+          if (realMaxValue <= 100) return { step: 10, max: 100 };
+          if (realMaxValue <= 500) return { step: 50 };
+          if (realMaxValue <= 1000) return { step: 100 };
+          if (realMaxValue <= 2000) return { step: 200 };
+          if (realMaxValue <= 5000) return { step: 500 };
+          return { step: 1000 };
+        })();
+
+        const yStep = yScale.step || 10;
+        let yMax = typeof yScale.max === "number" ? yScale.max : Math.ceil(Math.max(realMaxValue, 1) / yStep) * yStep;
+        if (yMax < yStep) {
+          yMax = yStep;
         }
-        const topTick = discreteTicks[discreteTicks.length - 1];
 
-        const projectValue = val => {
-          const numeric = Number(val) || 0;
-          if (useLogScale) {
-            return numeric > 0 ? numeric : LOG_MIN;
+        const formatPct = (val, { allowDash = true } = {}) => {
+          const num = Number(val);
+          if (!Number.isFinite(num)) {
+            return allowDash ? "—" : "";
           }
-          if (numeric <= BREAK_START) return numeric;
-          if (numeric < BREAK_END) {
-            return BREAK_START + (numeric - BREAK_START) * BREAK_COMPRESS;
-          }
-          const compressedGap = (BREAK_END - BREAK_START) * BREAK_COMPRESS;
-          return BREAK_START + compressedGap + (numeric - BREAK_END) * BREAK_COMPRESS;
+          if (Math.abs(num) >= 100) return `${Math.round(num)}%`;
+          return `${Number(num.toFixed(1))}%`;
         };
-
-        const restoreValue = axisVal => {
-          const numeric = Number(axisVal) || 0;
-          if (useLogScale) {
-            if (numeric <= LOG_MIN + 1e-6) return 0;
-            return numeric;
-          }
-          if (numeric <= BREAK_START) return numeric;
-          const compressedGap = (BREAK_END - BREAK_START) * BREAK_COMPRESS;
-          if (numeric <= BREAK_START + compressedGap) {
-            return BREAK_START + (numeric - BREAK_START) / BREAK_COMPRESS;
-          }
-          return BREAK_END + (numeric - BREAK_START - compressedGap) / BREAK_COMPRESS;
-        };
-
-        const projectedMax = useLogScale ?
-          topTick * 1.05 :
-          projectValue(topTick) + 6;
 
         const lineSeries = METRIC_KEYS.map((name, sIdx) => ({
           name,
@@ -1445,11 +1416,12 @@ $conexion->close();
               fontSize: 12,
               fontWeight: 600,
               formatter: function(p) {
-                const raw = typeof p.data?.realValue === "number" ? p.data.realValue : 0;
-                const num = Number(raw);
-                if (!Number.isFinite(num)) return "";
-                const display = Math.abs(num) >= 100 ? Math.round(num) : Number(num.toFixed(1));
-                return display + "%";
+                const raw = typeof p.data?.realValue === "number" ?
+                  p.data.realValue :
+                  (typeof p.value === "number" ? p.value : null);
+                return formatPct(raw, {
+                  allowDash: false
+                });
               }
             }
           },
@@ -1465,7 +1437,7 @@ $conexion->close();
             const m = it.metrics.find(mm => mm.nombre === name);
             const real = m ? Number(m.executed) || 0 : 0;
             return {
-              value: projectValue(real),
+              value: real,
               realValue: real,
               meta: m ? {
                 nombre: m.nombre,
@@ -1505,17 +1477,7 @@ $conexion->close();
             axisPointer: {
               type: "line",
               label: {
-                formatter: ({
-                  value
-                }) => {
-                  const restored = restoreValue(value);
-                  const num = Number(restored);
-                  if (!Number.isFinite(num)) return "—";
-                  const display = Math.abs(num) >= 100 ?
-                    Math.round(num) :
-                    Number(num.toFixed(1));
-                  return `${display}%`;
-                }
+                formatter: ({ value }) => formatPct(value)
               }
             },
             formatter: function(params) {
@@ -1527,11 +1489,8 @@ $conexion->close();
                 const meta = p.data?.meta;
                 const pctRaw = typeof p.data?.realValue === "number" ?
                   p.data.realValue :
-                  restoreValue(p.value ?? 0);
-                const pctNum = Number(pctRaw);
-                const pctLabel = Number.isFinite(pctNum) ?
-                  `${(Math.abs(pctNum) >= 100 ? Math.round(pctNum) : Number(pctNum.toFixed(1)))}%` :
-                  "—";
+                  (typeof p.value === "number" ? p.value : 0);
+                const pctLabel = formatPct(pctRaw);
                 const ejec = meta?.executedReal ?? "—";
                 const plan = meta?.planned ?? "—";
                 const dot = `<span style="display:inline-block;margin-right:6px;width:10px;height:10px;background:${p.color};border-radius:50%"></span>`;
@@ -1608,11 +1567,11 @@ $conexion->close();
               show: false
             }
           },
-          yAxis: useLogScale ? {
-            type: "log",
-            logBase: 10,
-            min: LOG_MIN,
-            max: topTick,
+          yAxis: {
+            type: "value",
+            min: 0,
+            max: yMax,
+            interval: yStep,
             name: "Cumplimiento (%)",
             nameLocation: "middle",
             nameGap: 60,
@@ -1634,54 +1593,6 @@ $conexion->close();
               inside: false,
               length: 4
             },
-            splitLine: {
-              show: true,
-              lineStyle: {
-                color: "rgba(0,0,0,0.08)"
-              }
-            },
-            minorTick: {
-              show: false
-            },
-            minorSplitLine: {
-              show: false
-            },
-            axisLabel: {
-              margin: 16,
-              formatter: function(val) {
-                if (val <= LOG_MIN + 1e-6) return "0%";
-                const epsilon = val < 10 ? 0.5 : Math.max(1, val * 0.08);
-                const match = discreteTicks.find(t => Math.abs(val - t) <= epsilon);
-                if (match !== undefined) {
-                  const isTop = match === topTick && realMax > match;
-                  return `${isTop ? "≥" : ""}${match}%`;
-                }
-                return "";
-              }
-            }
-          } : {
-            type: "value",
-            min: 0,
-            max: projectedMax,
-            name: "Cumplimiento (%)",
-            nameLocation: "middle",
-            nameGap: 60,
-            nameRotate: 90,
-            nameTextStyle: {
-              fontSize: 12,
-              fontWeight: 600,
-              color: "#495057"
-            },
-            axisLine: {
-              show: true,
-              lineStyle: {
-                color: "#6c757d",
-                width: 1.2
-              }
-            },
-            axisTick: {
-              show: false
-            },
             minorTick: {
               show: false
             },
@@ -1696,31 +1607,7 @@ $conexion->close();
             },
             axisLabel: {
               margin: 16,
-              formatter: function(val) {
-                const real = restoreValue(val);
-                if (Math.abs(real - BREAK_START) < 0.5) {
-                  return `{tick|${Math.round(real)}%}\n{break|//}`;
-                }
-                const epsilon = real < 10 ? 0.5 : Math.max(1, real * 0.06);
-                const match = discreteTicks.find(t => Math.abs(real - t) <= epsilon);
-                if (match !== undefined) {
-                  const isTop = match === topTick && realMax > match;
-                  return `{tick|${isTop ? "≥" : ""}${match}%}`;
-                }
-                return "";
-              },
-              rich: {
-                tick: {
-                  color: "#666",
-                  fontSize: 11,
-                  fontWeight: 500
-                },
-                break: {
-                  color: "#888",
-                  fontSize: 11,
-                  lineHeight: 12
-                }
-              }
+              formatter: value => formatPct(value)
             }
           },
           series: [
@@ -1754,7 +1641,7 @@ $conexion->close();
                   show: false
                 },
                 data: [{
-                  yAxis: projectValue(100)
+                  yAxis: 100
                 }]
               }
             }
@@ -1784,11 +1671,12 @@ $conexion->close();
               fontSize: 12,
               fontWeight: 600,
               formatter: function(p) {
-                const raw = typeof p.data?.realValue === 'number' ? p.data.realValue : 0;
-                const num = Number(raw);
-                if (!Number.isFinite(num)) return '';
-                const display = Math.abs(num) >= 100 ? Math.round(num) : Number(num.toFixed(1));
-                return display + '%';
+                const raw = typeof p.data?.realValue === 'number' ?
+                  p.data.realValue :
+                  (typeof p.value === 'number' ? p.value : null);
+                return formatPct(raw, {
+                  allowDash: false
+                });
               }
             };
             s.label = Object.assign({}, s.label || {}, labelCfg);
@@ -1800,8 +1688,7 @@ $conexion->close();
           }
 
           // Hover sobre segmentos/símbolos de la serie
-          trendChart.getZr().on('mousemove', function() {
-            /* noop to keep ZR active */ });
+          trendChart.getZr().on('mousemove', function() {});
           trendChart.on('mouseover', function(params) {
             if (params && params.componentType === 'series' && params.seriesType === 'line' && params.seriesName !== 'Referencia 100%') {
               const idx = params.seriesIndex;
