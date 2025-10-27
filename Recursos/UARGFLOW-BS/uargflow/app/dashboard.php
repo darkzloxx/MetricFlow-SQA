@@ -2,7 +2,7 @@
 // ============================a
 // Conexión a MariaDB
 // ============================
-$conexion = new mysqli("localhost", "root", "", "bd_codevit", 3308);
+$conexion = new mysqli("localhost", "root", "", "bd_prueba", 3308);
 if ($conexion->connect_error) {
   die("Error al conectar: " . $conexion->connect_error);
 }
@@ -862,6 +862,7 @@ $conexion->close();
             margin: 2
           }
         },
+
         yAxis: [{
             type: "value",
             min: 0,
@@ -1356,22 +1357,33 @@ $conexion->close();
         const allTrendValues = DATA.flatMap(it => (it.metrics || []).map(m => Number(m.executed) || 0));
         const realMaxValue = allTrendValues.length ? Math.max(...allTrendValues) : 0;
 
-        const yScale = (() => {
-          if (realMaxValue <= 100) return { step: 10, max: 100 };
-          if (realMaxValue <= 500) return { step: 50 };
-          if (realMaxValue <= 1000) return { step: 100 };
-          if (realMaxValue <= 2000) return { step: 200 };
-          if (realMaxValue <= 5000) return { step: 500 };
-          return { step: 1000 };
-        })();
+        // ===== Escala con banda extendida comprimida por arriba de 200% =====
+        const BASE_MAX = 200; // rango principal 0–200%
+        const EXT_PLOT = 20; // altura visual (en unidades de eje) para la zona extendida
+        const hasOverflow = realMaxValue > BASE_MAX;
+        const yMaxPlot = hasOverflow ? (BASE_MAX + EXT_PLOT) : BASE_MAX;
+        const yStep = 20; // ticks legibles cada 20%
 
-        const yStep = yScale.step || 10;
-        let yMax = typeof yScale.max === "number" ? yScale.max : Math.ceil(Math.max(realMaxValue, 1) / yStep) * yStep;
-        if (yMax < yStep) {
-          yMax = yStep;
-        }
+        // Mapea valor real (pct) a valor de eje "plot" (con compresión en overflow)
+        const mapRealToPlot = v => {
+          const num = Number(v) || 0;
+          if (!hasOverflow || num <= BASE_MAX) return Math.max(0, num);
+          // Distribuye (BASE_MAX, realMax] dentro de (BASE_MAX, yMaxPlot]
+          const k = EXT_PLOT / Math.max(1e-6, (realMaxValue - BASE_MAX));
+          return BASE_MAX + (num - BASE_MAX) * k;
+        };
 
-        const formatPct = (val, { allowDash = true } = {}) => {
+        // Inversa: de valor "plot" a valor real (para etiquetar eje/axisPointer correctamente)
+        const mapPlotToReal = vPlot => {
+          const num = Number(vPlot) || 0;
+          if (!hasOverflow || num <= BASE_MAX) return Math.max(0, num);
+          const kInv = Math.max(1e-6, (realMaxValue - BASE_MAX) / EXT_PLOT);
+          return BASE_MAX + (num - BASE_MAX) * kInv;
+        };
+
+        const formatPct = (val, {
+          allowDash = true
+        } = {}) => {
           const num = Number(val);
           if (!Number.isFinite(num)) {
             return allowDash ? "—" : "";
@@ -1379,6 +1391,32 @@ $conexion->close();
           if (Math.abs(num) >= 100) return `${Math.round(num)}%`;
           return `${Number(num.toFixed(1))}%`;
         };
+
+        // Colores por serie para reutilizar en etiquetas
+        const seriesColors = METRIC_KEYS.map((_, sIdx) => palette[sIdx % palette.length]);
+
+        // Matriz de valores reales por iteración y serie (para detectar outliers por iteración)
+        const valuesMatrix = (Array.isArray(DATA) ? DATA : []).map(it =>
+          METRIC_KEYS.map(name => {
+            const mm = (it.metrics || []).find(m => m.nombre === name);
+            return mm ? (Number(mm.executed) || 0) : 0;
+          })
+        );
+
+        // Rankeamos outliers (>200%) por iteración para escalonar etiquetas sin superposición
+        const OUTLIER_STEP = 12; // px por nivel
+        const outlierRanks = valuesMatrix.map(row => {
+          const entries = row.map((v, idx) => ({
+              idx,
+              v
+            })).filter(e => e.v > BASE_MAX)
+            .sort((a, b) => b.v - a.v); // mayores arriba
+          const map = {};
+          entries.forEach((e, rank) => {
+            map[e.idx] = rank;
+          });
+          return map; // { serieIndex: rank }
+        });
 
         const lineSeries = METRIC_KEYS.map((name, sIdx) => ({
           name,
@@ -1398,6 +1436,7 @@ $conexion->close();
             borderColor: "#fff",
             borderWidth: 1
           },
+
           emphasis: {
             focus: "series",
             lineStyle: {
@@ -1412,13 +1451,13 @@ $conexion->close();
               borderWidth: 1,
               borderRadius: 4,
               padding: [2, 4],
-              color: "#111",
+              color: palette[sIdx % palette.length],
               fontSize: 12,
               fontWeight: 600,
               formatter: function(p) {
                 const raw = typeof p.data?.realValue === "number" ?
                   p.data.realValue :
-                  (typeof p.value === "number" ? p.value : null);
+                  (typeof p.value === "number" ? mapPlotToReal(p.value) : null);
                 return formatPct(raw, {
                   allowDash: false
                 });
@@ -1426,18 +1465,21 @@ $conexion->close();
             }
           },
           blur: {
-            lineStyle: {
+            lineStyle: { //lineas del grafico
               opacity: 0.10
             },
-            itemStyle: {
-              opacity: 0.10
-            }
+            itemStyle: { //puntos del grafico
+              opacity: 0.10,
+            },
+
           },
-          data: DATA.map(it => {
+          data: DATA.map((it, di) => {
             const m = it.metrics.find(mm => mm.nombre === name);
             const real = m ? Number(m.executed) || 0 : 0;
-            return {
-              value: real,
+            const isOverflowPoint = real > BASE_MAX;
+            const plotVal = mapRealToPlot(real);
+            const item = {
+              value: plotVal,
               realValue: real,
               meta: m ? {
                 nombre: m.nombre,
@@ -1448,11 +1490,54 @@ $conexion->close();
                 extra: m.extra
               } : null
             };
+            if (isOverflowPoint) {
+              // Puntos > 200% como rombos, con etiqueta compacta y color de la serie
+              item.symbol = 'diamond';
+              item.symbolSize = 11;
+              item.itemStyle = {
+                color: seriesColors[sIdx], // color de la métrica
+                borderColor: '#ffffff',
+                borderWidth: 1,
+                shadowColor: 'rgba(0,0,0,0.15)',
+                shadowBlur: 4
+              };
+              const rank = (outlierRanks[di] && outlierRanks[di][sIdx]) || 0;
+              const seriesColor = seriesColors[sIdx];
+
+            }
+            return item;
           }),
           label: {
             show: false
           }
         }));
+        const overflowMarkers = {
+          name: "Marcador overflow",
+          type: "scatter",
+          symbol: "none",
+          data: iterLabels.map((iter, di) => {
+            const hasOverflow = (valuesMatrix[di] || []).some(v => v > BASE_MAX);
+            if (!hasOverflow) return null;
+            return {
+              value: [compactIterLabels[di], yMaxPlot],
+              label: {
+                show: true,
+                formatter: "200%+",
+                color: "#0d6efd",
+                fontWeight: 700,
+                fontSize: 11,
+                backgroundColor: "rgba(255,255,255,0.9)",
+                borderColor: "#0d6efd",
+                borderWidth: 1,
+                borderRadius: 4,
+                padding: [2, 5],
+                shadowColor: "rgba(0,0,0,0.1)",
+                shadowBlur: 2
+              }
+            };
+          }).filter(Boolean),
+          z: 99
+        };
 
         trendChart.setOption({
           backgroundColor: "#fff",
@@ -1462,13 +1547,12 @@ $conexion->close();
             confine: false,
             backgroundColor: "rgba(255,255,255,0.95)",
             borderColor: "#ddd",
-            borderWidth: 1,
             textStyle: {
               color: "#222",
               fontSize: 13
             },
             extraCssText: `
-              box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+                    color: seriesColor,
               border-radius: 6px;
               max-width: 340px;
               white-space: normal;
@@ -1477,7 +1561,9 @@ $conexion->close();
             axisPointer: {
               type: "line",
               label: {
-                formatter: ({ value }) => formatPct(value)
+                formatter: ({
+                  value
+                }) => formatPct(mapPlotToReal(value))
               }
             },
             formatter: function(params) {
@@ -1485,11 +1571,11 @@ $conexion->close();
               const iter = iterLabels[idx] || "";
               let html = `<b>${iter}</b><br/>`;
               params.forEach(p => {
-                if (p.seriesName === "Referencia 100%") return;
+                if (p.seriesName === "Referencia y zona" || p.seriesName === "Marcador overflow") return;
                 const meta = p.data?.meta;
                 const pctRaw = typeof p.data?.realValue === "number" ?
                   p.data.realValue :
-                  (typeof p.value === "number" ? p.value : 0);
+                  (typeof p.value === "number" ? mapPlotToReal(p.value) : 0);
                 const pctLabel = formatPct(pctRaw);
                 const ejec = meta?.executedReal ?? "—";
                 const plan = meta?.planned ?? "—";
@@ -1507,14 +1593,7 @@ $conexion->close();
             width: "96%",
             itemWidth: 10,
             itemHeight: 10,
-            icon: "circle",
             itemGap: 18,
-            padding: [6, 10, 6, 10],
-
-            selectorLabel: {
-              color: "#0d6efd",
-              fontWeight: 600
-            },
             selectorPosition: "start",
             textStyle: {
               fontSize: 12.5,
@@ -1568,9 +1647,10 @@ $conexion->close();
             }
           },
           yAxis: {
+
             type: "value",
             min: 0,
-            max: yMax,
+            max: yMaxPlot,
             interval: yStep,
             name: "Cumplimiento (%)",
             nameLocation: "middle",
@@ -1593,35 +1673,27 @@ $conexion->close();
               inside: false,
               length: 4
             },
-            minorTick: {
-              show: false
-            },
             splitLine: {
               show: true,
               lineStyle: {
                 color: "rgba(0,0,0,0.06)"
               }
             },
-            minorSplitLine: {
-              show: false
-            },
             axisLabel: {
               margin: 16,
-              formatter: value => formatPct(value)
+              formatter: value => formatPct(mapPlotToReal(value))
             }
           },
           series: [
             ...lineSeries,
+            overflowMarkers, // ← agregado aquí
             {
-              name: "Referencia 100%",
+              name: "Referencia y zona",
               type: "line",
               silent: true,
               symbol: "none",
               lineStyle: {
-                type: "dashed",
-                color: "#6c757d",
-                width: 3.5,
-                opacity: 0.95
+                opacity: 0
               },
               markLine: {
                 symbol: "none",
@@ -1634,106 +1706,152 @@ $conexion->close();
                 label: {
                   show: true,
                   position: "end",
-                  formatter: "100%",
+                  formatter: (p) => `${p.value}%`,
                   color: "#6c757d",
                   backgroundColor: "rgba(255,255,255,.6)",
-                  padding: [2, 4],
-                  show: false
+                  padding: [2, 4]
                 },
                 data: [{
                   yAxis: 100
+                }, {
+                  yAxis: BASE_MAX
                 }]
-              }
+              },
+              markArea: hasOverflow ? {
+                silent: true,
+                itemStyle: {
+                  color: 'rgba(13,110,253,0.06)'
+                },
+                label: {
+                  show: true,
+                  color: '#0d6efd',
+                  fontWeight: 600,
+                  formatter: '200%+'
+                },
+                data: [
+                  [{
+                    yAxis: BASE_MAX
+                  }, {
+                    yAxis: yMaxPlot
+                  }]
+                ]
+              } : undefined
             }
           ]
         });
 
         // Mostrar etiquetas de TODOS los puntos al pasar por encima de la línea o su leyenda
-        (function() {
-          let lastLabeledSeries = null;
+        // Mostrar etiquetas SOLO de la serie sobre la que está el puntero
+      // Mostrar etiquetas SOLO de la serie sobre la que está el puntero (línea o punto)
+(function() {
+  let lastLabeledSeries = null;
 
-          function setSeriesLabelsVisible(seriesIdx, visible) {
-            const opt = trendChart.getOption();
-            if (!opt || !opt.series || !opt.series[seriesIdx]) return;
-            const s = opt.series[seriesIdx];
-            if (s.type !== 'line' || s.name === 'Referencia 100%') return;
+  function setSeriesLabelsVisible(seriesIdx, visible) {
+    const opt = trendChart.getOption();
+    if (!opt || !opt.series || !opt.series[seriesIdx]) return;
+    const s = opt.series[seriesIdx];
+    if (s.type !== "line" || s.name === "Referencia y zona" || s.name === "Marcador overflow") return;
 
-            const labelCfg = {
-              show: !!visible,
-              position: 'top',
-              distance: 6,
-              backgroundColor: 'rgba(255,255,255,0.9)',
-              borderColor: '#ddd',
-              borderWidth: 1,
-              borderRadius: 4,
-              padding: [2, 4],
-              color: '#111',
-              fontSize: 12,
-              fontWeight: 600,
-              formatter: function(p) {
-                const raw = typeof p.data?.realValue === 'number' ?
-                  p.data.realValue :
-                  (typeof p.value === 'number' ? p.value : null);
-                return formatPct(raw, {
-                  allowDash: false
-                });
-              }
-            };
-            s.label = Object.assign({}, s.label || {}, labelCfg);
-            trendChart.setOption({
-              series: opt.series
-            }, {
-              lazyUpdate: true
-            });
-          }
+    const serieColor = palette[seriesIdx % palette.length];
+    const labelCfg = {
+      show: !!visible,
+      position: "top",
+      distance: 6,
+      backgroundColor: "rgba(255,255,255,0.9)",
+      borderColor: "#ddd",
+      borderWidth: 1,
+      borderRadius: 4,
+      padding: [2, 4],
+      color: serieColor,
+      fontSize: 12,
+      fontWeight: 600,
+      formatter: function(p) {
+        const raw = typeof p.data?.realValue === "number"
+          ? p.data.realValue
+          : (typeof p.value === "number" ? mapPlotToReal(p.value) : null);
+        return formatPct(raw, { allowDash: false });
+      }
+    };
 
-          // Hover sobre segmentos/símbolos de la serie
-          trendChart.getZr().on('mousemove', function() {});
-          trendChart.on('mouseover', function(params) {
-            if (params && params.componentType === 'series' && params.seriesType === 'line' && params.seriesName !== 'Referencia 100%') {
-              const idx = params.seriesIndex;
-              if (lastLabeledSeries !== idx) {
-                if (lastLabeledSeries !== null) setSeriesLabelsVisible(lastLabeledSeries, false);
-                setSeriesLabelsVisible(idx, true);
-                lastLabeledSeries = idx;
-              }
-            }
-          });
-          trendChart.on('mouseout', function(params) {
-            if (params && params.componentType === 'series' && params.seriesType === 'line' && params.seriesName !== 'Referencia 100%') {
-              const idx = params.seriesIndex;
-              setSeriesLabelsVisible(idx, false);
-              if (lastLabeledSeries === idx) lastLabeledSeries = null;
-            }
-          });
+    s.label = Object.assign({}, s.label || {}, labelCfg);
+    trendChart.setOption({ series: opt.series }, { lazyUpdate: true });
+  }
 
-          // Hover desde la leyenda (legend hover dispara highlight/downplay)
-          trendChart.on('highlight', function(params) {
-            if (params && params.seriesType === 'line' && params.seriesName !== 'Referencia 100%') {
-              const idx = params.seriesIndex;
-              if (lastLabeledSeries !== idx) {
-                if (lastLabeledSeries !== null) setSeriesLabelsVisible(lastLabeledSeries, false);
-                setSeriesLabelsVisible(idx, true);
-                lastLabeledSeries = idx;
-              }
-            }
-          });
-          trendChart.on('downplay', function(params) {
-            if (params && params.seriesType === 'line' && params.seriesName !== 'Referencia 100%') {
-              const idx = params.seriesIndex;
-              setSeriesLabelsVisible(idx, false);
-              if (lastLabeledSeries === idx) lastLabeledSeries = null;
-            }
-          });
+  // --- Nueva detección ampliada: detecta línea, símbolo o área sensible ---
+  trendChart.getZr().on("mousemove", function(e) {
+    const pointInPixel = [e.offsetX, e.offsetY];
+    const pointInGrid = trendChart.convertFromPixel({ seriesIndex: 0 }, pointInPixel);
+    if (!pointInGrid) return;
 
-          // Salida global del lienzo
-          trendChart.on('globalout', function() {
-            if (lastLabeledSeries !== null) {
-              setSeriesLabelsVisible(lastLabeledSeries, false);
-              lastLabeledSeries = null;
-            }
-          });
-        })();
+    const found = trendChart.convertToPixel({ seriesIndex: 0 }, pointInGrid);
+    if (!found) return;
+
+    const hoverSeries = trendChart.containPixel({ seriesIndex: 0 }, pointInPixel);
+    if (!hoverSeries) return;
+  });
+
+  // Hover sobre puntos o símbolos
+  trendChart.on("mouseover", function(params) {
+    if (
+      params &&
+      params.seriesType === "line" &&
+      params.seriesName !== "Referencia y zona" &&
+      params.seriesName !== "Marcador overflow"
+    ) {
+      const idx = params.seriesIndex;
+      if (lastLabeledSeries !== idx) {
+        if (lastLabeledSeries !== null)
+          setSeriesLabelsVisible(lastLabeledSeries, false);
+        setSeriesLabelsVisible(idx, true);
+        lastLabeledSeries = idx;
+      }
+    }
+  });
+
+  // Salida del hover (línea o punto)
+  trendChart.on("mouseout", function(params) {
+    if (
+      params &&
+      params.seriesType === "line" &&
+      params.seriesName !== "Referencia y zona" &&
+      params.seriesName !== "Marcador overflow"
+    ) {
+      const idx = params.seriesIndex;
+      setSeriesLabelsVisible(idx, false);
+      if (lastLabeledSeries === idx) lastLabeledSeries = null;
+    }
+  });
+
+  // Hover desde la leyenda
+  trendChart.on("highlight", function(params) {
+    if (params && params.seriesType === "line" && params.seriesName !== "Referencia y zona" && params.seriesName !== "Marcador overflow") {
+      const idx = params.seriesIndex;
+      if (lastLabeledSeries !== idx) {
+        if (lastLabeledSeries !== null)
+          setSeriesLabelsVisible(lastLabeledSeries, false);
+        setSeriesLabelsVisible(idx, true);
+        lastLabeledSeries = idx;
+      }
+    }
+  });
+
+  // Salida desde la leyenda o fuera del canvas
+  trendChart.on("downplay", function(params) {
+    if (params && params.seriesType === "line" && params.seriesName !== "Referencia y zona" && params.seriesName !== "Marcador overflow") {
+      const idx = params.seriesIndex;
+      setSeriesLabelsVisible(idx, false);
+      if (lastLabeledSeries === idx) lastLabeledSeries = null;
+    }
+  });
+
+  trendChart.on("globalout", function() {
+    if (lastLabeledSeries !== null) {
+      setSeriesLabelsVisible(lastLabeledSeries, false);
+      lastLabeledSeries = null;
+    }
+  });
+})();
+
 
         window.__TREND_ALREADY_RENDERED = true;
       }
