@@ -760,12 +760,29 @@ $conexion->close();
 
   <script>
     // ========= Datos del backend =========
-    const DATA = <?= json_encode($DATA, JSON_UNESCAPED_UNICODE | JSON_NUMERIC_CHECK); ?>;
-    const HAY_ITERACIONES = <?= $hayIteraciones ? 'true' : 'false'; ?>;
-    const ACTUAL = <?= json_encode($actualIter, JSON_UNESCAPED_UNICODE | JSON_NUMERIC_CHECK); ?>;
-    const ANTERIOR = <?= json_encode($anteriorIter, JSON_UNESCAPED_UNICODE | JSON_NUMERIC_CHECK); ?>;
+    let DATA = <?= json_encode($DATA, JSON_UNESCAPED_UNICODE | JSON_NUMERIC_CHECK); ?>;
+    let HAY_ITERACIONES = <?= $hayIteraciones ? 'true' : 'false'; ?>;
+    let ACTUAL = <?= json_encode($actualIter, JSON_UNESCAPED_UNICODE | JSON_NUMERIC_CHECK); ?>;
+    let ANTERIOR = <?= json_encode($anteriorIter, JSON_UNESCAPED_UNICODE | JSON_NUMERIC_CHECK); ?>;
     const MSG_ACTUAL = <?= json_encode($mensajeActual, JSON_UNESCAPED_UNICODE); ?>;
     const MSG_ANT = <?= json_encode($mensajeAnterior, JSON_UNESCAPED_UNICODE); ?>;
+    const ID_PROYECTO = <?= (int)$idProyecto ?>; // para live updates
+    let __dashVersion = null; // versión de datos del último render
+
+    // ===== Persistencia de estado en localStorage (sobrevive recargas) =====
+    const STORAGE_KEY = (id => `uargflow:dashboard:v1:proyecto:${id}`)(ID_PROYECTO);
+    function loadStateFromStorage() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        return raw ? JSON.parse(raw) : null;
+      } catch (_) { return null; }
+    }
+    function saveStateToStorage(state) {
+      try {
+        if (!state) return;
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      } catch (_) { /* noop */ }
+    }
 
     // ========= Utilidades =========
     function clamp(x, a, b) { //esto limita un valor entre a y b
@@ -1417,6 +1434,131 @@ $conexion->close();
       }
     }
 
+    // ===== Live updates (polling) =====
+    function collectUiState() {
+      try {
+        const selPhases = Array.from(document.querySelectorAll('#phaseLegend .phase-pill.active'))
+          .map(el => el.getAttribute('data-phase'))
+          .filter(Boolean);
+        const histSel = (document.getElementById('hist-select') || {}).value || null;
+        const histIdx = histSel !== null && histSel !== '' ? parseInt(histSel, 10) : null;
+        const histKey = Number.isInteger(histIdx) && Array.isArray(DATA) && DATA[histIdx]
+          ? (DATA[histIdx].iteracion || null)
+          : null;
+        let legendSelected = null;
+        try {
+          const inst = echarts.getInstanceByDom(document.getElementById('trendChart'));
+          const opt = inst ? inst.getOption() : null;
+          legendSelected = opt && opt.legend && opt.legend[0] ? (opt.legend[0].selected || null) : null;
+        } catch (_) { /* noop */ }
+        const state = { phases: selPhases, hist: histSel, histKey, legend: legendSelected };
+        saveStateToStorage(state);
+        return state;
+      } catch (e) { return { phases: null, hist: null, legend: null }; }
+    }
+
+    function applyUiState(saved) {
+      try {
+        if (!saved) saved = loadStateFromStorage();
+        if (saved && (saved.histKey || saved.hist)) {
+          const sel = document.getElementById('hist-select');
+          if (sel) {
+            let idx = null;
+            if (saved.histKey && Array.isArray(DATA)) {
+              const found = DATA.findIndex(d => d && d.iteracion === saved.histKey);
+              if (found >= 0) idx = found;
+            }
+            if (idx === null && saved.hist !== undefined) {
+              const n = parseInt(saved.hist, 10);
+              if (Number.isInteger(n)) idx = n;
+            }
+            if (idx !== null) {
+              sel.value = String(idx);
+              // Disparar evento y, además, forzar render por si el listener aún no está ligado
+              sel.dispatchEvent(new Event('change', { bubbles: true }));
+              try {
+                const chosen = DATA[idx];
+                if (chosen) {
+                  const t = document.getElementById('left-title');
+                  const d = document.getElementById('left-dates');
+                  if (t) t.textContent = chosen.iteracion;
+                  if (d) d.textContent = `Del ${chosen.inicio} al ${chosen.fin}`;
+                  renderIteracionChart(chosen, 'bars-anterior', 'legend-metricas-anterior');
+                }
+              } catch (_) { /* noop */ }
+            }
+          }
+        }
+        if (saved && saved.legend) {
+          try {
+            const inst = echarts.getInstanceByDom(document.getElementById('trendChart'));
+            if (inst) inst.setOption({ legend: [{ selected: saved.legend }] }, { lazyUpdate: true });
+          } catch (_) { /* noop */ }
+        }
+      } catch (_) { /* noop */ }
+    }
+    async function fetchDashboardData() {
+      const url = `api/dashboard_data.php?proyecto=${encodeURIComponent(ID_PROYECTO)}&_=${Date.now()}`;
+      try {
+        const res = await fetch(url, { cache: 'no-store' });
+        if (!res.ok) return null;
+        return await res.json();
+      } catch (e) {
+        console.warn('No se pudo obtener datos (polling):', e);
+        return null;
+      }
+    }
+
+    async function startLiveUpdates(intervalMs = 10000) {
+      if (window.__LIVE_POLLING) return; // evita múltiples intervalos
+      window.__LIVE_POLLING = true;
+
+      // Primera sincronización: asegura paridad con BD tras la carga inicial
+      const first = await fetchDashboardData();
+      if (first && first.version) {
+        const saved = collectUiState();
+        __dashVersion = first.version;
+        DATA = Array.isArray(first.data) ? first.data : [];
+        HAY_ITERACIONES = !!first.hayIteraciones;
+        ACTUAL = first.actual || null;
+        ANTERIOR = first.anterior || null;
+
+        // Re-render limpio preservando estado
+        window.__PHASE_RESTORE = saved.phases || null;
+        try { const t = document.getElementById('trendChart'); const inst = t && echarts.getInstanceByDom(t); if (inst) inst.dispose(); } catch (_) {}
+        try { const a = document.getElementById('bars-actual'); const ia = a && echarts.getInstanceByDom(a); if (ia) ia.dispose(); } catch (_) {}
+        try { const b = document.getElementById('bars-anterior'); const ib = b && echarts.getInstanceByDom(b); if (ib) ib.dispose(); } catch (_) {}
+        const row = document.getElementById('barsRow'); if (row) row.innerHTML = '';
+        const phaseLegend = document.getElementById('phaseLegend'); if (phaseLegend) phaseLegend.innerHTML = '';
+        initDashboard();
+        applyUiState(saved);
+      }
+
+      // Polling periódico
+      setInterval(async () => {
+        const payload = await fetchDashboardData();
+        if (!payload || !payload.version) return;
+        if (__dashVersion && payload.version === __dashVersion) return; // sin cambios
+
+        // Cambios detectados → actualizar y reconstruir preservando estado
+        const saved = collectUiState();
+        window.__PHASE_RESTORE = saved.phases || null;
+        DATA = Array.isArray(payload.data) ? payload.data : [];
+        HAY_ITERACIONES = !!payload.hayIteraciones;
+        ACTUAL = payload.actual || null;
+        ANTERIOR = payload.anterior || null;
+        __dashVersion = payload.version;
+
+        try { const t = document.getElementById('trendChart'); const inst = t && echarts.getInstanceByDom(t); if (inst) inst.dispose(); } catch (_) {}
+        try { const a = document.getElementById('bars-actual'); const ia = a && echarts.getInstanceByDom(a); if (ia) ia.dispose(); } catch (_) {}
+        try { const b = document.getElementById('bars-anterior'); const ib = b && echarts.getInstanceByDom(b); if (ib) ib.dispose(); } catch (_) {}
+        const row = document.getElementById('barsRow'); if (row) row.innerHTML = '';
+        const phaseLegend = document.getElementById('phaseLegend'); if (phaseLegend) phaseLegend.innerHTML = '';
+        initDashboard();
+        applyUiState(saved);
+      }, intervalMs);
+    }
+
     function initDashboard() {
       if (typeof echarts === "undefined") {
         console.warn("ECharts no disponible aún, reintentando...");
@@ -1472,8 +1614,13 @@ $conexion->close();
             ].forEach(([l, n]) => letterToPhase.set(l, n));
           }
 
-          // Estado de selección de fases
-          const selectedPhases = new Set(Array.from(letterToPhase.values()));
+          // Estado de selección de fases (restaura si hay guardado)
+          const allPhases = Array.from(letterToPhase.values());
+          const storageState = loadStateFromStorage();
+          const savedSel = (Array.isArray(window.__PHASE_RESTORE) && window.__PHASE_RESTORE.length)
+            ? window.__PHASE_RESTORE
+            : (storageState && Array.isArray(storageState.phases) ? storageState.phases : null);
+          const selectedPhases = new Set(savedSel ? allPhases.filter(p => savedSel.includes(p)) : allPhases);
 
           // Render de los botones de fase (chips)
           const renderPhaseChips = () => {
@@ -1983,6 +2130,8 @@ $conexion->close();
             renderPhaseChips();
             const filtered = filterDataByPhase(Array.isArray(DATA) ? DATA : []);
             rebuildTrendChart(filtered);
+            window.__PHASE_RESTORE = Array.from(selectedPhases);
+            saveStateToStorage(Object.assign(loadStateFromStorage() || {}, { phases: window.__PHASE_RESTORE }));
           });
 
           // Desactivar interactividad si solo hay una fase
@@ -2038,7 +2187,10 @@ $conexion->close();
         }
       }
       resizeTrend();
-      window.addEventListener("resize", resizeTrend);
+      if (!window.__DASH_RESIZE_BOUND) {
+        window.addEventListener("resize", resizeTrend);
+        window.__DASH_RESIZE_BOUND = true;
+      }
 
       // Si no hay datos, mostrar aviso y salir
       if (!Array.isArray(DATA) || DATA.length === 0) {
@@ -2614,7 +2766,6 @@ $conexion->close();
       row.innerHTML = "";
 
       // ---- Card Izquierda: Anterior + selector ----
-      // Lista de iteraciones anteriores válidas respecto al inicio de la actual (si existe)
       const anteriorLista = Array.isArray(DATA) ?
         DATA.filter(d => {
           if (ACTUAL && ACTUAL.inicio) return new Date(d.fin).getTime() < new Date(ACTUAL.inicio).getTime();
@@ -2642,7 +2793,6 @@ $conexion->close();
       </p>
     </div>
   </div>`;
-
         row.appendChild(colLeft);
       } else {
         const defIter = ANTERIOR || anteriorLista[anteriorLista.length - 1];
@@ -2690,15 +2840,25 @@ $conexion->close();
 
 
         // Cambio de selección
-        document.addEventListener("change", e => {
-          if (e.target && e.target.id === "hist-select") {
-            const idx = parseInt(e.target.value, 10);
-            const chosen = DATA[idx];
-            document.getElementById("left-title").textContent = chosen.iteracion;
-            document.getElementById("left-dates").textContent = `Del ${chosen.inicio} al ${chosen.fin}`;
-            renderIteracionChart(chosen, "bars-anterior", "legend-metricas-anterior");
-          }
-        });
+        if (!window.__DASH_HIST_CHANGE_BOUND) {
+          document.addEventListener("change", function(e) {
+            if (e.target && e.target.id === "hist-select") {
+              const idx = parseInt(e.target.value, 10);
+              const chosen = DATA[idx];
+              const t = document.getElementById("left-title");
+              const d = document.getElementById("left-dates");
+              if (t) t.textContent = chosen.iteracion;
+              if (d) d.textContent = `Del ${chosen.inicio} al ${chosen.fin}`;
+              renderIteracionChart(chosen, "bars-anterior", "legend-metricas-anterior");
+              // persistir selección
+              const st = loadStateFromStorage() || {};
+              st.hist = String(idx);
+              st.histKey = chosen && chosen.iteracion ? chosen.iteracion : null;
+              saveStateToStorage(st);
+            }
+          });
+          window.__DASH_HIST_CHANGE_BOUND = true;
+        }
       }
 
       // ---- Card Derecha: Actual o mensaje ----
@@ -2782,7 +2942,14 @@ $conexion->close();
       }
     }
 
-    document.addEventListener("DOMContentLoaded", initDashboard);
+  document.addEventListener("DOMContentLoaded", function(){
+    const st = loadStateFromStorage();
+    if (st && Array.isArray(st.phases)) window.__PHASE_RESTORE = st.phases;
+    initDashboard();
+    // Restaurar UI (hist y leyenda) post-render
+    applyUiState(st);
+  });
+  document.addEventListener('DOMContentLoaded', function() { startLiveUpdates(3000); });
     document.addEventListener("DOMContentLoaded", function() {
       const toggleBtn = document.getElementById("toggleLegendBtn");
       const toggleIcon = toggleBtn.querySelector("i");
