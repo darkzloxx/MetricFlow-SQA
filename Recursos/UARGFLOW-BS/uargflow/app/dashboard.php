@@ -1,8 +1,22 @@
 <?php
+/**
+ * Genera la estructura $DATA consumida por el frontend (ECharts) para
+ * tableros de métricas, manteniendo compatibilidad con claves existentes.
+ *
+ * @author      Lorenzo Teppa
+ * @copyright   2025 CoDevIt
+ * @license     MIT
+ * @version     1.0.0
+ * @since       1.0.0
+ * 
+ * --------------------------------------------------------------------------
+ */
+
 // ============================a
 // Conexión a MariaDB
 // ============================
-$conexion = new mysqli("localhost", "root", "", "bd_prueba", 3308);
+$conexion = new mysqli("localhost", "root", "", "bd_codevit", 3308);
+// Si algo falla aquí, no hay dashboard: aborta con un mensaje explícito.
 if ($conexion->connect_error) {
   die("Error al conectar: " . $conexion->connect_error);
 }
@@ -94,7 +108,7 @@ if ($result) {
         "numero"    => $r['numero_iteracion'],
         "inicio"    => $r['inicio'],
         "fin"       => $r['fin'],
-        "metrics"   => []
+        "metricas"   => []
       ];
     }
 
@@ -114,7 +128,7 @@ if ($result) {
       $nota = "";
     }
 
-    $iterMap[$key]["metrics"][] = [
+    $iterMap[$key]["metricas"][] = [
       "id"           => (int)$r['id_metrica'],
       "nombre"       => $r['metrica'],
       "executed"     => $pct,
@@ -154,10 +168,10 @@ if (count($DATA) === 0) {
   }
 
   if ($actualIndex !== null) {
-    // ✅ Hay iteración actual (en curso)
+    // Hay iteración actual (en curso)
     $actualIter = $DATA[$actualIndex];
   } else {
-    // ❌ No hay iteración actual → la última registrada pasa a ser la "más reciente anterior"
+    // No hay iteración actual la última registrada pasa a ser la "más reciente anterior"
     $mensajeActual = 'No hay ninguna iteración activa en la fecha actual.';
   }
 
@@ -176,7 +190,7 @@ if (count($DATA) === 0) {
   }
 
   // Caso: iteración actual sin métricas
-  if ($actualIter && empty($actualIter['metrics'])) {
+  if ($actualIter && empty($actualIter['metricas'])) {
     $mensajeActual = "La iteración <b>{$actualIter['iteracion']}</b> no tiene métricas planificadas aún.";
   }
 }
@@ -210,7 +224,6 @@ $conexion->close();
       height: 360px;
     }
 
-    /* ======== GLOBAL ======== */
     body {
       background-color: #f8f9fa;
       font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -373,7 +386,7 @@ $conexion->close();
     }
 
 
-    .legend-metrics {
+    .legend-metricas {
       margin-top: 6px;
       color: #444;
       line-height: 1.5;
@@ -573,7 +586,7 @@ $conexion->close();
       echo '</div>   <footer class="footer">UARGFlow BS <span class="oi oi-globe"></span> UNPA-UARG</footer>
 '; // cerrar container
 
-      exit; // ✅ corta la ejecución del resto del dashboard
+      exit; //  corta la ejecución del resto del dashboard
     }
     ?>
     <?php
@@ -680,18 +693,18 @@ $conexion->close();
     const MSG_ANT = <?= json_encode($mensajeAnterior, JSON_UNESCAPED_UNICODE); ?>;
 
     // ========= Utilidades =========
-    function clamp(x, a, b) {
+    function clamp(x, a, b) {//esto limita un valor entre a y b
       return Math.min(Math.max(x, a), b);
     }
 
-    function colorSemaforo(valuePct, minPct, maxPct) {
-      // valuePct: % de cumplimiento calculado (ejecutado/planificado*100)
+    function colorSemaforo(valorPct, minPct, maxPct) {
+      // valorPct: % de cumplimiento calculado (ejecutado/planificado*100)
       // minPct:  100 - umbral (límite de desviación)
       // maxPct:  100 + umbral (no se usa para el semáforo del flujo)
-      valuePct = Number(valuePct) || 0;
+      valorPct = Number(valorPct) || 0;
       minPct = Number(minPct) || 0;
-      if (valuePct >= 100) return "#28a745"; // Verde
-      if (valuePct >= minPct) return "#ffc107"; // Amarillo
+      if (valorPct >= 100) return "#28a745"; // Verde
+      if (valorPct >= minPct) return "#ffc107"; // Amarillo
       return "#dc3545"; // Rojo
     }
 
@@ -715,7 +728,7 @@ $conexion->close();
     //aca se inicializa el dashboard
     function renderIteracionChart(it, chartId, legendId) {
       //si no hay métricas
-      if (!it || !it.metrics || it.metrics.length === 0) {
+      if (!it || !it.metricas || it.metricas.length === 0) {
         document.getElementById(chartId).innerHTML = `
     <div class="text-center text-muted mt-5">
       No se planificaron métricas para ${it?.iteracion || 'esta iteración'}.
@@ -726,16 +739,15 @@ $conexion->close();
       const prev = echarts.getInstanceByDom(dom);
       if (prev) prev.dispose();
       const chart = echarts.init(dom);
-      const labels = it.metrics.map(m => m.id);
+      const labels = it.metricas.map(m => m.id);
 
       // === Configuración de máximos ===
       const BAR_WIDTH = 40; // ancho barra base
       const VISIBLE_MAX = 120; // tope visible
       const OVERFLOW_TOP = 140; // “un poco” por encima
 
-      // Antes: const hasNoPlan = ...
-      // Nuevo: levantar eje oculto si hay cualquier overflow
-      const hasOverflow = it.metrics.some(m =>
+      // levantar eje oculto si hay cualquier overflow
+      const hasOverflow = it.metricas.some(m =>
         (m.planned === 0 && m.executedReal > 0) || (Number(m.executed) > VISIBLE_MAX)
       );
       const OVERFLOW_MAX = hasOverflow ? OVERFLOW_TOP : VISIBLE_MAX; // eje oculto si hace falta
@@ -743,21 +755,21 @@ $conexion->close();
       // Para las barras normales seguimos usando 120
       const maxYBars = VISIBLE_MAX;
 
-      const execData = it.metrics.map(m => ({
+      const execData = it.metricas.map(m => ({
         value: Math.min(m.executed, maxYBars),
         meta: m
       }));
       const BAR_DURATION = 1500;
       const BAR_DELAY_PER_IDX = idx => idx * 150;
       const OVERFLOW_DURATION = 1500;
-      const lastDelay = BAR_DELAY_PER_IDX(it.metrics.length - 1);
+      const lastDelay = BAR_DELAY_PER_IDX(it.metricas.length - 1);
       const AFTER_OVERFLOW_ALL = lastDelay + BAR_DURATION + OVERFLOW_DURATION + 150;
       const timePct = pctTiempoIter(it.inicio, it.fin);
 
       const scroll = dom.closest(".chart-scroll");
       const stage = dom.parentElement; // .chart-stage
       const visibleW = scroll ? scroll.clientWidth : 600;
-      const neededW = Math.max(visibleW, it.metrics.length * 90);
+      const neededW = Math.max(visibleW, it.metricas.length * 90);
       if (stage) stage.style.width = `${neededW}px`;
       dom.style.width = "100%";
       if (scroll) {
@@ -982,7 +994,7 @@ $conexion->close();
             z: 900,
             renderItem: function(params, api) {
               const idx = api.value(0);
-              const m = it.metrics[idx];
+              const m = it.metricas[idx];
               if (!m) return null;
               const isHighThreshold = m.min >= 95;
 
@@ -1056,7 +1068,7 @@ $conexion->close();
               };
             },
 
-            data: it.metrics.map((_, idx) => ({
+            data: it.metricas.map((_, idx) => ({
               value: idx
             }))
           },
@@ -1074,7 +1086,7 @@ $conexion->close();
               const xStart = api.coord([0, 0])[0]; //
 
               // borde derecho real del área de barras
-              const lastCenter = api.coord([it.metrics.length - 1, 0])[0];
+              const lastCenter = api.coord([it.metricas.length - 1, 0])[0];
               const bandW = api.size([1, 0])[0];
               const plotRight = lastCenter + bandW * 0.5;
               const chartW = api.getWidth();
@@ -1089,7 +1101,7 @@ $conexion->close();
                   {
                     type: "line",
                     shape: {
-                      x1: api.coord([it.metrics[0]?.id || 0, 0])[0] - (api.size([1, 0])[0] * 0.5),
+                      x1: api.coord([it.metricas[0]?.id || 0, 0])[0] - (api.size([1, 0])[0] * 0.5),
                       y1: y,
                       x2: chartW - 50, // hasta el borde derecho del canvas
                       y2: y
@@ -1179,7 +1191,7 @@ $conexion->close();
             animationDelay: idx => BAR_DELAY_PER_IDX(idx) + BAR_DURATION,
             renderItem: function(params, api) {
               const idx = api.value(0);
-              const m = it.metrics[idx];
+              const m = it.metricas[idx];
               if (!m) return null;
 
               const pct = Number(m.executed) || 0;
@@ -1285,7 +1297,7 @@ $conexion->close();
 
               return null;
             },
-            data: it.metrics.map((_, idx) => idx)
+            data: it.metricas.map((_, idx) => idx)
           },
 
         ]
@@ -1294,7 +1306,7 @@ $conexion->close();
       // Leyenda de métricas
       if (legendId) {
         const legendDiv = document.getElementById(legendId);
-        legendDiv.innerHTML = it.metrics.map(m => `<span class="me-3"><b>#${m.id}</b> = ${m.nombre}</span>`).join(' ');
+        legendDiv.innerHTML = it.metricas.map(m => `<span class="me-3"><b>#${m.id}</b> = ${m.nombre}</span>`).join(' ');
       }
     }
 
@@ -1310,7 +1322,7 @@ $conexion->close();
       const trendStage = trendWrap.querySelector(".chart-stage");
       const trendChartDom = document.getElementById("trendChart");
       const METRIC_KEYS = [...new Set((Array.isArray(DATA) ? DATA : [])
-        .flatMap(it => (it.metrics || []).map(m => m.nombre)))];
+        .flatMap(it => (it.metricas || []).map(m => m.nombre)))];
 
       const palette = [
         "#007bff", "#1b9437ff", "#dc3545", "#b98b00ff", "#0d8092ff",
@@ -1354,7 +1366,7 @@ $conexion->close();
       } else {
         const legendType = "plain";
 
-        const allTrendValues = DATA.flatMap(it => (it.metrics || []).map(m => Number(m.executed) || 0));
+        const allTrendValues = DATA.flatMap(it => (it.metricas || []).map(m => Number(m.executed) || 0));
         const realMaxValue = allTrendValues.length ? Math.max(...allTrendValues) : 0;
 
         // ===== Escala con banda extendida comprimida por arriba de 200% =====
@@ -1398,7 +1410,7 @@ $conexion->close();
         // Matriz de valores reales por iteración y serie (para detectar outliers por iteración)
         const valuesMatrix = (Array.isArray(DATA) ? DATA : []).map(it =>
           METRIC_KEYS.map(name => {
-            const mm = (it.metrics || []).find(m => m.nombre === name);
+            const mm = (it.metricas || []).find(m => m.nombre === name);
             return mm ? (Number(mm.executed) || 0) : 0;
           })
         );
@@ -1474,7 +1486,7 @@ $conexion->close();
 
           },
           data: DATA.map((it, di) => {
-            const m = it.metrics.find(mm => mm.nombre === name);
+            const m = it.metricas.find(mm => mm.nombre === name);
             const real = m ? Number(m.executed) || 0 : 0;
             const isOverflowPoint = real > BASE_MAX;
             const plotVal = mapRealToPlot(real);
@@ -1974,12 +1986,12 @@ $conexion->close();
           <span class="legend-item"><span class="legend-dash"></span>Progreso iteración</span>
         </div>
         <div class="legend-bottom mt-3">
-          <div id="legend-metrics-anterior" class="mb-2"></div>
+          <div id="legend-metricas-anterior" class="mb-2"></div>
         </div>
       </div>
     </div>`;
         row.appendChild(colLeft);
-        renderIteracionChart(defIter, "bars-anterior", "legend-metrics-anterior");
+        renderIteracionChart(defIter, "bars-anterior", "legend-metricas-anterior");
 
 
         // Cambio de selección
@@ -1989,7 +2001,7 @@ $conexion->close();
             const chosen = DATA[idx];
             document.getElementById("left-title").textContent = chosen.iteracion;
             document.getElementById("left-dates").textContent = `Del ${chosen.inicio} al ${chosen.fin}`;
-            renderIteracionChart(chosen, "bars-anterior", "legend-metrics-anterior");
+            renderIteracionChart(chosen, "bars-anterior", "legend-metricas-anterior");
           }
         });
       }
@@ -2000,7 +2012,7 @@ $conexion->close();
       colRight.className = "col-12 col-xl-6";
 
       // ✅ Caso 1: hay iteración actual y métricas cargadas
-      if (ACTUAL && Array.isArray(ACTUAL.metrics) && ACTUAL.metrics.length > 0) {
+      if (ACTUAL && Array.isArray(ACTUAL.metricas) && ACTUAL.metricas.length > 0) {
         colRight.innerHTML = `
     <div class="card card-iteracion h-100">
       <div class="card-header bg-transparent border-0">
@@ -2025,17 +2037,17 @@ $conexion->close();
           <span class="legend-item"><span class="legend-dash"></span>Progreso iteración</span>
         </div>
         <div class="legend-bottom mt-3">
-          <div id="legend-metrics-actual" class="mb-2"></div>
+          <div id="legend-metricas-actual" class="mb-2"></div>
         </div>
       </div>
     </div>`;
         row.appendChild(colRight);
-        renderIteracionChart(ACTUAL, "bars-actual", "legend-metrics-actual");
+        renderIteracionChart(ACTUAL, "bars-actual", "legend-metricas-actual");
 
 
       }
       // ⚠️ Caso 2: existe iteración actual pero sin métricas planificadas
-      else if (ACTUAL && (!ACTUAL.metrics || ACTUAL.metrics.length === 0)) {
+      else if (ACTUAL && (!ACTUAL.metricas || ACTUAL.metricas.length === 0)) {
         colRight.innerHTML = `
     <div class="card card-iteracion h-100 d-flex flex-column justify-content-center align-items-center text-center"
          style="border: 1px dashed rgba(13,110,253,0.25); background: rgba(13,110,253,0.03);">
