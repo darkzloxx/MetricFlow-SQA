@@ -16,7 +16,7 @@
 // ============================a
 // Conexión a MariaDB
 // ============================
-$conexion = new mysqli("localhost", "root", "", "bd_CU12", 3306);
+$conexion = new mysqli("localhost", "root", "", "bd", 3306);
 // Si algo falla aquí, no hay dashboard: aborta con un mensaje explícito.
 if ($conexion->connect_error) {
   die("Error al conectar: " . $conexion->connect_error);
@@ -26,7 +26,7 @@ if ($conexion->connect_error) {
 // ============================
 // Proyecto (puedes pasar ?proyecto=ID)
 // ============================
-$idProyecto = isset($_GET['proyecto']) ? (int)$_GET['proyecto'] : 5;
+$idProyecto = isset($_GET['proyecto']) ? (int)$_GET['proyecto'] : 1;
 
 $sqlProyecto = "SELECT nombre, estado FROM proyecto WHERE id_proyecto = $idProyecto";
 $resProyecto = $conexion->query($sqlProyecto);
@@ -1198,38 +1198,36 @@ $conexion->close();
             renderItem: function(params, api) {
               const pct = Math.min(timePct, 120); // cap 120%
               const y = api.coord([0, pct])[1]; // posición Y de la línea
-              const xStart = api.coord([0, 0])[0]; //
-
-              // borde derecho real del área de barras
-              const lastCenter = api.coord([it.metricas.length - 1, 0])[0];
-              const bandW = api.size([1, 0])[0];
-              const plotRight = lastCenter + bandW * 0.5;
+              // Coordenadas exactas del grid para alinear con el eje Y (x=0)
+              const cs = params.coordSys; // { x, y, width, height }
+              const xLeft = Math.round(cs.x) + 0.5; // borde izquierdo del grid (eje X)
+              const xRight = Math.round(cs.x + cs.width) + 0.5; // borde derecho del grid
               const chartW = api.getWidth();
-
-              // margen dinámico: evita que el texto quede pegado
-              const labelX = Math.min(plotRight + 90, chartW - 10);
+              const labelX = Math.min(xRight + 12, chartW - 10);
 
               return {
                 type: "group",
                 children: [
-                  // Línea punteada elegante (animada)
+                  // Línea punteada desde el eje Y
                   {
                     type: "line",
                     shape: {
-                      x1: api.coord([it.metricas[0]?.id || 0, 0])[0] - (api.size([1, 0])[0] * 0.5),
+                      x1: xLeft,
                       y1: y,
-                      x2: chartW - 50, // hasta el borde derecho del canvas
+                      x2: xRight + 15,
                       y2: y
                     },
                     style: {
                       stroke: "#0a3bcfff",
-                      lineWidth: 1.2,
-                      lineDash: [6, 4],
+                      lineWidth: 2.4,
+                      lineDash: [10, 6],
+                      shadowColor: "rgba(10,59,207,0.35)",
+                      shadowBlur: 3,
                       opacity: 0
                     },
                     keyframeAnimation: {
                       duration: 400,
-                      delay: AFTER_OVERFLOW_ALL - 100, // aparece después del overflow
+                      delay: AFTER_OVERFLOW_ALL - 100,
                       easing: "cubicOut",
                       keyframes: [{
                           percent: 0,
@@ -1241,24 +1239,24 @@ $conexion->close();
                         {
                           percent: 1,
                           style: {
-                            opacity: 0.8,
-                            lineWidth: 1.0
+                            opacity: 0.9,
+                            lineWidth: 2.4
                           }
                         }
                       ]
                     }
                   },
-                  // Texto a la derecha (animado)
+                  // Texto al extremo derecho
                   {
                     type: "text",
                     style: {
-                      x: labelX - 50, // corrige leve desplazamiento a la izquierda
-                      y: y - 500,
+                      x: labelX,
+                      y: y - 8,
                       text: `${pct.toFixed(1)}%`,
                       fill: "#0a3bcfff",
                       fontWeight: "bold",
                       fontSize: 11.5,
-                      textAlign: "center",
+                      textAlign: "left",
                       textVerticalAlign: "bottom",
                       lineHeight: 16,
                       textShadowColor: "rgba(255,255,255,0.7)",
@@ -1267,7 +1265,7 @@ $conexion->close();
                     },
                     keyframeAnimation: {
                       duration: 500,
-                      delay: AFTER_OVERFLOW_ALL, // luego de la línea
+                      delay: AFTER_OVERFLOW_ALL,
                       easing: "cubicOut",
                       keyframes: [{
                           percent: 0,
