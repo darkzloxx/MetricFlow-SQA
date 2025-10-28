@@ -8,7 +8,11 @@ header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 
 $proyectoId = isset($_GET['proyecto']) ? (int)$_GET['proyecto'] : 1;
 
-$conexion = @new mysqli('localhost', 'root', '', 'bd_CU12_1', 3308);
+// Prefer local dev DB used by tests, then fallback to alternate
+$conexion = @new mysqli('localhost', 'root', '', 'bd_CU12', 3306);
+if ($conexion->connect_error) {
+  $conexion = @new mysqli('localhost', 'root', '', 'bd_CU12_1', 3308);
+}
 if ($conexion->connect_error) {
   http_response_code(500);
   echo json_encode(['error' => 'DB connection failed']);

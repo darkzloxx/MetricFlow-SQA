@@ -16,7 +16,7 @@
 // ============================a
 // Conexión a MariaDB
 // ============================
-$conexion = new mysqli("localhost", "root", "", "bd_CU12_1", 3308);
+$conexion = new mysqli("localhost", "root", "", "bd_CU12", 3306);
 // Si algo falla aquí, no hay dashboard: aborta con un mensaje explícito.
 if ($conexion->connect_error) {
   die("Error al conectar: " . $conexion->connect_error);
@@ -705,7 +705,7 @@ $conexion->close();
             <div class="stat-icon icon-bg-success"><span class="oi oi-graph"></span></div>
             <div class="stat-content">
               <span class="stat-label">Métricas utilizadas</span>
-              <div class="stat-value"><?= (int)$totalMetricas ?></div>
+              <div id="totalMetricasValue" class="stat-value"><?= (int)$totalMetricas ?></div>
             </div>
           </div>
         </div>
@@ -719,7 +719,7 @@ $conexion->close();
             </div>
             <div class="stat-content">
               <span class="stat-label">Iteraciones</span>
-              <div class="stat-value text-dark"><?= (int)$totalIteraciones ?></div>
+              <div id="totalIteracionesValue" class="stat-value text-dark"><?= (int)$totalIteraciones ?></div>
             </div>
           </div>
         </div>
@@ -1509,30 +1509,50 @@ $conexion->close();
       }
     }
 
+    // Aplicar un payload del servidor y re-renderizar todo preservando estado de UI
+    function renderWithPayload(payload) {
+      if (!payload) return;
+      const saved = collectUiState();
+      window.__PHASE_RESTORE = saved.phases || null;
+      DATA = Array.isArray(payload.data) ? payload.data : [];
+      HAY_ITERACIONES = !!payload.hayIteraciones;
+      ACTUAL = payload.actual || null;
+      ANTERIOR = payload.anterior || null;
+      __dashVersion = payload.version || null;
+
+      // Actualizar contadores superiores sin recargar
+      try {
+        const tm = document.getElementById('totalMetricasValue');
+        if (tm && typeof payload.totalMetricas !== 'undefined') tm.textContent = String(payload.totalMetricas);
+        const ti = document.getElementById('totalIteracionesValue');
+        if (ti && typeof payload.totalIteraciones !== 'undefined') ti.textContent = String(payload.totalIteraciones);
+      } catch (_) { /* noop */ }
+
+      try { const t = document.getElementById('trendChart'); const inst = t && echarts.getInstanceByDom(t); if (inst) inst.dispose(); } catch (_) {}
+      try { const a = document.getElementById('bars-actual'); const ia = a && echarts.getInstanceByDom(a); if (ia) ia.dispose(); } catch (_) {}
+      try { const b = document.getElementById('bars-anterior'); const ib = b && echarts.getInstanceByDom(b); if (ib) ib.dispose(); } catch (_) {}
+      const row = document.getElementById('barsRow'); if (row) row.innerHTML = '';
+      const phaseLegend = document.getElementById('phaseLegend'); if (phaseLegend) phaseLegend.innerHTML = '';
+      initDashboard();
+      applyUiState(saved);
+    }
+
+    // Refresco bajo demanda (ej. al cambiar de fase)
+    async function refreshFromServer() {
+      const payload = await fetchDashboardData();
+      if (!payload || !payload.version) return;
+      if (!__dashVersion || payload.version !== __dashVersion) {
+        renderWithPayload(payload);
+      }
+    }
+
     async function startLiveUpdates(intervalMs = 10000) {
       if (window.__LIVE_POLLING) return; // evita múltiples intervalos
       window.__LIVE_POLLING = true;
 
       // Primera sincronización: asegura paridad con BD tras la carga inicial
       const first = await fetchDashboardData();
-      if (first && first.version) {
-        const saved = collectUiState();
-        __dashVersion = first.version;
-        DATA = Array.isArray(first.data) ? first.data : [];
-        HAY_ITERACIONES = !!first.hayIteraciones;
-        ACTUAL = first.actual || null;
-        ANTERIOR = first.anterior || null;
-
-        // Re-render limpio preservando estado
-        window.__PHASE_RESTORE = saved.phases || null;
-        try { const t = document.getElementById('trendChart'); const inst = t && echarts.getInstanceByDom(t); if (inst) inst.dispose(); } catch (_) {}
-        try { const a = document.getElementById('bars-actual'); const ia = a && echarts.getInstanceByDom(a); if (ia) ia.dispose(); } catch (_) {}
-        try { const b = document.getElementById('bars-anterior'); const ib = b && echarts.getInstanceByDom(b); if (ib) ib.dispose(); } catch (_) {}
-        const row = document.getElementById('barsRow'); if (row) row.innerHTML = '';
-        const phaseLegend = document.getElementById('phaseLegend'); if (phaseLegend) phaseLegend.innerHTML = '';
-        initDashboard();
-        applyUiState(saved);
-      }
+      if (first && first.version) { renderWithPayload(first); }
 
       // Polling periódico
       setInterval(async () => {
@@ -1541,22 +1561,78 @@ $conexion->close();
         if (__dashVersion && payload.version === __dashVersion) return; // sin cambios
 
         // Cambios detectados → actualizar y reconstruir preservando estado
-        const saved = collectUiState();
-        window.__PHASE_RESTORE = saved.phases || null;
-        DATA = Array.isArray(payload.data) ? payload.data : [];
-        HAY_ITERACIONES = !!payload.hayIteraciones;
-        ACTUAL = payload.actual || null;
-        ANTERIOR = payload.anterior || null;
-        __dashVersion = payload.version;
-
-        try { const t = document.getElementById('trendChart'); const inst = t && echarts.getInstanceByDom(t); if (inst) inst.dispose(); } catch (_) {}
-        try { const a = document.getElementById('bars-actual'); const ia = a && echarts.getInstanceByDom(a); if (ia) ia.dispose(); } catch (_) {}
-        try { const b = document.getElementById('bars-anterior'); const ib = b && echarts.getInstanceByDom(b); if (ib) ib.dispose(); } catch (_) {}
-        const row = document.getElementById('barsRow'); if (row) row.innerHTML = '';
-        const phaseLegend = document.getElementById('phaseLegend'); if (phaseLegend) phaseLegend.innerHTML = '';
-        initDashboard();
-        applyUiState(saved);
+        renderWithPayload(payload);
       }, intervalMs);
+    }
+
+    // ===== Live updates via Server-Sent Events (preferido) =====
+    function startLiveUpdatesSSE() {
+      if (!('EventSource' in window)) return false;
+      if (window.__LIVE_SSE) return true;
+      try {
+        const url = `api/dashboard_sse.php?proyecto=${encodeURIComponent(ID_PROYECTO)}`;
+        const es = new EventSource(url, { withCredentials: false });
+        window.__LIVE_SSE = es;
+        let gotFirstUpdate = false;
+        let lastUpdateAt = Date.now();
+        let closed = false;
+
+        // Startup watchdog: if no update within 7s, fallback to polling
+        const startupTimer = setTimeout(() => {
+          if (!gotFirstUpdate && !closed) {
+            try { es.close(); } catch (_) {}
+            window.__LIVE_SSE = null;
+            closed = true;
+            startLiveUpdates(5000);
+          }
+        }, 7000);
+
+        // Health watchdog: if no updates for 75s, fallback to polling
+        const healthTimer = setInterval(() => {
+          if (closed) { clearInterval(healthTimer); return; }
+          if (Date.now() - lastUpdateAt > 75000) {
+            try { es.close(); } catch (_) {}
+            window.__LIVE_SSE = null;
+            closed = true;
+            clearInterval(healthTimer);
+            startLiveUpdates(5000);
+          }
+        }, 20000);
+
+        const handlePayload = (payload) => {
+          if (!payload || !payload.version) return;
+          if (__dashVersion && payload.version === __dashVersion) return; // sin cambios
+          renderWithPayload(payload);
+        };
+
+        es.addEventListener('update', (e) => {
+          try { handlePayload(JSON.parse(e.data)); } catch (_) {}
+          gotFirstUpdate = true;
+          lastUpdateAt = Date.now();
+          clearTimeout(startupTimer);
+        });
+        es.onmessage = (e) => { // fallback default event
+          try { handlePayload(JSON.parse(e.data)); } catch (_) {}
+          gotFirstUpdate = true;
+          lastUpdateAt = Date.now();
+          clearTimeout(startupTimer);
+        };
+        es.addEventListener('open', () => {
+          // mark as connected; we still wait for first update
+        });
+        es.addEventListener('error', () => {
+          try { es.close(); } catch (_) {}
+          window.__LIVE_SSE = null;
+          closed = true;
+          clearTimeout(startupTimer);
+          // Fallback a polling tras un breve retardo
+          setTimeout(() => { startLiveUpdates(5000); }, 1500);
+        });
+        return true;
+      } catch (e) {
+        window.__LIVE_SSE = null;
+        return false;
+      }
     }
 
     function initDashboard() {
@@ -2132,6 +2208,8 @@ $conexion->close();
             rebuildTrendChart(filtered);
             window.__PHASE_RESTORE = Array.from(selectedPhases);
             saveStateToStorage(Object.assign(loadStateFromStorage() || {}, { phases: window.__PHASE_RESTORE }));
+            // Al cambiar de fase, intentamos traer datos frescos del servidor
+            refreshFromServer();
           });
 
           // Desactivar interactividad si solo hay una fase
@@ -2855,6 +2933,8 @@ $conexion->close();
               st.hist = String(idx);
               st.histKey = chosen && chosen.iteracion ? chosen.iteracion : null;
               saveStateToStorage(st);
+              // Cada cambio de historial puede aprovechar para verificar si hay datos nuevos
+              refreshFromServer();
             }
           });
           window.__DASH_HIST_CHANGE_BOUND = true;
@@ -2949,7 +3029,18 @@ $conexion->close();
     // Restaurar UI (hist y leyenda) post-render
     applyUiState(st);
   });
-  document.addEventListener('DOMContentLoaded', function() { startLiveUpdates(3000); });
+  document.addEventListener('DOMContentLoaded', function() {
+    // Intentar SSE primero; si falla, usar polling
+    const ok = startLiveUpdatesSSE();
+    if (!ok) startLiveUpdates(3000);
+  });
+  // Refrescar cuando la pestaña vuelve a estar visible o la ventana gana foco
+  document.addEventListener('visibilitychange', function() {
+    if (!document.hidden) refreshFromServer();
+  });
+  window.addEventListener('focus', function(){
+    refreshFromServer();
+  });
     document.addEventListener("DOMContentLoaded", function() {
       const toggleBtn = document.getElementById("toggleLegendBtn");
       const toggleIcon = toggleBtn.querySelector("i");
