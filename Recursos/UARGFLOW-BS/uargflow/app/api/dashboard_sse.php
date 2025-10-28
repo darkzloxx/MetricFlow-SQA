@@ -21,9 +21,9 @@ $proyectoId = isset($_GET['proyecto']) ? (int)$_GET['proyecto'] : 1;
 function build_payload_and_version($proyectoId)
 {
     // Prefer the DB used by tests first, then fallback
-    $conexion = @new mysqli('localhost', 'root', '', 'bd_CU12', 3306);
+    $conexion = @new mysqli('localhost', 'root', '', 'bd_codevit', 3306);
     if ($conexion->connect_error) {
-        $conexion = @new mysqli('localhost', 'root', '', 'bd_CU12_1', 3308);
+        $conexion = @new mysqli('localhost', 'root', '', 'bd_CU12', 3308);
         if ($conexion->connect_error) {
             return [null, null];
         }

@@ -13,19 +13,19 @@
  * --------------------------------------------------------------------------
  */
 
-// ============================a
-// Conexión a MariaDB
-// ============================
-$conexion = new mysqli("localhost", "root", "", "bd", 3306);
+//require_once __DIR__ . '/../lib/ControlAcceso.Class.php';
+// Todos los roles con el permiso del dashboard pueden acceder
+//ControlAcceso::requierePermiso(PermisosSistema::DASHBOARD);
+//conexión a la base de datos para probar
+$conexion = new mysqli("localhost", "root", "", "bd_codevit", 3306);
 // Si algo falla aquí, no hay dashboard: aborta con un mensaje explícito.
 if ($conexion->connect_error) {
   die("Error al conectar: " . $conexion->connect_error);
 }
-//include __DIR__ . '/../gui/footer.php'; // desde /app a /gui
+// Conexión centralizada
+//$conexion = BDConexion::getConexion();
 
-// ============================
-// Proyecto (puedes pasar ?proyecto=ID)
-// ============================
+//OBTENER EL ID DEL PROYECTO POR 
 $idProyecto = isset($_GET['proyecto']) ? (int)$_GET['proyecto'] : 1;
 
 $sqlProyecto = "SELECT nombre, estado FROM proyecto WHERE id_proyecto = $idProyecto";
@@ -197,7 +197,7 @@ if (count($DATA) === 0) {
 }
 
 
-$conexion->close();
+// $conexion es singleton; no cerramos aquí para reuso.
 ?>
 
 
@@ -218,6 +218,7 @@ $conexion->close();
   <!-- Carga única y segura de ECharts -->
   <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"
     onerror="this.onerror=null;this.src='../lib/echarts.min.js';"></script>
+  <?php /* include __DIR__ . '/../gui/navbar.php'; */ ?>
 
   <style>
     .chart {
@@ -611,6 +612,17 @@ $conexion->close();
       box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
     }
 
+    .btn-outline-secondary {
+      border-color: #dee2e6;
+      color: #495057;
+      background-color: #fff;
+    }
+
+    .btn-outline-secondary:hover {
+      background-color: #f8f9fa;
+      color: #212529;
+    }
+
     .legend-phases .phase-letter {
       display: inline-flex;
       align-items: center;
@@ -627,17 +639,15 @@ $conexion->close();
 </head>
 
 <body>
-  <!-- Navbar -->
-  <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-    <div class="container">
-      <a class="navbar-brand" href="#">
-        <img src="../lib/img/Logo-UNPA-UARG-azul.png" width="30" height="30" class="d-inline-block align-top" alt="">
-        MetricFlow SQA - Dashboard
-      </a>
-    </div>
-  </nav>
+
 
   <div class="container my-4">
+    <!-- Botón Volver a Proyectos -->
+    <div class="mb-3">
+      <a href="proyectos.php" class="btn btn-outline-secondary">
+        <span class="oi oi-arrow-left mr-1"></span> Volver
+      </a>
+    </div>
     <?php
     // ============================
     // Validar existencia de proyecto
@@ -655,7 +665,11 @@ $conexion->close();
           </p>
         </div>
       </div>';
-      echo '</div>   <footer class="footer">UARGFlow BS <span class="oi oi-globe"></span> UNPA-UARG</footer>
+      echo '</div>        <footer class="footer">
+            MetricFlow-SQA
+            <span class="oi oi-globe"></span> 
+            CoDevIt
+        </footer>
 '; // cerrar container
 
       exit; //  corta la ejecución del resto del dashboard
@@ -756,7 +770,7 @@ $conexion->close();
     </div>
   </div>
 
-  <footer class="footer">UARGFlow BS <span class="oi oi-globe"></span> UNPA-UARG</footer>
+  <footer class="footer">MetricFlow-SQA <span class="oi oi-globe"></span> UNPA-UARG</footer>
 
   <script>
     // ========= Datos del backend =========
@@ -786,7 +800,7 @@ $conexion->close();
         if (!state) return;
         localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
       } catch (_) {
-        /* noop */ }
+      }
     }
 
     // ========= Utilidades =========
@@ -1472,7 +1486,7 @@ $conexion->close();
           const opt = inst ? inst.getOption() : null;
           legendSelected = opt && opt.legend && opt.legend[0] ? (opt.legend[0].selected || null) : null;
         } catch (_) {
-          /* noop */ }
+        }
         const state = {
           phases: selPhases,
           hist: histSel,
@@ -1521,7 +1535,7 @@ $conexion->close();
                   renderIteracionChart(chosen, 'bars-anterior', 'legend-metricas-anterior');
                 }
               } catch (_) {
-                /* noop */ }
+              }
             }
           }
         }
@@ -1536,10 +1550,10 @@ $conexion->close();
               lazyUpdate: true
             });
           } catch (_) {
-            /* noop */ }
+          }
         }
       } catch (_) {
-        /* noop */ }
+      }
     }
     async function fetchDashboardData() {
       const url = `api/dashboard_data.php?proyecto=${encodeURIComponent(ID_PROYECTO)}&_=${Date.now()}`;
@@ -1586,7 +1600,7 @@ $conexion->close();
           }
         }
       } catch (_) {
-        /* noop */ }
+      }
 
       try {
         const t = document.getElementById('trendChart');
@@ -1626,12 +1640,15 @@ $conexion->close();
 
       // Primera sincronización: asegura paridad con BD tras la carga inicial
       const first = await fetchDashboardData();
-      if (first && first.version) {
+      if (first && first.version && first.version !== __dashVersion) {
+        // Solo re-renderizamos si la versión es distinta para evitar flicker
         renderWithPayload(first);
       }
 
       // Polling periódico
       setInterval(async () => {
+        // Evita trabajo innecesario y flicker si la pestaña no está visible
+        if (document.hidden) return;
         const payload = await fetchDashboardData();
         if (!payload || !payload.version) return;
         if (__dashVersion && payload.version === __dashVersion) return; // sin cambios
@@ -1697,6 +1714,10 @@ $conexion->close();
           gotFirstUpdate = true;
           lastUpdateAt = Date.now();
           clearTimeout(startupTimer);
+        });
+        // Mantener vivo el watchdog con eventos 'ping' del servidor
+        es.addEventListener('ping', () => {
+          lastUpdateAt = Date.now();
         });
         es.onmessage = (e) => { // fallback default event
           try {
