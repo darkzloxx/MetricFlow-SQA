@@ -23,6 +23,14 @@ if ($conexion->connect_error) {
 $sqlProyecto = "SELECT nombre, estado FROM proyecto WHERE id_proyecto = $proyectoId";
 $resProyecto = $conexion->query($sqlProyecto);
 $proyectoExiste = ($resProyecto && $resProyecto->num_rows > 0);
+$proyectoInfo = null;
+if ($proyectoExiste) {
+  $rowProyecto = $resProyecto->fetch_assoc();
+  $proyectoInfo = [
+    'nombre' => $rowProyecto['nombre'],
+    'estado' => $rowProyecto['estado']
+  ];
+}
 
 // Totales
 $sqlMetricas = "SELECT COUNT(DISTINCT mi.id_metrica) AS total
@@ -91,13 +99,17 @@ if ($result) {
     $plan = (float)($r['planificado'] ?? 0);
     $ejec = (float)($r['ejecutado'] ?? 0);
     if ($plan == 0 && $ejec == 0) {
-      $pct = 100; $nota = 'Se cumplió';
+      $pct = 100;
+      $nota = 'Se cumplió';
     } elseif ($plan == 0 && $ejec > 0) {
-      $pct = 100; $nota = 'Se planificó 0 (' . $ejec . ')';
+      $pct = 100;
+      $nota = 'Se planificó 0 (' . $ejec . ')';
     } elseif ($ejec > $plan) {
-      $pct = round(($ejec / $plan) * 100); $nota = 'Supera planificado (+' . ($ejec - $plan) . ')';
+      $pct = round(($ejec / $plan) * 100);
+      $nota = 'Supera planificado (+' . ($ejec - $plan) . ')';
     } else {
-      $pct = round(($ejec / $plan) * 100); $nota = '';
+      $pct = round(($ejec / $plan) * 100);
+      $nota = '';
     }
 
     $iterMap[$key]['metricas'][] = [
@@ -123,12 +135,19 @@ $anteriorIter = null;
 if (count($DATA) > 0) {
   $actualIndex = null;
   foreach ($DATA as $idx => $it) {
-    if ($it['inicio'] <= $hoy && $it['fin'] >= $hoy) { $actualIndex = $idx; break; }
+    if ($it['inicio'] <= $hoy && $it['fin'] >= $hoy) {
+      $actualIndex = $idx;
+      break;
+    }
   }
-  if ($actualIndex !== null) { $actualIter = $DATA[$actualIndex]; }
+  if ($actualIndex !== null) {
+    $actualIter = $DATA[$actualIndex];
+  }
   $fechaReferencia = $actualIter ? $actualIter['inicio'] : $hoy;
   $anteriores = array_filter($DATA, fn($it) => $it['fin'] < $fechaReferencia);
-  if (count($anteriores) > 0) { $anteriorIter = end($anteriores); }
+  if (count($anteriores) > 0) {
+    $anteriorIter = end($anteriores);
+  }
 }
 
 $conexion->close();
@@ -141,6 +160,7 @@ $payload = [
   'hayIteraciones' => $hayIteraciones,
   'totalMetricas' => $totalMetricas,
   'totalIteraciones' => $totalIteraciones,
+  'proyecto' => $proyectoInfo,
 ];
 $version = md5(json_encode($payload));
 
@@ -151,8 +171,8 @@ echo json_encode([
   'hayIteraciones' => $hayIteraciones,
   'totalMetricas' => $totalMetricas,
   'totalIteraciones' => $totalIteraciones,
+  'proyecto' => $proyectoInfo,
   'version' => $version,
   'serverTime' => date('c')
 ], JSON_UNESCAPED_UNICODE | JSON_NUMERIC_CHECK);
 exit;
-?>

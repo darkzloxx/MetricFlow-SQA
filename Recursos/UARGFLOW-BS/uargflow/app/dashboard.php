@@ -26,7 +26,7 @@ if ($conexion->connect_error) {
 // ============================
 // Proyecto (puedes pasar ?proyecto=ID)
 // ============================
-$idProyecto = isset($_GET['proyecto']) ? (int)$_GET['proyecto'] : 1;
+$idProyecto = isset($_GET['proyecto']) ? (int)$_GET['proyecto'] : 5;
 
 $sqlProyecto = "SELECT nombre, estado FROM proyecto WHERE id_proyecto = $idProyecto";
 $resProyecto = $conexion->query($sqlProyecto);
@@ -690,9 +690,9 @@ $conexion->close();
             <div class="stat-icon icon-bg-primary"><span class="oi oi-briefcase"></span></div>
             <div class="stat-content">
               <span class="stat-label">Proyecto</span>
-              <div class="stat-value"><?= htmlspecialchars($nombreProyecto) ?></div>
+              <div id="projectName" class="stat-value"><?= htmlspecialchars($nombreProyecto) ?></div>
               <span class="status-line">Estado:
-                <span class="badge badge-pill <?= $estadoClass ?>"><?= htmlspecialchars($estadoProyecto) ?></span>
+                <span id="projectStatusBadge" class="badge badge-pill <?= $estadoClass ?>"><?= htmlspecialchars($estadoProyecto) ?></span>
               </span>
             </div>
           </div>
@@ -771,17 +771,22 @@ $conexion->close();
 
     // ===== Persistencia de estado en localStorage (sobrevive recargas) =====
     const STORAGE_KEY = (id => `uargflow:dashboard:v1:proyecto:${id}`)(ID_PROYECTO);
+
     function loadStateFromStorage() {
       try {
         const raw = localStorage.getItem(STORAGE_KEY);
         return raw ? JSON.parse(raw) : null;
-      } catch (_) { return null; }
+      } catch (_) {
+        return null;
+      }
     }
+
     function saveStateToStorage(state) {
       try {
         if (!state) return;
         localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-      } catch (_) { /* noop */ }
+      } catch (_) {
+        /* noop */ }
     }
 
     // ========= Utilidades =========
@@ -798,6 +803,24 @@ $conexion->close();
       if (valorPct >= 100) return "#28a745"; // Verde
       if (valorPct >= minPct) return "#ffc107"; // Amarillo
       return "#dc3545"; // Rojo
+    }
+
+    // Mapea el estado del proyecto a la clase de Bootstrap usada en el badge
+    function estadoToBadgeClass(estado) {
+      if (!estado) return 'badge-secondary';
+      const key = String(estado).trim().toUpperCase().replace(/\s+/g, '_');
+      switch (key) {
+        case 'REGISTRADO':
+          return 'badge-secondary';
+        case 'EN_PROGRESO':
+          return 'badge-primary';
+        case 'FINALIZADO':
+          return 'badge-success';
+        case 'CANCELADO':
+          return 'badge-danger';
+        default:
+          return 'badge-secondary';
+      }
     }
 
     function pctTiempoIter(inicio, fin) {
@@ -1442,19 +1465,31 @@ $conexion->close();
           .filter(Boolean);
         const histSel = (document.getElementById('hist-select') || {}).value || null;
         const histIdx = histSel !== null && histSel !== '' ? parseInt(histSel, 10) : null;
-        const histKey = Number.isInteger(histIdx) && Array.isArray(DATA) && DATA[histIdx]
-          ? (DATA[histIdx].iteracion || null)
-          : null;
+        const histKey = Number.isInteger(histIdx) && Array.isArray(DATA) && DATA[histIdx] ?
+          (DATA[histIdx].iteracion || null) :
+          null;
         let legendSelected = null;
         try {
           const inst = echarts.getInstanceByDom(document.getElementById('trendChart'));
           const opt = inst ? inst.getOption() : null;
           legendSelected = opt && opt.legend && opt.legend[0] ? (opt.legend[0].selected || null) : null;
-        } catch (_) { /* noop */ }
-        const state = { phases: selPhases, hist: histSel, histKey, legend: legendSelected };
+        } catch (_) {
+          /* noop */ }
+        const state = {
+          phases: selPhases,
+          hist: histSel,
+          histKey,
+          legend: legendSelected
+        };
         saveStateToStorage(state);
         return state;
-      } catch (e) { return { phases: null, hist: null, legend: null }; }
+      } catch (e) {
+        return {
+          phases: null,
+          hist: null,
+          legend: null
+        };
+      }
     }
 
     function applyUiState(saved) {
@@ -1475,7 +1510,9 @@ $conexion->close();
             if (idx !== null) {
               sel.value = String(idx);
               // Disparar evento y, además, forzar render por si el listener aún no está ligado
-              sel.dispatchEvent(new Event('change', { bubbles: true }));
+              sel.dispatchEvent(new Event('change', {
+                bubbles: true
+              }));
               try {
                 const chosen = DATA[idx];
                 if (chosen) {
@@ -1485,22 +1522,33 @@ $conexion->close();
                   if (d) d.textContent = `Del ${chosen.inicio} al ${chosen.fin}`;
                   renderIteracionChart(chosen, 'bars-anterior', 'legend-metricas-anterior');
                 }
-              } catch (_) { /* noop */ }
+              } catch (_) {
+                /* noop */ }
             }
           }
         }
         if (saved && saved.legend) {
           try {
             const inst = echarts.getInstanceByDom(document.getElementById('trendChart'));
-            if (inst) inst.setOption({ legend: [{ selected: saved.legend }] }, { lazyUpdate: true });
-          } catch (_) { /* noop */ }
+            if (inst) inst.setOption({
+              legend: [{
+                selected: saved.legend
+              }]
+            }, {
+              lazyUpdate: true
+            });
+          } catch (_) {
+            /* noop */ }
         }
-      } catch (_) { /* noop */ }
+      } catch (_) {
+        /* noop */ }
     }
     async function fetchDashboardData() {
       const url = `api/dashboard_data.php?proyecto=${encodeURIComponent(ID_PROYECTO)}&_=${Date.now()}`;
       try {
-        const res = await fetch(url, { cache: 'no-store' });
+        const res = await fetch(url, {
+          cache: 'no-store'
+        });
         if (!res.ok) return null;
         return await res.json();
       } catch (e) {
@@ -1526,13 +1574,41 @@ $conexion->close();
         if (tm && typeof payload.totalMetricas !== 'undefined') tm.textContent = String(payload.totalMetricas);
         const ti = document.getElementById('totalIteracionesValue');
         if (ti && typeof payload.totalIteraciones !== 'undefined') ti.textContent = String(payload.totalIteraciones);
-      } catch (_) { /* noop */ }
+        // Proyecto: nombre y estado
+        if (payload.proyecto) {
+          const pName = document.getElementById('projectName');
+          if (pName && typeof payload.proyecto.nombre !== 'undefined') {
+            pName.textContent = String(payload.proyecto.nombre);
+          }
+          const pBadge = document.getElementById('projectStatusBadge');
+          if (pBadge && typeof payload.proyecto.estado !== 'undefined') {
+            // limpiar clases previas badge-*
+            pBadge.className = `badge badge-pill ${estadoToBadgeClass(payload.proyecto.estado)}`;
+            pBadge.textContent = String(payload.proyecto.estado);
+          }
+        }
+      } catch (_) {
+        /* noop */ }
 
-      try { const t = document.getElementById('trendChart'); const inst = t && echarts.getInstanceByDom(t); if (inst) inst.dispose(); } catch (_) {}
-      try { const a = document.getElementById('bars-actual'); const ia = a && echarts.getInstanceByDom(a); if (ia) ia.dispose(); } catch (_) {}
-      try { const b = document.getElementById('bars-anterior'); const ib = b && echarts.getInstanceByDom(b); if (ib) ib.dispose(); } catch (_) {}
-      const row = document.getElementById('barsRow'); if (row) row.innerHTML = '';
-      const phaseLegend = document.getElementById('phaseLegend'); if (phaseLegend) phaseLegend.innerHTML = '';
+      try {
+        const t = document.getElementById('trendChart');
+        const inst = t && echarts.getInstanceByDom(t);
+        if (inst) inst.dispose();
+      } catch (_) {}
+      try {
+        const a = document.getElementById('bars-actual');
+        const ia = a && echarts.getInstanceByDom(a);
+        if (ia) ia.dispose();
+      } catch (_) {}
+      try {
+        const b = document.getElementById('bars-anterior');
+        const ib = b && echarts.getInstanceByDom(b);
+        if (ib) ib.dispose();
+      } catch (_) {}
+      const row = document.getElementById('barsRow');
+      if (row) row.innerHTML = '';
+      const phaseLegend = document.getElementById('phaseLegend');
+      if (phaseLegend) phaseLegend.innerHTML = '';
       initDashboard();
       applyUiState(saved);
     }
@@ -1552,7 +1628,9 @@ $conexion->close();
 
       // Primera sincronización: asegura paridad con BD tras la carga inicial
       const first = await fetchDashboardData();
-      if (first && first.version) { renderWithPayload(first); }
+      if (first && first.version) {
+        renderWithPayload(first);
+      }
 
       // Polling periódico
       setInterval(async () => {
@@ -1571,7 +1649,9 @@ $conexion->close();
       if (window.__LIVE_SSE) return true;
       try {
         const url = `api/dashboard_sse.php?proyecto=${encodeURIComponent(ID_PROYECTO)}`;
-        const es = new EventSource(url, { withCredentials: false });
+        const es = new EventSource(url, {
+          withCredentials: false
+        });
         window.__LIVE_SSE = es;
         let gotFirstUpdate = false;
         let lastUpdateAt = Date.now();
@@ -1580,7 +1660,9 @@ $conexion->close();
         // Startup watchdog: if no update within 7s, fallback to polling
         const startupTimer = setTimeout(() => {
           if (!gotFirstUpdate && !closed) {
-            try { es.close(); } catch (_) {}
+            try {
+              es.close();
+            } catch (_) {}
             window.__LIVE_SSE = null;
             closed = true;
             startLiveUpdates(5000);
@@ -1589,9 +1671,14 @@ $conexion->close();
 
         // Health watchdog: if no updates for 75s, fallback to polling
         const healthTimer = setInterval(() => {
-          if (closed) { clearInterval(healthTimer); return; }
+          if (closed) {
+            clearInterval(healthTimer);
+            return;
+          }
           if (Date.now() - lastUpdateAt > 75000) {
-            try { es.close(); } catch (_) {}
+            try {
+              es.close();
+            } catch (_) {}
             window.__LIVE_SSE = null;
             closed = true;
             clearInterval(healthTimer);
@@ -1606,13 +1693,17 @@ $conexion->close();
         };
 
         es.addEventListener('update', (e) => {
-          try { handlePayload(JSON.parse(e.data)); } catch (_) {}
+          try {
+            handlePayload(JSON.parse(e.data));
+          } catch (_) {}
           gotFirstUpdate = true;
           lastUpdateAt = Date.now();
           clearTimeout(startupTimer);
         });
         es.onmessage = (e) => { // fallback default event
-          try { handlePayload(JSON.parse(e.data)); } catch (_) {}
+          try {
+            handlePayload(JSON.parse(e.data));
+          } catch (_) {}
           gotFirstUpdate = true;
           lastUpdateAt = Date.now();
           clearTimeout(startupTimer);
@@ -1621,12 +1712,16 @@ $conexion->close();
           // mark as connected; we still wait for first update
         });
         es.addEventListener('error', () => {
-          try { es.close(); } catch (_) {}
+          try {
+            es.close();
+          } catch (_) {}
           window.__LIVE_SSE = null;
           closed = true;
           clearTimeout(startupTimer);
           // Fallback a polling tras un breve retardo
-          setTimeout(() => { startLiveUpdates(5000); }, 1500);
+          setTimeout(() => {
+            startLiveUpdates(5000);
+          }, 1500);
         });
         return true;
       } catch (e) {
@@ -1693,9 +1788,9 @@ $conexion->close();
           // Estado de selección de fases (restaura si hay guardado)
           const allPhases = Array.from(letterToPhase.values());
           const storageState = loadStateFromStorage();
-          const savedSel = (Array.isArray(window.__PHASE_RESTORE) && window.__PHASE_RESTORE.length)
-            ? window.__PHASE_RESTORE
-            : (storageState && Array.isArray(storageState.phases) ? storageState.phases : null);
+          const savedSel = (Array.isArray(window.__PHASE_RESTORE) && window.__PHASE_RESTORE.length) ?
+            window.__PHASE_RESTORE :
+            (storageState && Array.isArray(storageState.phases) ? storageState.phases : null);
           const selectedPhases = new Set(savedSel ? allPhases.filter(p => savedSel.includes(p)) : allPhases);
 
           // Render de los botones de fase (chips)
@@ -2207,7 +2302,9 @@ $conexion->close();
             const filtered = filterDataByPhase(Array.isArray(DATA) ? DATA : []);
             rebuildTrendChart(filtered);
             window.__PHASE_RESTORE = Array.from(selectedPhases);
-            saveStateToStorage(Object.assign(loadStateFromStorage() || {}, { phases: window.__PHASE_RESTORE }));
+            saveStateToStorage(Object.assign(loadStateFromStorage() || {}, {
+              phases: window.__PHASE_RESTORE
+            }));
             // Al cambiar de fase, intentamos traer datos frescos del servidor
             refreshFromServer();
           });
@@ -2236,7 +2333,7 @@ $conexion->close();
       // Crear chart + responsive ancho por cantidad de iteraciones
       const oldTrend = echarts.getInstanceByDom(trendChartDom);
       if (oldTrend) oldTrend.dispose();
-  const trendChart = echarts.init(trendChartDom);
+      const trendChart = echarts.init(trendChartDom);
 
       function resizeTrend() {
         if (trendStage) {
@@ -2256,7 +2353,13 @@ $conexion->close();
             const keys = (opt && opt.legend && opt.legend[0] && opt.legend[0].data) ? opt.legend[0].data : [];
             const rows = adjustTrendHeightForLegend(instance, trendChartDom, keys);
             const dynamicBottom = Math.max(90, 70 + (rows * 26));
-            instance.setOption({ grid: { bottom: dynamicBottom } }, { lazyUpdate: true });
+            instance.setOption({
+              grid: {
+                bottom: dynamicBottom
+              }
+            }, {
+              lazyUpdate: true
+            });
           } else {
             trendChart.resize();
           }
@@ -2275,7 +2378,7 @@ $conexion->close();
         trendChart.clear();
         trendChartDom.innerHTML = '<div class="text-muted">No hay datos para mostrar.</div>';
       } else {
-  const legendType = "plain";
+        const legendType = "plain";
 
         const allTrendValues = DATA.flatMap(it => (it.metricas || []).map(m => Number(m.executed) || 0));
         const realMaxValue = allTrendValues.length ? Math.max(...allTrendValues) : 0;
@@ -2462,11 +2565,11 @@ $conexion->close();
           z: 99
         };
 
-  // Ajustar altura para que la leyenda no se superponga (calcula filas estimadas)
-  const legendRows = adjustTrendHeightForLegend(trendChart, trendChartDom, METRIC_KEYS);
-  const dynamicBottom = Math.max(90, 70 + (legendRows * 26));
+        // Ajustar altura para que la leyenda no se superponga (calcula filas estimadas)
+        const legendRows = adjustTrendHeightForLegend(trendChart, trendChartDom, METRIC_KEYS);
+        const dynamicBottom = Math.max(90, 70 + (legendRows * 26));
 
-  trendChart.setOption({
+        trendChart.setOption({
           backgroundColor: "#fff",
           tooltip: {
             trigger: "axis",
@@ -2523,7 +2626,10 @@ $conexion->close();
             itemHeight: 10,
             itemGap: 18,
             selectorPosition: "start",
-            textStyle: { fontSize: 12.5, color: "#444" },
+            textStyle: {
+              fontSize: 12.5,
+              color: "#444"
+            },
             animation: false
           },
           grid: {
@@ -3022,25 +3128,25 @@ $conexion->close();
       }
     }
 
-  document.addEventListener("DOMContentLoaded", function(){
-    const st = loadStateFromStorage();
-    if (st && Array.isArray(st.phases)) window.__PHASE_RESTORE = st.phases;
-    initDashboard();
-    // Restaurar UI (hist y leyenda) post-render
-    applyUiState(st);
-  });
-  document.addEventListener('DOMContentLoaded', function() {
-    // Intentar SSE primero; si falla, usar polling
-    const ok = startLiveUpdatesSSE();
-    if (!ok) startLiveUpdates(3000);
-  });
-  // Refrescar cuando la pestaña vuelve a estar visible o la ventana gana foco
-  document.addEventListener('visibilitychange', function() {
-    if (!document.hidden) refreshFromServer();
-  });
-  window.addEventListener('focus', function(){
-    refreshFromServer();
-  });
+    document.addEventListener("DOMContentLoaded", function() {
+      const st = loadStateFromStorage();
+      if (st && Array.isArray(st.phases)) window.__PHASE_RESTORE = st.phases;
+      initDashboard();
+      // Restaurar UI (hist y leyenda) post-render
+      applyUiState(st);
+    });
+    document.addEventListener('DOMContentLoaded', function() {
+      // Intentar SSE primero; si falla, usar polling
+      const ok = startLiveUpdatesSSE();
+      if (!ok) startLiveUpdates(3000);
+    });
+    // Refrescar cuando la pestaña vuelve a estar visible o la ventana gana foco
+    document.addEventListener('visibilitychange', function() {
+      if (!document.hidden) refreshFromServer();
+    });
+    window.addEventListener('focus', function() {
+      refreshFromServer();
+    });
     document.addEventListener("DOMContentLoaded", function() {
       const toggleBtn = document.getElementById("toggleLegendBtn");
       const toggleIcon = toggleBtn.querySelector("i");
