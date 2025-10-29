@@ -6,7 +6,20 @@
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 
-$proyectoId = isset($_GET['proyecto']) ? (int)$_GET['proyecto'] : 1;
+// Seguridad: requiere usuario autenticado con rol en el proyecto solicitado
+require_once __DIR__ . '/../../lib/ControlAcceso.Class.php';
+$proyectoId = isset($_GET['proyecto']) ? (int)$_GET['proyecto'] : 0;
+$usr = ControlAcceso::usuarioActual();
+if (!$usr) {
+  http_response_code(401);
+  echo json_encode(['error' => 'No autenticado']);
+  exit;
+}
+if ($proyectoId <= 0 || !ControlAcceso::usuarioPerteneceAProyecto($proyectoId)) {
+  http_response_code(403);
+  echo json_encode(['error' => 'Acceso denegado al proyecto']);
+  exit;
+}
 
 // Prefer local dev DB used by tests, then fallback to alternate
 $conexion = @new mysqli('localhost', 'root', '', 'bd_codevit', 3306);

@@ -12,6 +12,7 @@ class PermisosSistema {
     public const DASHBOARD = 'Visualización de Dashboard Inicial';
     public const ABM_USUARIOS = 'ABM Usuarios';
     public const ABM_PROYECTOS = 'ABM Proyectos';
+    public const GESTION_MODELO_CALIDAD = 'Gestión de Modelo de Calidad';
     // Alias de compatibilidad con código antiguo
     public const PERMISO_USUARIOS = self::ABM_USUARIOS;
     public const PERMISO_PERMISOS = 'ABM Permisos';
@@ -174,6 +175,70 @@ class ControlAcceso {
     public static function verificaLogin(): void {
         if (!isset($_SESSION['usuario']) || !($_SESSION['usuario'] instanceof UsuarioSesion)) {
             header('Location: ' . Constantes::HOMEURL);
+            exit;
+        }
+    }
+
+    /**
+     * Retorna el usuario de sesión o null si no hay login válido
+     */
+    public static function usuarioActual(): ?UsuarioSesion {
+        return (isset($_SESSION['usuario']) && ($_SESSION['usuario'] instanceof UsuarioSesion))
+            ? $_SESSION['usuario']
+            : null;
+    }
+
+    /**
+     * Lista los IDs de proyectos asignados al usuario actual (usuario_proyecto)
+     * @return int[]
+     */
+    public static function proyectosAsignadosDelUsuario(): array {
+        $usr = self::usuarioActual();
+        if (!$usr) { return []; }
+        $cn = BDConexion::getConexion();
+        $sql = 'SELECT id_proyecto FROM usuario_proyecto WHERE id_usuario = ?';
+        $stmt = $cn->prepare($sql);
+        $stmt->bind_param('i', $usr->id);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        $ids = [];
+        while ($row = $res->fetch_assoc()) {
+            $ids[] = (int)$row['id_proyecto'];
+        }
+        $stmt->close();
+        return $ids;
+    }
+
+    /**
+     * Verifica si el usuario actual tiene un rol en el proyecto indicado
+     */
+    public static function usuarioPerteneceAProyecto(int $idProyecto): bool {
+        $usr = self::usuarioActual();
+        if (!$usr || $idProyecto <= 0) { return false; }
+        $cn = BDConexion::getConexion();
+        $sql = 'SELECT 1 FROM usuario_proyecto WHERE id_usuario = ? AND id_proyecto = ? LIMIT 1';
+        $stmt = $cn->prepare($sql);
+        $stmt->bind_param('ii', $usr->id, $idProyecto);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        $ok = (bool)$res->fetch_row();
+        $stmt->close();
+        return $ok;
+    }
+
+    /**
+     * Requiere que el usuario esté autenticado y pertenezca al proyecto
+     * Si no cumple, redirige a HOMEAUTH o devuelve 403 según $emitir403.
+     */
+    public static function requiereProyecto(int $idProyecto, bool $emitir403 = false): void {
+        self::verificaLogin();
+        if (!self::usuarioPerteneceAProyecto($idProyecto)) {
+            if ($emitir403) {
+                http_response_code(403);
+                echo 'Acceso denegado al proyecto';
+                exit;
+            }
+            header('Location: ' . Constantes::HOMEAUTH);
             exit;
         }
     }

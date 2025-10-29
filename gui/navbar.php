@@ -17,12 +17,14 @@ if (!class_exists('ControlAcceso')) { require_once __DIR__ . '/../lib/ControlAcc
     <div class="collapse navbar-collapse" id="navbarSupportedContent">
         <ul class="navbar-nav mr-auto">
 
-            <li class="nav-item">
-                <a class="nav-link" href="../app/usuarios.php">
-                    <span class="oi oi-person" />
-                    Alumnos
-                </a>
-            </li>
+            <?php if (ControlAcceso::verificaPermiso(PermisosSistema::ABM_USUARIOS)) { ?>
+                <li class="nav-item">
+                    <a class="nav-link" href="../app/usuarios.php">
+                        <span class="oi oi-people" />
+                        Alumnos
+                    </a>
+                </li>
+            <?php } ?>
             <?php /* Bloque de Roles (deshabilitado)
             if (ControlAcceso::verificaPermiso(PermisosSistema::ABM_USUARIOS)) { ?>
                 <li class = "nav-item">
@@ -32,20 +34,27 @@ if (!class_exists('ControlAcceso')) { require_once __DIR__ . '/../lib/ControlAcc
                     </a>
                 </li>
             <?php } */ ?>
-            <?php if (ControlAcceso::verificaPermiso(PermisosSistema::ABM_PROYECTOS)) { ?>
+            <?php 
+                $mostrarProyectos = ControlAcceso::verificaPermiso(PermisosSistema::ABM_PROYECTOS);
+                if (!$mostrarProyectos && class_exists('ControlAcceso')) {
+                    try { $mostrarProyectos = !empty(ControlAcceso::proyectosAsignadosDelUsuario()); } catch (Throwable $e) { $mostrarProyectos = false; }
+                }
+                if ($mostrarProyectos) { ?>
                 <li class="nav-item">
                     <a class="nav-link" href="../app/proyectos.php">
-                        <span class="oi oi-lock-locked" />
+                        <span class="oi oi-folder" />
                         Proyectos
                     </a>
                 </li>
+            <?php } ?>
+                <?php if (ControlAcceso::verificaPermiso(PermisosSistema::GESTION_MODELO_CALIDAD)) { ?>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#">
+                            <span class="oi oi-book" /> 
+                            Modelos
+                        </a>
+                    </li>
                 <?php } ?>
-                <li class="nav-item">
-                    <a class="nav-link" href="../app/salir.php">
-                        <span class="oi oi-book" /> 
-                        Modelos
-                    </a>
-                </li>
                 
                 <li class="nav-item">
                     <a class="nav-link" href="../app/salir.php">

@@ -38,10 +38,39 @@ class BDColeccionGenerica extends BDModeloGenerico {
      * 
      */
     function setColeccion($tablaBD_, $nombreClase) {
-        $this->query = "SELECT * FROM {$tablaBD_}";
-        $this->datos = BDConexion::getInstancia()->query($this->query);
-        for ($x = 0; $x < $this->datos->num_rows; $x++) {
-            $this->addElemento($this->datos->fetch_object($nombreClase));
+        // Evitar fetch_object con constructores que requieren ID.
+        // Descubrimos la PK de la tabla y cargamos cada elemento por su ID real.
+        $this->coleccion = [];
+        $tabla = preg_replace('/[^A-Za-z0-9_]/', '', (string)$tablaBD_);
+        $cn = BDConexion::getInstancia();
+        $pk = null;
+        $resPk = $cn->query("SHOW KEYS FROM {$tabla} WHERE Key_name='PRIMARY'");
+        if ($resPk && ($rowPk = $resPk->fetch_assoc())) {
+            $pk = $rowPk['Column_name'] ?? null;
+        }
+        if (!$pk) {
+            $resHasId = $cn->query("SHOW COLUMNS FROM {$tabla} LIKE 'id'");
+            if ($resHasId && $resHasId->num_rows > 0) {
+                $pk = 'id';
+            } else {
+                $resFirst = $cn->query("SHOW COLUMNS FROM {$tabla}");
+                if ($resFirst && ($rowFirst = $resFirst->fetch_assoc())) {
+                    $pk = $rowFirst['Field'];
+                } else {
+                    $pk = 'id';
+                }
+            }
+        }
+
+        $this->query = "SELECT `{$pk}` AS _id FROM {$tabla}";
+        $this->datos = $cn->query($this->query);
+        if ($this->datos) {
+            while ($row = $this->datos->fetch_assoc()) {
+                $id = isset($row['_id']) ? (int)$row['_id'] : null;
+                if ($id !== null) {
+                    $this->addElemento(new $nombreClase($id));
+                }
+            }
         }
     }
     

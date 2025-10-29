@@ -13,7 +13,23 @@ if (function_exists('apache_setenv')) { @apache_setenv('no-gzip', '1'); }
 ini_set('output_buffering', 'off');
 ini_set('zlib.output_compression', '0');
 
-$proyectoId = isset($_GET['proyecto']) ? (int)$_GET['proyecto'] : 1;
+$proyectoId = isset($_GET['proyecto']) ? (int)$_GET['proyecto'] : 0;
+
+require_once __DIR__ . '/../../lib/ControlAcceso.Class.php';
+// Función liviana para enviar evento SSE inmediatamente
+function sse_error($msg, $code = 403) {
+  if (function_exists('http_response_code')) { @http_response_code($code); }
+  echo "event: error\n";
+  echo 'data: ' . json_encode(['error' => $msg], JSON_UNESCAPED_UNICODE) . "\n\n";
+  @ob_flush(); @flush();
+  exit;
+}
+
+$usr = ControlAcceso::usuarioActual();
+if (!$usr) { sse_error('No autenticado', 401); }
+if ($proyectoId <= 0 || !ControlAcceso::usuarioPerteneceAProyecto($proyectoId)) {
+  sse_error('Acceso denegado al proyecto', 403);
+}
 
 function build_payload_and_version($proyectoId) {
   // Prefer the DB used by tests first, then fallback

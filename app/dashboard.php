@@ -13,20 +13,34 @@
  * --------------------------------------------------------------------------
  */
 
-//require_once __DIR__ . '/../lib/ControlAcceso.Class.php';
-// Todos los roles con el permiso del dashboard pueden acceder
-//ControlAcceso::requierePermiso(PermisosSistema::DASHBOARD);
+require_once __DIR__ . '/../lib/ControlAcceso.Class.php';
+// Reglas: debe estar autenticado y tener rol en el proyecto que desea ver
+ControlAcceso::verificaLogin();
 //conexión a la base de datos para probar
-$conexion = new mysqli("localhost", "root", "", "bd_codevit", 3306);
+//$conexion = new mysqli("localhost", "root", "", "bd_codevit", 3306);
 // Si algo falla aquí, no hay dashboard: aborta con un mensaje explícito.
-if ($conexion->connect_error) {
+/*if ($conexion->connect_error) {
   die("Error al conectar: " . $conexion->connect_error);
-}
+}*/
 // Conexión centralizada
 $conexion = BDConexion::getConexion();
 
-//OBTENER EL ID DEL PROYECTO POR 
-$idProyecto = isset($_GET['proyecto']) ? (int)$_GET['proyecto'] : 1;
+// Obtiene id de proyecto por GET; si no viene, redirige al primer proyecto asignado
+$idProyecto = isset($_GET['proyecto']) ? (int)$_GET['proyecto'] : 0;
+if ($idProyecto <= 0) {
+  $asignados = ControlAcceso::proyectosAsignadosDelUsuario();
+  if (!empty($asignados)) {
+    header('Location: ' . '/metricflow-sqa/app/dashboard.php?proyecto=' . (int)$asignados[0]);
+    exit;
+  } else {
+    // No tiene proyectos asignados: vuelve al home autenticado (listado de proyectos)
+    header('Location: ' . Constantes::HOMEAUTH);
+    exit;
+  }
+}
+
+// Verifica pertenencia al proyecto
+ControlAcceso::requiereProyecto($idProyecto);
 
 $sqlProyecto = "SELECT nombre, estado FROM proyecto WHERE id_proyecto = $idProyecto";
 $resProyecto = $conexion->query($sqlProyecto);

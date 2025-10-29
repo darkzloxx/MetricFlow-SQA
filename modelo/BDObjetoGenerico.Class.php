@@ -59,12 +59,59 @@ class BDObjetoGenerico extends BDModeloGenerico {
      * @param String $nombreTabla tabla de la bd
      */
     function __construct($id, $nombreTabla) {
-        
+
         parent::__construct();
-        $this->id = $id ? : $this->id;
-        $this->query = "SELECT * FROM {$nombreTabla} WHERE id = {$this->id}";
-        
-        $this->datos = BDConexion::getInstancia()->query($this->query);
+        $this->id = $id ?: $this->id;
+
+        // Determinar PK y, si corresponde, mapear columnas a los alias esperados
+        $cn = BDConexion::getInstancia();
+        $tabla = preg_replace('/[^A-Za-z0-9_]/', '', (string)$nombreTabla);
+
+        // Descubre la PK de la tabla
+        $pk = null;
+        $resPk = $cn->query("SHOW KEYS FROM {$tabla} WHERE Key_name='PRIMARY'");
+        if ($resPk && ($rowPk = $resPk->fetch_assoc())) {
+            $pk = $rowPk['Column_name'] ?? null;
+        }
+        if (!$pk) {
+            // Fallbacks sensatos
+            $resHasId = $cn->query("SHOW COLUMNS FROM {$tabla} LIKE 'id'");
+            if ($resHasId && $resHasId->num_rows > 0) {
+                $pk = 'id';
+            } else {
+                $resFirst = $cn->query("SHOW COLUMNS FROM {$tabla}");
+                if ($resFirst && ($rowFirst = $resFirst->fetch_assoc())) {
+                    $pk = $rowFirst['Field'];
+                } else {
+                    $pk = 'id';
+                }
+            }
+        }
+
+        // Descubre una columna de nombre amigable para mapear a 'nombre' si no existe
+        $nameCol = 'nombre';
+        $resNombre = $cn->query("SHOW COLUMNS FROM {$tabla} LIKE 'nombre'");
+        if (!($resNombre && $resNombre->num_rows > 0)) {
+            $resNA = $cn->query("SHOW COLUMNS FROM {$tabla} LIKE 'nombre_apellido'");
+            if ($resNA && $resNA->num_rows > 0) {
+                $nameCol = 'nombre_apellido';
+            } else {
+                $nameCol = null; // no alias especial
+            }
+        }
+
+        $select = "SELECT *";
+        if ($pk !== 'id') {
+            $select .= ", {$pk} AS id";
+        }
+        if ($nameCol && $nameCol !== 'nombre') {
+            $select .= ", {$nameCol} AS nombre";
+        }
+
+        $idInt = (int)$this->id;
+        $this->query = "{$select} FROM {$tabla} WHERE {$pk} = {$idInt}";
+
+        $this->datos = $cn->query($this->query);
         if (!$this->datos) {
             throw new Exception('Error en consulta BD: ' . BDConexion::getInstancia()->error, BDConexion::getInstancia()->errno);
         }

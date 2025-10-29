@@ -1,10 +1,31 @@
 <?php
-include_once '../lib/ControlAcceso.class.php';
-ControlAcceso::requierePermiso(PermisosSistema::ABM_PROYECTOS);
-include_once '../modelo/Permiso.php';
+include_once '../lib/ControlAcceso.Class.php';
+ControlAcceso::verificaLogin();
 
 // ID del proyecto recibido por GET
 $idProyecto = isset($_GET['id']) ? (int)$_GET['id'] : 0;
+if ($idProyecto <= 0) {
+    header('Location: ' . Constantes::HOMEAUTH);
+    exit;
+}
+
+// Solo permitir ver si el usuario pertenece al proyecto (cualquier rol)
+ControlAcceso::requiereProyecto($idProyecto);
+
+// Cargar datos del proyecto (descripcion, estado, nombre)
+$cn = BDConexion::getConexion();
+$stmt = $cn->prepare('SELECT p.id_proyecto, p.nombre, p.estado, p.descripcion, p.objetivo FROM proyecto p WHERE p.id_proyecto = ?');
+$stmt->bind_param('i', $idProyecto);
+$stmt->execute();
+$res = $stmt->get_result();
+$Proyecto = $res->fetch_assoc();
+$stmt->close();
+
+if (!$Proyecto) {
+    header('Location: ' . Constantes::HOMEAUTH);
+    exit;
+}
+
 $urlDashboard = 'dashboard.php?proyecto=' . $idProyecto;
 ?>
 
@@ -28,7 +49,27 @@ $urlDashboard = 'dashboard.php?proyecto=' . $idProyecto;
                     <h3>Propiedades del Proyecto</h3>
                 </div>
                 <div class="card-body">
-                    <h5 class="card-text mb-3">Ver tablero del proyecto</h5>
+                    <div class="mb-3">
+                        <h5 class="mb-1">Nombre</h5>
+                        <div><?= htmlspecialchars($Proyecto['nombre'], ENT_QUOTES, 'UTF-8'); ?></div>
+                    </div>
+                    <div class="mb-3">
+                        <h5 class="mb-1">Estado</h5>
+                        <div><?= htmlspecialchars($Proyecto['estado'], ENT_QUOTES, 'UTF-8'); ?></div>
+                    </div>
+                    <div class="mb-3">
+                        <h5 class="mb-1">Descripción</h5>
+                        <div><?= nl2br(htmlspecialchars((string)$Proyecto['descripcion'], ENT_QUOTES, 'UTF-8')); ?></div>
+                    </div>
+                    <?php if (!empty($Proyecto['objetivo'])) { ?>
+                    <div class="mb-4">
+                        <h5 class="mb-1">Objetivo</h5>
+                        <div><?= nl2br(htmlspecialchars((string)$Proyecto['objetivo'], ENT_QUOTES, 'UTF-8')); ?></div>
+                    </div>
+                    <?php } ?>
+
+                    <hr />
+                    <h5 class="card-text mb-3">Dashboard del proyecto</h5>
                     <a class="btn btn-primary" href="<?= $urlDashboard; ?>">
                         <span class="oi oi-graph"></span> Abrir Dashboard
                     </a>
