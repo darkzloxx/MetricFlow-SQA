@@ -11,14 +11,14 @@
     </button>
     <div class="collapse navbar-collapse" id="navbarSupportedContent">
         <ul class="navbar-nav mr-auto">
-
+            <!--
             <li class="nav-item">
                 <a class="nav-link" href="../app/usuarios.php">
-                    <span class="oi oi-person" />
-                    Alumnos
+                    <span class="oi oi-project" />
+                    Dashboard
                 </a>
             </li>
-            <!--
+            
             <?php if (ControlAcceso::verificaPermiso(PermisosSistema::PERMISO_ROLES)) { ?>
                 <li class = "nav-item">
                     <a class = "nav-link" href = "../app/roles.php">
@@ -27,7 +27,7 @@
                     </a>
                 </li>
             <?php } ?>
-            -->
+            
             <?php if (ControlAcceso::verificaPermiso(PermisosSistema::PERMISO_PERMISOS)) { ?>
                 <li class="nav-item">
                     <a class="nav-link" href="../app/proyectos.php">
@@ -35,15 +35,16 @@
                         Proyectos
                     </a>
                 </li>
+                -->
                 <?php } ?>
                 <li class="nav-item">
-                    <a class="nav-link" href="../app/modelos.php">
+                    <a class="nav-link" href="../app/pantalla.alumnos.modelo.php">
                         <span class="oi oi-book" /> 
                         Modelos
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link" href="../app/metricas.php">
+                    <a class="nav-link" href="../app/pantalla.alumnos.metricas.php">
                         <span class="oi oi-signal" /> 
                         Metricas
                     </a>

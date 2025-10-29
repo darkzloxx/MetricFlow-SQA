@@ -17,7 +17,7 @@
 // Todos los roles con el permiso del dashboard pueden acceder
 //ControlAcceso::requierePermiso(PermisosSistema::DASHBOARD);
 //conexión a la base de datos para probar
-$conexion = new mysqli("localhost", "root", "", "bd_codevit", 3306);
+$conexion = new mysqli("localhost", "root", "", "bdusuarios", 3306);
 // Si algo falla aquí, no hay dashboard: aborta con un mensaje explícito.
 if ($conexion->connect_error) {
   die("Error al conectar: " . $conexion->connect_error);
@@ -27,6 +27,7 @@ if ($conexion->connect_error) {
 
 //OBTENER EL ID DEL PROYECTO POR 
 $idProyecto = isset($_GET['proyecto']) ? (int)$_GET['proyecto'] : 1;
+$idProyecto = $_GET["id"];
 
 $sqlProyecto = "SELECT nombre, estado FROM proyecto WHERE id_proyecto = $idProyecto";
 $resProyecto = $conexion->query($sqlProyecto);
@@ -198,6 +199,9 @@ if (count($DATA) === 0) {
 
 
 // $conexion es singleton; no cerramos aquí para reuso.
+include_once '../lib/ControlAcceso.class.php';
+ControlAcceso::requierePermiso(PermisosSistema::PERMISO_PERMISOS);
+include_once '../modelo/Permiso.php';
 ?>
 
 
@@ -639,7 +643,7 @@ if (count($DATA) === 0) {
 </head>
 
 <body>
-
+<?php include_once '../gui/navbar.php'; ?>
 
   <div class="container my-4">
     <!-- Botón Volver a Proyectos -->
