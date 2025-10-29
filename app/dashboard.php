@@ -23,7 +23,7 @@ if ($conexion->connect_error) {
   die("Error al conectar: " . $conexion->connect_error);
 }
 // Conexión centralizada
-//$conexion = BDConexion::getConexion();
+$conexion = BDConexion::getConexion();
 
 //OBTENER EL ID DEL PROYECTO POR 
 $idProyecto = isset($_GET['proyecto']) ? (int)$_GET['proyecto'] : 1;
@@ -173,7 +173,7 @@ if (count($DATA) === 0) {
     $actualIter = $DATA[$actualIndex];
   } else {
     // No hay iteración actual la última registrada pasa a ser la "más reciente anterior"
-    $mensajeActual = 'No hay ninguna iteración activa en la fecha actual.';
+    $mensajeActual = 'No hay ninguna iteración activa en la fecha actual o no tiene métricas asociadas.';
   }
 
   // Buscar anterior (todas con fin < inicio actual o, si no hay actual, todas)
@@ -3135,7 +3135,7 @@ if (count($DATA) === 0) {
     <div class="card-body d-flex flex-column justify-content-center align-items-center text-center">
 <i class="oi oi-calendar mb-2" style="font-size:1.8rem; color:#6c757d;"></i>
       <p class="mb-1" style="font-weight:600; color:#adb5bd;">
-        No hay iteración activa
+        No hay iteración activa o no tiene métricas planificadas
       </p>
       <p class="mb-0" style="font-size:0.9rem; color:#868e96; max-width:420px;">
         ${MSG_ACTUAL || "El proyecto no tiene una iteración planificada para la fecha actual."}
