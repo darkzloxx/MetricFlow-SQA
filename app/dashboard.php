@@ -220,7 +220,7 @@ if (count($DATA) === 0) {
 
 <head>
   <meta charset="utf-8" />
-  <title>php - Dashboard</title>
+  <title><?= htmlspecialchars($nombreProyecto, ENT_QUOTES, 'UTF-8'); ?> - Dashboard</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <link rel="stylesheet" href="../lib/bootstrap-4.1.1-dist/css/bootstrap.css" />
   <link rel="stylesheet" href="../lib/open-iconic-master/font/css/open-iconic-bootstrap.css" />
@@ -232,7 +232,7 @@ if (count($DATA) === 0) {
   <!-- Carga única y segura de ECharts -->
   <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"
     onerror="this.onerror=null;this.src='../lib/echarts.min.js';"></script>
-  <?php /* include __DIR__ . '/../gui/navbar.php'; */ ?>
+  <?php include __DIR__ . '/../gui/navbar.php';  ?>
 
   <style>
     .chart {
@@ -658,10 +658,31 @@ if (count($DATA) === 0) {
   <div class="container my-4">
     <!-- Botón Volver a Proyectos -->
     <div class="mb-3">
-      <a href="proyectos.php" class="btn btn-outline-secondary">
+      <a id="btnVolver" href="proyectos.php" class="btn btn-outline-secondary">
         <span class="oi oi-arrow-left mr-1"></span> Volver
       </a>
     </div>
+    <script>
+      (function() {
+        var btn = document.getElementById('btnVolver');
+        if (!btn) return;
+        btn.addEventListener('click', function(e) {
+          // Intentar volver en el historial del navegador cuando sea seguro
+          e.preventDefault();
+          try {
+            var ref = document.referrer;
+            if (ref && (new URL(ref)).origin === location.origin && history.length > 1) {
+              history.back();
+            } else {
+              // Fallback: navegar a la lista de proyectos
+              location.href = btn.getAttribute('href');
+            }
+          } catch (err) {
+            location.href = btn.getAttribute('href');
+          }
+        });
+      })();
+    </script>
     <?php
     // ============================
     // Validar existencia de proyecto
@@ -813,8 +834,7 @@ if (count($DATA) === 0) {
       try {
         if (!state) return;
         localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-      } catch (_) {
-      }
+      } catch (_) {}
     }
 
     // ========= Utilidades =========
@@ -1499,8 +1519,7 @@ if (count($DATA) === 0) {
           const inst = echarts.getInstanceByDom(document.getElementById('trendChart'));
           const opt = inst ? inst.getOption() : null;
           legendSelected = opt && opt.legend && opt.legend[0] ? (opt.legend[0].selected || null) : null;
-        } catch (_) {
-        }
+        } catch (_) {}
         const state = {
           phases: selPhases,
           hist: histSel,
@@ -1548,8 +1567,7 @@ if (count($DATA) === 0) {
                   if (d) d.textContent = `Del ${chosen.inicio} al ${chosen.fin}`;
                   renderIteracionChart(chosen, 'bars-anterior', 'legend-metricas-anterior');
                 }
-              } catch (_) {
-              }
+              } catch (_) {}
             }
           }
         }
@@ -1563,11 +1581,9 @@ if (count($DATA) === 0) {
             }, {
               lazyUpdate: true
             });
-          } catch (_) {
-          }
+          } catch (_) {}
         }
-      } catch (_) {
-      }
+      } catch (_) {}
     }
     async function fetchDashboardData() {
       const url = `api/dashboard_data.php?proyecto=${encodeURIComponent(ID_PROYECTO)}&_=${Date.now()}`;
@@ -1613,8 +1629,7 @@ if (count($DATA) === 0) {
             pBadge.textContent = String(payload.proyecto.estado);
           }
         }
-      } catch (_) {
-      }
+      } catch (_) {}
 
       try {
         const t = document.getElementById('trendChart');
@@ -3212,6 +3227,12 @@ if (count($DATA) === 0) {
             toggleBtn.classList.add("off");
           }
         });
+      }
+    });
+    // Oculta el botón "Volver" si la pestaña no tiene historial (por ejemplo, se abrió directamente)
+    document.addEventListener('DOMContentLoaded', () => {
+      if (window.history.length <= 1) {
+        document.getElementById('btnVolver').style.display = 'none';
       }
     });
   </script>

@@ -7,7 +7,8 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
 require_once __DIR__ . '/../modelo/BDConexion.Class.php';
 require_once __DIR__ . '/Constantes.Class.php';
 
-class PermisosSistema {
+class PermisosSistema
+{
     // Mapeo de permisos a los nombres de la BD bd_codevit
     public const DASHBOARD = 'Visualización de Dashboard Inicial';
     public const ABM_USUARIOS = 'ABM Usuarios';
@@ -22,18 +23,21 @@ class PermisosSistema {
     public const ROL_ESTANDAR = 'Espectador';
 }
 
-class PermisoSesion {
+class PermisoSesion
+{
     public $id;
     public $nombre;
 }
 
-class RolSesion {
+class RolSesion
+{
     public $id;
     public $nombre;
     /** @var PermisoSesion[] */
     public $permisos = [];
 
-    public function cargarPermisos(): void {
+    public function cargarPermisos(): void
+    {
         $cn = BDConexion::getConexion();
         $sql = "SELECT p.id, p.nombre FROM permiso p JOIN rol_permiso rp ON p.id = rp.id_permiso WHERE rp.id_rol = ?";
         $stmt = $cn->prepare($sql);
@@ -51,14 +55,19 @@ class RolSesion {
     }
 }
 
-class UsuarioSesion {
+class UsuarioSesion
+{
     public $id; // id_usuario
     public $email;
     public $nombre; // nombre_apellido
     /** @var RolSesion[] */
     public $roles = [];
+    
+    /** @var object[] lista de proyectos con sus roles asociados */
+    public $proyectos = [];
 
-    public function __construct(string $email_, ?string $nombre_ = null) {
+    public function __construct(string $email_, ?string $nombre_ = null)
+    {
         $this->email = $email_;
         $this->nombre = $nombre_ ?? '';
 
@@ -70,7 +79,8 @@ class UsuarioSesion {
         $this->cargarRoles();
     }
 
-    private function buscarUsuarioBd(): bool {
+    private function buscarUsuarioBd(): bool
+    {
         $cn = BDConexion::getConexion();
         $sql = "SELECT id_usuario, nombre_apellido, email FROM usuario WHERE email = ? LIMIT 1";
         $stmt = $cn->prepare($sql);
@@ -87,7 +97,8 @@ class UsuarioSesion {
         return false;
     }
 
-    private function registrarUsuario(): void {
+    private function registrarUsuario(): void
+    {
         $cn = BDConexion::getConexion();
         $cn->begin_transaction();
         try {
@@ -125,7 +136,8 @@ class UsuarioSesion {
         }
     }
 
-    private function cargarRoles(): void {
+    private function cargarRoles(): void
+    {
         $cn = BDConexion::getConexion();
         $sql = "SELECT r.id, r.nombre FROM usuario_rol ur JOIN rol r ON r.id = ur.id_rol WHERE ur.id_usuario = ?";
         $stmt = $cn->prepare($sql);
@@ -144,8 +156,10 @@ class UsuarioSesion {
     }
 }
 
-class ControlAcceso {
-    public static function requierePermiso(string $permisoNombre): void {
+class ControlAcceso
+{
+    public static function requierePermiso(string $permisoNombre): void
+    {
         if (!isset($_SESSION['usuario']) || !($_SESSION['usuario'] instanceof UsuarioSesion)) {
             header('Location: ' . Constantes::HOMEURL);
             exit;
@@ -157,7 +171,8 @@ class ControlAcceso {
         }
     }
 
-    public static function verificaPermiso(string $permisoNombre): bool {
+    public static function verificaPermiso(string $permisoNombre): bool
+    {
         if (!isset($_SESSION['usuario']) || !($_SESSION['usuario'] instanceof UsuarioSesion)) {
             return false;
         }
@@ -172,7 +187,8 @@ class ControlAcceso {
         return false;
     }
 
-    public static function verificaLogin(): void {
+    public static function verificaLogin(): void
+    {
         if (!isset($_SESSION['usuario']) || !($_SESSION['usuario'] instanceof UsuarioSesion)) {
             header('Location: ' . Constantes::HOMEURL);
             exit;
@@ -182,7 +198,8 @@ class ControlAcceso {
     /**
      * Retorna el usuario de sesión o null si no hay login válido
      */
-    public static function usuarioActual(): ?UsuarioSesion {
+    public static function usuarioActual(): ?UsuarioSesion
+    {
         return (isset($_SESSION['usuario']) && ($_SESSION['usuario'] instanceof UsuarioSesion))
             ? $_SESSION['usuario']
             : null;
@@ -192,9 +209,12 @@ class ControlAcceso {
      * Lista los IDs de proyectos asignados al usuario actual (usuario_proyecto)
      * @return int[]
      */
-    public static function proyectosAsignadosDelUsuario(): array {
+    public static function proyectosAsignadosDelUsuario(): array
+    {
         $usr = self::usuarioActual();
-        if (!$usr) { return []; }
+        if (!$usr) {
+            return [];
+        }
         $cn = BDConexion::getConexion();
         $sql = 'SELECT id_proyecto FROM usuario_proyecto WHERE id_usuario = ?';
         $stmt = $cn->prepare($sql);
@@ -212,9 +232,12 @@ class ControlAcceso {
     /**
      * Verifica si el usuario actual tiene un rol en el proyecto indicado
      */
-    public static function usuarioPerteneceAProyecto(int $idProyecto): bool {
+    public static function usuarioPerteneceAProyecto(int $idProyecto): bool
+    {
         $usr = self::usuarioActual();
-        if (!$usr || $idProyecto <= 0) { return false; }
+        if (!$usr || $idProyecto <= 0) {
+            return false;
+        }
         $cn = BDConexion::getConexion();
         $sql = 'SELECT 1 FROM usuario_proyecto WHERE id_usuario = ? AND id_proyecto = ? LIMIT 1';
         $stmt = $cn->prepare($sql);
@@ -230,7 +253,8 @@ class ControlAcceso {
      * Requiere que el usuario esté autenticado y pertenezca al proyecto
      * Si no cumple, redirige a HOMEAUTH o devuelve 403 según $emitir403.
      */
-    public static function requiereProyecto(int $idProyecto, bool $emitir403 = false): void {
+    public static function requiereProyecto(int $idProyecto, bool $emitir403 = false): void
+    {
         self::verificaLogin();
         if (!self::usuarioPerteneceAProyecto($idProyecto)) {
             if ($emitir403) {
@@ -243,7 +267,56 @@ class ControlAcceso {
         }
     }
 
-    public static function creaSesion(string $email, ?string $nombre = null): void {
+    public static function creaSesion(string $email, ?string $nombre = null): void
+    {
         $_SESSION['usuario'] = new UsuarioSesion($email, $nombre);
+        $usuario = $_SESSION['usuario'];
+
+       // ============================================
+// 🔹 Cargar proyectos y roles asociados
+// ============================================
+$cn = BDConexion::getConexion();
+
+// Ahora la tabla `usuario_proyecto` tiene `id_rol` como FK numérica.
+$sql = "
+    SELECT 
+        p.id_proyecto,
+        p.nombre AS proyecto,
+        r.id AS id_rol,
+        r.nombre AS rol_name
+    FROM usuario_proyecto up
+    JOIN proyecto p ON p.id_proyecto = up.id_proyecto
+    LEFT JOIN rol r ON r.id = up.id_rol
+    WHERE up.id_usuario = ?
+";
+$stmt = $cn->prepare($sql);
+$stmt->bind_param('i', $usuario->id);
+$stmt->execute();
+$res = $stmt->get_result();
+
+$usuario->proyectos = [];
+while ($row = $res->fetch_assoc()) {
+    $idProyecto = (int)$row['id_proyecto'];
+    if (!isset($usuario->proyectos[$idProyecto])) {
+        $usuario->proyectos[$idProyecto] = (object)[
+            'id' => $idProyecto,
+            'nombre' => $row['proyecto'],
+            'roles' => []
+        ];
+    }
+
+    // Agregamos el rol (si existe) a la lista del proyecto
+    if (!empty($row['id_rol']) || !empty($row['rol_name'])) {
+        $usuario->proyectos[$idProyecto]->roles[] = (object)[
+            'id' => (int)$row['id_rol'],
+            'nombre' => $row['rol_name']
+        ];
+    }
+}
+$stmt->close();
+
+// Convertir a array indexado
+$usuario->proyectos = array_values($usuario->proyectos);
+
     }
 }

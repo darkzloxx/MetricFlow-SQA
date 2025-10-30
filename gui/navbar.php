@@ -21,7 +21,7 @@ if (!class_exists('ControlAcceso')) { require_once __DIR__ . '/../lib/ControlAcc
                 <li class="nav-item">
                     <a class="nav-link" href="../app/usuarios.php">
                         <span class="oi oi-people" />
-                        Alumnos
+                        Usuarios
                     </a>
                 </li>
             <?php } ?>
@@ -47,14 +47,14 @@ if (!class_exists('ControlAcceso')) { require_once __DIR__ . '/../lib/ControlAcc
                     </a>
                 </li>
             <?php } ?>
-                <?php if (ControlAcceso::verificaPermiso(PermisosSistema::GESTION_MODELO_CALIDAD)) { ?>
+                <?php /*if (ControlAcceso::verificaPermiso(PermisosSistema::GESTION_MODELO_CALIDAD)) { ?>
                     <li class="nav-item">
                         <a class="nav-link" href="#">
                             <span class="oi oi-book" /> 
                             Modelos
                         </a>
                     </li>
-                <?php } ?>
+                <?php } */?>
                 
                 <li class="nav-item">
                     <a class="nav-link" href="../app/salir.php">

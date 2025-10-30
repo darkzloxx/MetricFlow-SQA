@@ -504,24 +504,28 @@ INSERT INTO `usuario` (`id_usuario`, `nombre_apellido`, `email`) VALUES
 --
 
 CREATE TABLE `usuario_proyecto` (
-  `id_usuario` int(11) NOT NULL,
-  `id_proyecto` int(11) NOT NULL,
-  `rol` varchar(50) DEFAULT NULL
+  `id_usuario` INT(11) NOT NULL,
+  `id_proyecto` INT(11) NOT NULL,
+  `id_rol` INT(11) NOT NULL,
+  PRIMARY KEY (`id_usuario`, `id_proyecto`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+INSERT INTO `usuario_proyecto` (`id_usuario`, `id_proyecto`, `id_rol`) VALUES
+(1, 1, 2),
+(2, 1, 4),
+(3, 1, 1),
+(4, 1, 3),
+(5, 1, 4),
+(6, 1, 1),
+(7, 1, 1),
+(8, 1, 1);
+
 
 --
 -- Volcado de datos para la tabla `usuario_proyecto`
 --
 
-INSERT INTO `usuario_proyecto` (`id_usuario`, `id_proyecto`, `rol`) VALUES
-(1, 1, 'Gerente de Calidad'),
-(2, 1, 'Espectador'),
-(3, 1, 'Administrador'),
-(4, 1, 'Líder de Proyecto'),
-(5, 1, 'Espectador'),
-(6, 1, 'Administrador'),
-(7, 1, 'Administrador'),
-(8, 1, 'Administrador');
+
 
 -- --------------------------------------------------------
 
@@ -653,10 +657,6 @@ ALTER TABLE `usuario`
 
 --
 -- Indices de la tabla `usuario_proyecto`
---
-ALTER TABLE `usuario_proyecto`
-  ADD PRIMARY KEY (`id_usuario`,`id_proyecto`),
-  ADD KEY `id_proyecto` (`id_proyecto`);
 
 --
 -- Indices de la tabla `usuario_rol`
@@ -781,19 +781,27 @@ ALTER TABLE `rol_permiso`
   ADD CONSTRAINT `rol_permiso_ibfk_1` FOREIGN KEY (`id_rol`) REFERENCES `rol` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
   ADD CONSTRAINT `rol_permiso_ibfk_2` FOREIGN KEY (`id_permiso`) REFERENCES `permiso` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
---
--- Filtros para la tabla `usuario_proyecto`
---
-ALTER TABLE `usuario_proyecto`
-  ADD CONSTRAINT `usuario_proyecto_ibfk_1` FOREIGN KEY (`id_usuario`) REFERENCES `usuario` (`id_usuario`),
-  ADD CONSTRAINT `usuario_proyecto_ibfk_2` FOREIGN KEY (`id_proyecto`) REFERENCES `proyecto` (`id_proyecto`);
 
---
 -- Filtros para la tabla `usuario_rol`
 --
 ALTER TABLE `usuario_rol`
   ADD CONSTRAINT `usuario_rol_ibfk_1` FOREIGN KEY (`id_usuario`) REFERENCES `usuario` (`id_usuario`) ON DELETE CASCADE ON UPDATE CASCADE,
   ADD CONSTRAINT `usuario_rol_ibfk_2` FOREIGN KEY (`id_rol`) REFERENCES `rol` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- --------------------------------------------------------
+-- Filtros para la tabla `usuario_proyecto`
+-- --------------------------------------------------------
+
+ALTER TABLE `usuario_proyecto`
+  ADD CONSTRAINT `usuario_proyecto_ibfk_1`
+    FOREIGN KEY (`id_usuario`) REFERENCES `usuario` (`id_usuario`)
+    ON DELETE CASCADE ON UPDATE CASCADE,
+  ADD CONSTRAINT `usuario_proyecto_ibfk_2`
+    FOREIGN KEY (`id_proyecto`) REFERENCES `proyecto` (`id_proyecto`)
+    ON DELETE CASCADE ON UPDATE CASCADE,
+  ADD CONSTRAINT `usuario_proyecto_ibfk_3`
+    FOREIGN KEY (`id_rol`) REFERENCES `rol` (`id`)
+    ON DELETE CASCADE ON UPDATE CASCADE;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
 /*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
