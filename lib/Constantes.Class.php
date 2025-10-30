@@ -17,13 +17,13 @@ class Constantes {
     // Prefijo del servidor (para redirecciones simples)
     public const SERVER = '';
     // Ruta del login
-    public const HOMEURL = '/metricflow-sqa/app/index.php';
+    public const HOMEURL = '/metricflow/app/index.php';
     // Ruta por defecto luego del login
-    public const HOMEAUTH = '/metricflow-sqa/app/proyectos.php';
+    public const HOMEAUTH = '/metricflow/app/proyectos.php';
 
     // Base de datos unificada para toda la app
     public const DB_HOST = 'localhost';
-    public const DB_PORT = 3306;
+    public const DB_PORT = 3308;
     public const DB_USER = 'root';
     public const DB_PASS = '';
     public const DB_NAME = 'bd_codevit';

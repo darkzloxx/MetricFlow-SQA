@@ -6,6 +6,16 @@ $DatosFormulario = $_POST;
 BDConexion::getInstancia()->autocommit(false);
 BDConexion::getInstancia()->begin_transaction();
 
+// init helper for skipped rows
+$skippedRows = [];
+
+// Debug: if no proyectos/roles are posted, log the POST payload to a temp file for inspection
+if (empty($_POST['listaProyectos'])) {
+	$logPath = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'usuario_crear_post.log';
+	$entry = "---- " . date('Y-m-d H:i:s') . " ----\n" . print_r($_POST, true) . "\n";
+	@file_put_contents($logPath, $entry, FILE_APPEND | LOCK_EX);
+}
+
 $correo = $DatosFormulario["mail"];
 
 $resultado = "";
@@ -40,23 +50,50 @@ if ($consulta->num_rows > 0){
 			$rol = $_POST['rol'];
 			$cont = count($listaProyectos);
 				for ($i = 0; $i < $cont; ++$i) {
-					if ($listaProyectos[$i] != " ") {
-						$proyectosId = "SELECT id_proyecto FROM proyecto where nombre = '".$listaProyectos[$i]."'"; 
-						$proyectosId=BDConexion::getInstancia()->query($proyectosId);
-						$proyectoId = $proyectosId->fetch_all(MYSQLI_ASSOC); 
-						foreach ($proyectoId as $ProyecId) {
-							$id_proyecto =  $ProyecId['id_proyecto'];
-							}
-						$rolId = "SELECT id FROM rol where nombre = '".$rol[$i]."'"; 
-						$rolId=BDConexion::getInstancia()->query($rolId);
-						$rolId = $rolId->fetch_all(MYSQLI_ASSOC); 
-						foreach ($rolId as $idRol) {
-							$id_rol = $idRol['id'] ;
-							}
-						$sql = "INSERT INTO usuario_proyecto VALUES($idUsuario,$id_proyecto,$id_rol)";
-						$consultaGestion = BDConexion::getInstancia()->query($sql);
+					$projVal = trim($listaProyectos[$i] ?? '');
+					$roleVal = trim($rol[$i] ?? '');
+					if ($projVal === '') {
+						// nothing to add for this row
+						$skippedRows[] = [ 'index' => $i, 'reason' => 'proyecto vacío' ];
+						continue;
+					}
+
+					// Asumimos que ahora recibimos IDs en los arrays: validar existencia
+					$id_proyecto = intval($projVal);
+					$projCheck = BDConexion::getInstancia()->query("SELECT 1 FROM proyecto WHERE id_proyecto = " . intval($id_proyecto) . " LIMIT 1");
+					if (!($projCheck && $projCheck->num_rows > 0)) {
+						$skippedRows[] = [ 'index' => $i, 'reason' => 'proyecto inválido' ];
+						continue;
+					}
+
+					// Validar rol (también esperamos ID)
+					$id_rol = null;
+					if ($roleVal !== '') {
+						$id_rol = intval($roleVal);
+						$roleCheck = BDConexion::getInstancia()->query("SELECT 1 FROM rol WHERE id = " . intval($id_rol) . " LIMIT 1");
+						if (!($roleCheck && $roleCheck->num_rows > 0)) {
+							$skippedRows[] = [ 'index' => $i, 'reason' => 'rol inválido o vacío' ];
+							continue;
+						}
 					} else {
-						$consultaGestion = true;
+						$skippedRows[] = [ 'index' => $i, 'reason' => 'rol inválido o vacío' ];
+						continue;
+					}
+
+					// Sólo insertar si tenemos ids válidos
+					if (!empty($idUsuario) && !empty($id_proyecto) && !empty($id_rol)) {
+						// Evitar duplicados (mismo usuario-proyecto)
+						$checkSql = "SELECT 1 FROM usuario_proyecto WHERE id_usuario = " . intval($idUsuario) . " AND id_proyecto = " . intval($id_proyecto) . " LIMIT 1";
+						$exists = BDConexion::getInstancia()->query($checkSql);
+						if (!($exists && $exists->num_rows > 0)) {
+							$sql = "INSERT INTO usuario_proyecto (id_usuario, id_proyecto, id_rol) VALUES (" .
+								intval($idUsuario) . "," . intval($id_proyecto) . "," . intval($id_rol) . ")";
+							$consultaGestion = BDConexion::getInstancia()->query($sql);
+							if (!$consultaGestion) {
+								BDConexion::getInstancia()->rollback();
+								die('DB error: ' . BDConexion::getInstancia()->error);
+							}
+						}
 					}
 				}
 		
@@ -66,6 +103,15 @@ if ($consulta->num_rows > 0){
 		BDConexion::getInstancia()->autocommit(true);
 		$resultado = true;
 		$mensaje = "Operacion Realizada con Exito";
+		// Si hubo filas omitidas, agregar detalle al mensaje
+		if (!empty($skippedRows)) {
+			$mensaje .= ' - Algunas filas fueron omitidas: ';
+			$parts = [];
+			foreach ($skippedRows as $r) {
+				$parts[] = sprintf('fila %d: %s', $r['index']+1, $r['reason']);
+			}
+			$mensaje .= implode('; ', $parts);
+		}
 	}
 }
 ?>
@@ -77,11 +123,28 @@ if ($consulta->num_rows > 0){
         <script type="text/javascript" src="../lib/JQuery/jquery-3.3.1.js"></script>
         <script type="text/javascript" src="../lib/bootstrap-4.1.1-dist/js/bootstrap.min.js"></script>
         <title><?= Constantes::NOMBRE_SISTEMA; ?> - Crear Usuario</title>
-    </head>
-    <body>
-        <?php include_once '../gui/navbar.php'; ?>
+   <style>
+        .btn-outline-secondary {
+            border-color: #dee2e6;
+            color: #495057;
+            background-color: #fff;
+        }
 
-        <div class="container">
+        .btn-outline-secondary:hover {
+            background-color: #f8f9fa;
+            color: #212529;
+        }
+    </style>
+    </head>
+
+<body>
+    <?php include_once '../gui/navbar.php'; ?>
+    <div class="container">
+        <div class="mb-3">
+            <a id="btnVolver" href="usuarios.php" class="btn btn-outline-secondary">
+                <span class="oi oi-arrow-left mr-1"></span> Volver
+            </a>
+        </div>
             <p></p>
             <div class="card">
                 <div class="card-header">
@@ -98,13 +161,7 @@ if ($consulta->num_rows > 0){
                             <?= $mensaje; ?>
                         </div>
                     <?php } ?>
-                    <hr />
-                    <h5 class="card-text">Opciones</h5>
-                    <a href="usuarios.php">
-                        <button type="button" class="btn btn-primary">
-                            <span class="oi oi-account-logout"></span> Salir
-                        </button>
-                    </a>
+                  
                 </div>
             </div>
         </div>

@@ -30,7 +30,7 @@ $idProyecto = isset($_GET['proyecto']) ? (int)$_GET['proyecto'] : 0;
 if ($idProyecto <= 0) {
   $asignados = ControlAcceso::proyectosAsignadosDelUsuario();
   if (!empty($asignados)) {
-    header('Location: ' . '/metricflow-sqa/app/dashboard.php?proyecto=' . (int)$asignados[0]);
+    header('Location: ' . '/metricflowsqa/app/dashboard.php?proyecto=' . (int)$asignados[0]);
     exit;
   } else {
     // No tiene proyectos asignados: vuelve al home autenticado (listado de proyectos)
@@ -700,12 +700,8 @@ if (count($DATA) === 0) {
           </p>
         </div>
       </div>';
-      echo '</div>        <footer class="footer">
-            MetricFlow-SQA
-            <span class="oi oi-globe"></span> 
-            CoDevIt
-        </footer>
-'; // cerrar container
+
+      // cerrar container
 
       exit; //  corta la ejecución del resto del dashboard
     }
@@ -805,7 +801,6 @@ if (count($DATA) === 0) {
     </div>
   </div>
 
-  <footer class="footer">MetricFlow-SQA <span class="oi oi-globe"></span> UNPA-UARG</footer>
 
   <script>
     // ========= Datos del backend =========
@@ -1836,10 +1831,11 @@ if (count($DATA) === 0) {
           // Estado de selección de fases (restaura si hay guardado)
           const allPhases = Array.from(letterToPhase.values());
           const storageState = loadStateFromStorage();
-          const savedSel = (Array.isArray(window.__PHASE_RESTORE) && window.__PHASE_RESTORE.length) ?
-            window.__PHASE_RESTORE :
+          // Si existe window.__PHASE_RESTORE o storageState.phases (incluso como []), lo usamos tal cual.
+          const savedSel = Array.isArray(window.__PHASE_RESTORE) ? window.__PHASE_RESTORE :
             (storageState && Array.isArray(storageState.phases) ? storageState.phases : null);
-          const selectedPhases = new Set(savedSel ? allPhases.filter(p => savedSel.includes(p)) : allPhases);
+          // Si savedSel es null → seleccionamos todas. Si es [] → no seleccionamos ninguna.
+          const selectedPhases = new Set(Array.isArray(savedSel) ? allPhases.filter(p => savedSel.includes(p)) : allPhases);
 
           // Render de los botones de fase (chips)
           const renderPhaseChips = () => {
@@ -2258,6 +2254,29 @@ if (count($DATA) === 0) {
               ]
             });
 
+            // Si el usuario tenía seleccionado 'ocultar métricas', forzamos la leyenda a ocultar todas
+            try {
+              const st = loadStateFromStorage();
+              if (st && st.legendAllVisible === false && Array.isArray(localMetricKeys) && localMetricKeys.length) {
+                  const sel = {};
+                  localMetricKeys.forEach(k => sel[k] = false);
+                  chart.setOption({
+                    legend: [{ selected: sel }]
+                  }, { lazyUpdate: true });
+                  try { if (window.__SET_TOGGLE_STATE) window.__SET_TOGGLE_STATE(false); } catch(_) {}
+                } else if (st && st.legend && typeof st.legend === 'object') {
+                  // aplicar selección explícita por series si existe
+                  chart.setOption({ legend: [{ selected: st.legend }] }, { lazyUpdate: true });
+                  try {
+                    const all = Object.values(st.legend).every(v => !!v);
+                    if (window.__SET_TOGGLE_STATE) window.__SET_TOGGLE_STATE(all);
+                  } catch(_) {}
+                }
+            } catch (_) {}
+
+            // Asegura que cambios manuales en la leyenda se persistan
+            try { bindLegendPersistence(chart); } catch(_) {}
+
             // Re-vincular eventos de hover de etiquetas
             (function() {
               let lastLabeledSeries = null;
@@ -2337,6 +2356,11 @@ if (count($DATA) === 0) {
             })();
           };
 
+          // Exponer API para re-aplicar filtro desde fuera del closure (útil al inicializar)
+          try {
+            window.__REBUILD_TREND = rebuildTrendChart;
+          } catch (_) {}
+
           // Render inicial de chips y comportamiento
           renderPhaseChips();
           phaseLegend.addEventListener('click', (e) => {
@@ -2382,6 +2406,27 @@ if (count($DATA) === 0) {
       const oldTrend = echarts.getInstanceByDom(trendChartDom);
       if (oldTrend) oldTrend.dispose();
       const trendChart = echarts.init(trendChartDom);
+
+      // Vincular persistencia de selección de leyenda (cuando el usuario oculta/mostrar una métrica)
+      function bindLegendPersistence(chart) {
+        try {
+          if (!chart) return;
+          // Evita doble enlace
+          if (chart.__legendSaveBound) return;
+          const handler = function(evt) {
+            try {
+              const st = loadStateFromStorage() || {};
+              st.legend = evt.selected || null;
+              const vals = Object.values(evt.selected || {});
+              st.legendAllVisible = vals.length ? vals.every(Boolean) : true;
+              saveStateToStorage(st);
+            } catch (_) {}
+          };
+          chart.on('legendselectchanged', handler);
+          chart.__legendSaveBound = true;
+        } catch (_) {}
+      }
+      bindLegendPersistence(trendChart);
 
       function resizeTrend() {
         if (trendStage) {
@@ -2819,6 +2864,25 @@ if (count($DATA) === 0) {
           ]
         });
 
+        // Aplicar estado 'ocultar métricas' guardado (si aplica) al chart principal
+        try {
+          const st2 = loadStateFromStorage();
+          if (st2 && st2.legendAllVisible === false && Array.isArray(METRIC_KEYS) && METRIC_KEYS.length) {
+            const selMap = {};
+            METRIC_KEYS.forEach(k => selMap[k] = false);
+            trendChart.setOption({ legend: [{ selected: selMap }] }, { lazyUpdate: true });
+            try { if (window.__SET_TOGGLE_STATE) window.__SET_TOGGLE_STATE(false); } catch(_) {}
+          } else if (st2 && st2.legend && typeof st2.legend === 'object') {
+            // Si hay una selección explícita por series, aplicarla
+            trendChart.setOption({ legend: [{ selected: st2.legend }] }, { lazyUpdate: true });
+            try {
+              // deducir si todas están visibles
+              const all = Object.values(st2.legend).every(v => !!v);
+              if (window.__SET_TOGGLE_STATE) window.__SET_TOGGLE_STATE(all);
+            } catch(_) {}
+          }
+        } catch (_) {}
+
         // Mostrar etiquetas de TODOS los puntos al pasar por encima de la línea o su leyenda
         // Mostrar etiquetas SOLO de la serie sobre la que está el puntero
         // Mostrar etiquetas SOLO de la serie sobre la que está el puntero (línea o punto)
@@ -2945,6 +3009,20 @@ if (count($DATA) === 0) {
 
 
         window.__TREND_ALREADY_RENDERED = true;
+
+        // Re-aplicar la selección de fases guardada (incluso si es [] → ninguna seleccionada)
+        try {
+          const storageState2 = loadStateFromStorage();
+          const savedPhases = Array.isArray(window.__PHASE_RESTORE) ? window.__PHASE_RESTORE :
+            (storageState2 && Array.isArray(storageState2.phases) ? storageState2.phases : null);
+          if (Array.isArray(savedPhases) && typeof window.__REBUILD_TREND === 'function') {
+            const basePhase = (fase) => (String(fase || '').trim().split(/\s+/)[0] || '').trim();
+            const filtered = (Array.isArray(DATA) ? DATA : []).filter(d => savedPhases.includes(basePhase(d.fase)));
+            try {
+              window.__REBUILD_TREND(filtered);
+            } catch (_) {}
+          }
+        } catch (_) {}
       }
 
       const row = document.getElementById("barsRow");
@@ -3199,9 +3277,42 @@ if (count($DATA) === 0) {
       const toggleBtn = document.getElementById("toggleLegendBtn");
       const toggleIcon = toggleBtn.querySelector("i");
       const toggleText = toggleBtn.querySelector("span");
+      // Estado visual del toggle (se restablece desde storage si existe)
       let allVisible = true;
+      try {
+        const st = loadStateFromStorage();
+        if (st && typeof st.legendAllVisible !== 'undefined') {
+          allVisible = !!st.legendAllVisible;
+        } else if (st && st.legend) {
+          // si existe la selección por series, deducimos si todas están visibles
+          const vals = Object.values(st.legend);
+          if (Array.isArray(vals) && vals.length) allVisible = vals.every(Boolean);
+        }
+      } catch (_) {}
 
+      // Función para sincronizar UI del toggle y exponerla globalmente
+      function setToggleUiState(state) {
+        try {
+          allVisible = !!state;
+          if (!toggleBtn) return;
+          if (allVisible) {
+            toggleText.textContent = "Ocultar métricas";
+            toggleIcon.className = "oi oi-eye";
+            toggleBtn.classList.remove("off");
+          } else {
+            toggleText.textContent = "Mostrar métricas";
+            toggleIcon.className = "oi oi-eye-slash";
+            toggleBtn.classList.add("off");
+          }
+        } catch (_) {}
+      }
+      // Exponer para llamadas externas (ej. tras aplicar la leyenda desde otro bloque)
+      try { window.__SET_TOGGLE_STATE = setToggleUiState; } catch(_) {}
+
+      // Ajustar la UI del botón según estado inicial
       if (toggleBtn) {
+        try { setToggleUiState(allVisible); } catch(_) {}
+
         toggleBtn.addEventListener("click", function() {
           const instance = echarts.getInstanceByDom(document.getElementById("trendChart"));
           if (!instance) return;
@@ -3217,15 +3328,15 @@ if (count($DATA) === 0) {
           allVisible = !allVisible;
 
           // Actualiza texto, icono y estilo
-          if (allVisible) {
-            toggleText.textContent = "Ocultar métricas";
-            toggleIcon.className = "oi oi-eye";
-            toggleBtn.classList.remove("off");
-          } else {
-            toggleText.textContent = "Mostrar métricas";
-            toggleIcon.className = "oi oi-eye-slash";
-            toggleBtn.classList.add("off");
-          }
+          try { setToggleUiState(allVisible); } catch(_) {}
+
+          // Persistir estado de la leyenda y del botón
+          try {
+            const st = loadStateFromStorage() || {};
+            st.legend = option.legend[0].selected || null;
+            st.legendAllVisible = !!allVisible;
+            saveStateToStorage(st);
+          } catch (_) {}
         });
       }
     });
@@ -3236,6 +3347,8 @@ if (count($DATA) === 0) {
       }
     });
   </script>
+  <?php include_once '../gui/footer.php'; ?>
+
 </body>
 
 </html>

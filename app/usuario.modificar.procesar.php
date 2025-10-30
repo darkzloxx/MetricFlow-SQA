@@ -38,7 +38,8 @@ if (isset($_POST['listaProyectos'])) {
     $listaProyectos = $_POST['listaProyectos'];
     $roles = $_POST['rol'];
     $total = count($listaProyectos);
-
+    // Evitar insertar duplicados: map de proyectos ya procesados
+    $seenProjects = [];
     for ($i = 0; $i < $total; $i++) {
         $nombreProyecto = trim($listaProyectos[$i] ?? '');
         $nombreRol = trim($roles[$i] ?? '');
@@ -54,6 +55,9 @@ if (isset($_POST['listaProyectos'])) {
         $stmtProyecto->close();
         if (!$rowProyecto) continue;
         $id_proyecto = (int)$rowProyecto['id_proyecto'];
+
+        // Si ya procesamos este proyecto, saltarlo
+        if (isset($seenProjects[$id_proyecto])) continue;
 
         // Obtener ID del rol
         $stmtRol = $bd->prepare("SELECT id FROM rol WHERE nombre = ? LIMIT 1");
@@ -75,6 +79,8 @@ if (isset($_POST['listaProyectos'])) {
             die("Error al insertar usuario_proyecto: " . $bd->error);
         }
         $stmtInsert->close();
+
+        $seenProjects[$id_proyecto] = true;
     }
 }
 
@@ -97,10 +103,28 @@ if ($current && isset($idUsuario) && $current->id === (int)$idUsuario) {
     <script type="text/javascript" src="../lib/JQuery/jquery-3.3.1.js"></script>
     <script type="text/javascript" src="../lib/bootstrap-4.1.1-dist/js/bootstrap.min.js"></script>
     <title><?= Constantes::NOMBRE_SISTEMA; ?> - Actualizar Usuario</title>
-</head>
+<style>
+        .btn-outline-secondary {
+            border-color: #dee2e6;
+            color: #495057;
+            background-color: #fff;
+        }
+
+        .btn-outline-secondary:hover {
+            background-color: #f8f9fa;
+            color: #212529;
+        }
+    </style>
+    </head>
+
 <body>
-<?php include_once '../gui/navbar.php'; ?>
-<div class="container">
+    <?php include_once '../gui/navbar.php'; ?>
+    <div class="container">
+        <div class="mb-3">
+            <a id="btnVolver" href="usuarios.php" class="btn btn-outline-secondary">
+                <span class="oi oi-arrow-left mr-1"></span> Volver
+            </a>
+        </div>
     <div class="card">
         <div class="card-header">
             <h3>Actualizar Usuario</h3>
@@ -115,13 +139,7 @@ if ($current && isset($idUsuario) && $current->id === (int)$idUsuario) {
                     Ha ocurrido un error durante la actualización.
                 </div>
             <?php } ?>
-            <hr />
-            <h5 class="card-text">Opciones</h5>
-            <a href="usuarios.php">
-                <button type="button" class="btn btn-primary">
-                    <span class="oi oi-account-logout"></span> Salir
-                </button>
-            </a>
+           
         </div>
     </div>
 </div>

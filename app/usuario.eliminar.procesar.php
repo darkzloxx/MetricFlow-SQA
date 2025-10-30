@@ -40,10 +40,28 @@ $bd->autocommit(true);
     <script type="text/javascript" src="../lib/JQuery/jquery-3.3.1.js"></script>
     <script type="text/javascript" src="../lib/bootstrap-4.1.1-dist/js/bootstrap.min.js"></script>
     <title><?= Constantes::NOMBRE_SISTEMA; ?> - Eliminar Usuario</title>
-</head>
+<style>
+        .btn-outline-secondary {
+            border-color: #dee2e6;
+            color: #495057;
+            background-color: #fff;
+        }
+
+        .btn-outline-secondary:hover {
+            background-color: #f8f9fa;
+            color: #212529;
+        }
+    </style>
+    </head>
+
 <body>
-<?php include_once '../gui/navbar.php'; ?>
-<div class="container">
+    <?php include_once '../gui/navbar.php'; ?>
+    <div class="container">
+        <div class="mb-3">
+            <a id="btnVolver" href="usuarios.php" class="btn btn-outline-secondary">
+                <span class="oi oi-arrow-left mr-1"></span> Volver
+            </a>
+        </div>
     <p></p>
     <div class="card">
         <div class="card-header">
@@ -59,13 +77,7 @@ $bd->autocommit(true);
                     Ha ocurrido un error.
                 </div>
             <?php } ?>
-            <hr />
-            <h5 class="card-text">Opciones</h5>
-            <a href="usuarios.php">
-                <button type="button" class="btn btn-primary">
-                    <span class="oi oi-account-logout"></span> Salir
-                </button>
-            </a>
+            
         </div>
     </div>
 </div>

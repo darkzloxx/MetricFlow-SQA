@@ -11,23 +11,23 @@ html {
     min-height: 100%;
 }
 body {
-    /* Margin bottom by footer height */
-    margin-bottom: 60px;
+  background-color: #f5f5f5;
+  padding-top: calc(56px + 20px); /* altura navbar + margen visual */
+  padding-bottom: calc(55px + 15px); /* altura footer + margen visual */
 }
+
 .footer {
-    position: absolute;
+    position: fixed;
     bottom: 0;
+    left: 0;
     width: 100%;
-    /* Set the fixed height of the footer here */
     height: 55px;
-    line-height: 50px; /* Vertically center the text there */
+    line-height: 50px;
     color: white;
-
-    padding: 0;
-    margin: 0;
-    border: 0;
-
-    text-align: center; 
-    background-color: #343a40 !important; 
-    border-top: 5px solid #17a2b8;            
+    text-align: center;
+    background-color: #343a40 !important;
+    border-top: 5px solid #17a2b8;
+    z-index: 1030; /* asegúrate de que esté encima de otros elementos */
 }
+
+/*hacer sticky el footer*/

@@ -2,9 +2,11 @@
 // Asegura sesión y clases disponibles aunque el navbar se incluya directo
 if (session_status() !== PHP_SESSION_ACTIVE) { session_start(); }
 if (!class_exists('ControlAcceso')) { require_once __DIR__ . '/../lib/ControlAcceso.Class.php'; }
+// Página actual (basename) para poder adaptar la UI según la vista
+$currentPage = isset($_SERVER['SCRIPT_NAME']) ? basename($_SERVER['SCRIPT_NAME']) : '';
 ?>
 <!-- Los estilos de navbar son definidos en la libreria css de Bootstrap -->
-<nav class="navbar navbar-expand-lg navbar-dark bg-dark py-2">
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark py-2 fixed-top">
 
     <a class="navbar-brand d-flex align-items-center" href="#">
         <img src="../lib/img/Logo-UNPA-UARG-azul.png" width="48" height="48" class="d-inline-block align-top mr-2" alt="Logo UNPA UARG">
@@ -56,12 +58,14 @@ if (!class_exists('ControlAcceso')) { require_once __DIR__ . '/../lib/ControlAcc
                     </li>
                 <?php } */?>
                 
+                <?php if ($currentPage !== 'index.php') { ?>
                 <li class="nav-item">
                     <a class="nav-link" href="../app/salir.php">
                         <span class="oi oi-account-logout" /> 
                         Salir
                     </a>
                 </li>
+                <?php } ?>
             </ul>
         </div>
     </nav>

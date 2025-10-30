@@ -17,7 +17,24 @@ $Roles = new ColeccionRoles();
 
 <body>
     <?php include_once '../gui/navbar.php'; ?>
+    <style>
+        .btn-outline-secondary {
+            border-color: #dee2e6;
+            color: #495057;
+            background-color: #fff;
+        }
+
+        .btn-outline-secondary:hover {
+            background-color: #f8f9fa;
+            color: #212529;
+        }
+    </style>
     <div class="container">
+        <div class="mb-3">
+            <a id="btnVolver" href="proyectos.php" class="btn btn-outline-secondary">
+                <span class="oi oi-arrow-left mr-1"></span> Volver
+            </a>
+        </div>
         <form action="proyecto.crear.procesar.php" method="post">
             <div class="card">
                 <div class="card-header">
@@ -38,7 +55,7 @@ $Roles = new ColeccionRoles();
                         <label for="inputMail">Descripcion</label>
                         <textarea class="form-control" name="descripcion" id="inputDescripcion" placeholder="Ingrese una breve Descripcion" rows="5" cols="40"></textarea>
                     </div>
-                    <hr/>
+                    <hr />
                 </div>
                 <div class="card-footer">
                     <button type="submit" class="btn btn-outline-success">
