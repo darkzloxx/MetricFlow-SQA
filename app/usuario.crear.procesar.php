@@ -93,6 +93,15 @@ if ($consulta->num_rows > 0){
 								BDConexion::getInstancia()->rollback();
 								die('DB error: ' . BDConexion::getInstancia()->error);
 							}
+							// Además, asegurar que la tabla usuario_rol tenga el rol asignado al usuario
+							$checkUR = BDConexion::getInstancia()->query("SELECT 1 FROM usuario_rol WHERE id_usuario = " . intval($idUsuario) . " AND id_rol = " . intval($id_rol) . " LIMIT 1");
+							if (!($checkUR && $checkUR->num_rows > 0)) {
+								$insUR = BDConexion::getInstancia()->query("INSERT INTO usuario_rol (id_usuario, id_rol) VALUES (" . intval($idUsuario) . "," . intval($id_rol) . ")");
+								if (!$insUR) {
+									BDConexion::getInstancia()->rollback();
+									die('DB error (usuario_rol): ' . BDConexion::getInstancia()->error);
+								}
+							}
 						}
 					}
 				}

@@ -33,6 +33,16 @@ if (!$stmt->execute()) {
 }
 $stmt->close();
 
+// === Eliminar roles previos en usuario_rol (mantener sincronía) ===
+$query = "DELETE FROM usuario_rol WHERE id_usuario = ?";
+$stmt = $bd->prepare($query);
+$stmt->bind_param('i', $idUsuario);
+if (!$stmt->execute()) {
+    $bd->rollback();
+    die("Error al limpiar roles de usuario: " . $bd->error);
+}
+$stmt->close();
+
 // === Reinsertar relaciones usuario-proyecto-rol ===
 if (isset($_POST['listaProyectos'])) {
     $listaProyectos = $_POST['listaProyectos'];
@@ -79,6 +89,22 @@ if (isset($_POST['listaProyectos'])) {
             die("Error al insertar usuario_proyecto: " . $bd->error);
         }
         $stmtInsert->close();
+
+        // Mantener sincronía en usuario_rol: insertar si no existe
+        $stmtCheckUR = $bd->prepare("SELECT 1 FROM usuario_rol WHERE id_usuario = ? AND id_rol = ? LIMIT 1");
+        $stmtCheckUR->bind_param('ii', $idUsuario, $id_rol);
+        $stmtCheckUR->execute();
+        $resCheckUR = $stmtCheckUR->get_result();
+        $stmtCheckUR->close();
+        if (!($resCheckUR && $resCheckUR->num_rows > 0)) {
+            $stmtInsUR = $bd->prepare("INSERT INTO usuario_rol (id_usuario, id_rol) VALUES (?, ?)");
+            $stmtInsUR->bind_param('ii', $idUsuario, $id_rol);
+            if (!$stmtInsUR->execute()) {
+                $bd->rollback();
+                die("Error al insertar usuario_rol: " . $bd->error);
+            }
+            $stmtInsUR->close();
+        }
 
         $seenProjects[$id_proyecto] = true;
     }
