@@ -23,10 +23,10 @@ class Constantes {
 
     // Base de datos unificada para toda la app
     public const DB_HOST = 'localhost';
-    public const DB_PORT = 3306;
+    public const DB_PORT = 3308;
     public const DB_USER = 'root';
     public const DB_PASS = '';
-    public const DB_NAME = 'bd_codevit';
+    public const DB_NAME = 'bd_codevit2';
 
     // Permiso del dashboard (según tu dump, todos los roles lo tienen)
     public const PERMISO_DASHBOARD = 'Visualización de Dashboard Inicial';

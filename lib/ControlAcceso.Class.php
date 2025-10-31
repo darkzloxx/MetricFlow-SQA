@@ -256,6 +256,24 @@ class ControlAcceso
     public static function requiereProyecto(int $idProyecto, bool $emitir403 = false): void
     {
         self::verificaLogin();
+            // Permitir a Administrador / SuperAdmin o a quien tenga ABM_PROYECTOS
+        $usr = self::usuarioActual();
+        if ($usr) {
+            // roles globales (RolSesion->nombre)
+            if (isset($usr->roles) && is_array($usr->roles)) {
+                foreach ($usr->roles as $r) {
+                    $rolName = mb_strtolower(trim($r->nombre ?? ''), 'UTF-8');
+                    if (in_array($rolName, ['administrador', 'superadmin'], true)) {
+                        return; // acceso permitido
+                    }
+                }
+            }
+            // permiso global para ver/administrar proyectos
+            if (self::verificaPermiso(PermisosSistema::ABM_PROYECTOS)) {
+                return;
+            }
+        }
+
         if (!self::usuarioPerteneceAProyecto($idProyecto)) {
             if ($emitir403) {
                 http_response_code(403);

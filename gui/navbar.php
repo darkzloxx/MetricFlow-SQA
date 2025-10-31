@@ -1,7 +1,11 @@
 <?php
 // Asegura sesión y clases disponibles aunque el navbar se incluya directo
-if (session_status() !== PHP_SESSION_ACTIVE) { session_start(); }
-if (!class_exists('ControlAcceso')) { require_once __DIR__ . '/../lib/ControlAcceso.Class.php'; }
+if (session_status() !== PHP_SESSION_ACTIVE) {
+    session_start();
+}
+if (!class_exists('ControlAcceso')) {
+    require_once __DIR__ . '/../lib/ControlAcceso.Class.php';
+}
 // Página actual (basename) para poder adaptar la UI según la vista
 $currentPage = isset($_SERVER['SCRIPT_NAME']) ? basename($_SERVER['SCRIPT_NAME']) : '';
 ?>
@@ -14,66 +18,70 @@ $currentPage = isset($_SERVER['SCRIPT_NAME']) ? basename($_SERVER['SCRIPT_NAME']
     </a>
 
     <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="toggle navigation">
-        <span class="navbar-toggler-icon"></span>   
+        <span class="navbar-toggler-icon"></span>
     </button>
     <div class="collapse navbar-collapse" id="navbarSupportedContent">
-        <ul class="navbar-nav mr-auto">
+        <?php if ($currentPage !== 'index.php') { ?>
+            <ul class="navbar-nav mr-auto">
 
-            <?php if (ControlAcceso::verificaPermiso(PermisosSistema::ABM_USUARIOS)) { ?>
-                <li class="nav-item">
-                    <a class="nav-link" href="../app/usuarios.php">
-                        <span class="oi oi-people" />
-                        Usuarios
-                    </a>
-                </li>
-            <?php } ?>
-            <?php /* Bloque de Roles (deshabilitado)
-            if (ControlAcceso::verificaPermiso(PermisosSistema::ABM_USUARIOS)) { ?>
-                <li class = "nav-item">
-                    <a class = "nav-link" href = "../app/roles.php">
-                        <span class = "oi oi-graph" />
-                        Roles
-                    </a>
-                </li>
-            <?php } */ ?>
-            <?php 
-                $mostrarProyectos = ControlAcceso::verificaPermiso(PermisosSistema::ABM_PROYECTOS);
-                if (!$mostrarProyectos && class_exists('ControlAcceso')) {
-                    try { $mostrarProyectos = !empty(ControlAcceso::proyectosAsignadosDelUsuario()); } catch (Throwable $e) { $mostrarProyectos = false; }
-                }
-                if ($mostrarProyectos) { ?>
-                <li class="nav-item">
-                    <a class="nav-link" href="../app/proyectos.php">
-                        <span class="oi oi-folder" />
-                        Proyectos
-                    </a>
-                </li>
-            <?php } ?>
-                <?php /*if (ControlAcceso::verificaPermiso(PermisosSistema::GESTION_MODELO_CALIDAD)) { ?>
+                <?php if (ControlAcceso::verificaPermiso(PermisosSistema::ABM_USUARIOS)) { ?>
                     <li class="nav-item">
-                        <a class="nav-link" href="#">
-                            <span class="oi oi-book" /> 
-                            Modelos
+                        <a class="nav-link" href="../app/usuarios.php">
+                            <span class="oi oi-people" />
+                            Usuarios
                         </a>
                     </li>
-                <?php } */?>
-                
-                <?php if ($currentPage !== 'index.php') { ?>
+                <?php } ?>
+                <?php /* Bloque de Roles (deshabilitado)
+                if (ControlAcceso::verificaPermiso(PermisosSistema::ABM_USUARIOS)) { ?>
+                    <li class = "nav-item">
+                        <a class = "nav-link" href = "../app/roles.php">
+                            <span class = "oi oi-graph" />
+                            Roles
+                        </a>
+                    </li>
+                <?php } */ ?>
+                <?php
+                $mostrarProyectos = ControlAcceso::verificaPermiso(PermisosSistema::ABM_PROYECTOS);
+                if (!$mostrarProyectos && class_exists('ControlAcceso')) {
+                    try {
+                        $mostrarProyectos = !empty(ControlAcceso::proyectosAsignadosDelUsuario());
+                    } catch (Throwable $e) {
+                        $mostrarProyectos = false;
+                    }
+                }
+                if ($mostrarProyectos) { ?>
+                    <li class="nav-item">
+                        <a class="nav-link" href="../app/proyectos.php">
+                            <span class="oi oi-folder" />
+                            Proyectos
+                        </a>
+                    </li>
+                <?php } ?>
+                <?php /*if (ControlAcceso::verificaPermiso(PermisosSistema::GESTION_MODELO_CALIDAD)) { ?>
+                        <li class="nav-item">
+                            <a class="nav-link" href="#">
+                                <span class="oi oi-book" /> 
+                                Modelos
+                            </a>
+                        </li>
+                    <?php } */ ?>
+
                 <li class="nav-item">
                     <a class="nav-link" href="../app/salir.php">
-                        <span class="oi oi-account-logout" /> 
+                        <span class="oi oi-account-logout" />
                         Salir
                     </a>
                 </li>
-                <?php } ?>
             </ul>
-        </div>
-    </nav>
+        <?php } ?>
+    </div>
+</nav>
 
 
-    <div class="alert alert-info alert-dismissible fade show" role="alert">
-        <?php $nom = isset($_SESSION['usuario']) ? ($_SESSION['usuario']->nombre ?? 'Usuario') : 'Invitado'; ?>
-        Ud. est&aacute; conectad@ como <strong><?= htmlspecialchars($nom, ENT_QUOTES, 'UTF-8'); ?></strong>.
+<div class="alert alert-info alert-dismissible fade show" role="alert">
+    <?php $nom = isset($_SESSION['usuario']) ? ($_SESSION['usuario']->nombre ?? 'Usuario') : 'Invitado'; ?>
+    Ud. est&aacute; conectad@ como <strong><?= htmlspecialchars($nom, ENT_QUOTES, 'UTF-8'); ?></strong>.
     <button type="button" class="close" data-dismiss="alert" aria-label="Close">
         <span aria-hidden="true">&times;</span>
     </button>
