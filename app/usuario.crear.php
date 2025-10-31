@@ -15,14 +15,26 @@ foreach ($proyecto as $Proyec) {
     $lista = $lista . ".append($('<option>').append('" . $nombreSafe . "'))";
     $optionsHtml .= '<option value="' . $id . '">' . $nombreSafe . '</option>';
 }
-
 // Cargar roles desde la BD y generar plantilla para el SELECT de roles (value = id)
 $rolesRes = BDConexion::getInstancia()->query("SELECT id, nombre FROM rol");
 $rolesArr = $rolesRes->fetch_all(MYSQLI_ASSOC);
 $rolesOptionsHtml = '';
+$forbiddenRoleIds = []; // ids de roles que no deben poder asignarse a proyectos
+
+// roles prohibidos por nombre (comparación case-insensitive)
+$forbiddenNames = ['administrador', 'superadmin', 'sin rol'];
+
 foreach ($rolesArr as $r) {
     $rid = htmlspecialchars($r['id'], ENT_QUOTES, 'UTF-8');
     $rname = htmlspecialchars($r['nombre'], ENT_QUOTES, 'UTF-8');
+    $nameLower = mb_strtolower(trim($r['nombre']), 'UTF-8');
+
+    if (in_array($nameLower, $forbiddenNames, true)) {
+        // registrar id prohibido y NO agregar a la plantilla de opciones
+        $forbiddenRoleIds[] = $rid;
+        continue;
+    }
+
     $rolesOptionsHtml .= '<option value="' . $rid . '">' . $rname . '</option>';
 }
 ?>
@@ -37,12 +49,85 @@ foreach ($rolesArr as $r) {
     <title><?= Constantes::NOMBRE_SISTEMA; ?> - Crear Usuario</title>
     <script>
         $(document).ready(function() {
+            // === Validación de nombre ===
+            const nameInput = $("#inputNombre");
+            const errorName = $("<div class='invalid-feedback d-block text-danger mt-1'></div>");
+            nameInput.after(errorName);
+
+            nameInput.on("input", function() {
+                const val = nameInput.val().trim();
+                const nameRegex = /^[A-Za-zÁÉÍÓÚáéíóúÑñ ]+$/;
+                if (val === "") {
+                    errorName.text("El nombre es obligatorio.");
+                    nameInput.addClass("is-invalid");
+                } else if (!nameRegex.test(val)) {
+                    errorName.text("El nombre solo puede contener letras y espacios.");
+                    nameInput.addClass("is-invalid");
+                } else {
+                    errorName.text("");
+                    nameInput.removeClass("is-invalid");
+                }
+            });
+
+            // === Validación de email ===
+            const emailInput = $("#inputMail");
+            const errorEmail = $("<div class='invalid-feedback d-block text-danger mt-1'></div>");
+            emailInput.after(errorEmail);
+
+            emailInput.on("input", function() {
+                const val = emailInput.val().trim();
+                const gmailRegex = /^[a-zA-Z0-9._%+-]+@gmail\.com$/;
+                if (val === "") {
+                    errorEmail.text("El email es obligatorio.");
+                    emailInput.addClass("is-invalid");
+                } else if (!gmailRegex.test(val)) {
+                    errorEmail.text("El correo debe ser un Gmail válido (ejemplo: usuario@gmail.com).");
+                    emailInput.addClass("is-invalid");
+                } else {
+                    errorEmail.text("");
+                    emailInput.removeClass("is-invalid");
+                }
+            });
+
+            // === Validación completa al enviar el formulario ===
+            $("#createUserForm").on("submit", function(e) {
+                const nombre = nameInput.val().trim();
+                const email = emailInput.val().trim();
+                const nameRegex = /^[A-Za-zÁÉÍÓÚáéíóúÑñ ]+$/;
+                const gmailRegex = /^[a-zA-Z0-9._%+-]+@gmail\.com$/;
+
+                let valid = true;
+
+                if (nombre === "" || !nameRegex.test(nombre)) {
+                    errorName.text(nombre === "" ? "El nombre es obligatorio." : "El nombre solo puede contener letras y espacios.");
+                    nameInput.addClass("is-invalid");
+                    valid = false;
+                }
+
+                if (email === "" || !gmailRegex.test(email)) {
+                    errorEmail.text(email === "" ? "El email es obligatorio." : "El correo debe ser un Gmail válido (ejemplo: usuario@gmail.com).");
+                    emailInput.addClass("is-invalid");
+                    valid = false;
+                }
+
+                if (!valid) {
+                    e.preventDefault();
+                    return false;
+                }
+            });
+        });
+
+
+        $(document).ready(function() {
             // inicializar plantilla maestra
             // plantilla inyectada en HTML (#projectTemplate)
             $('#btn_add_proyecto').click(function() {
                 // calcular disponibilidad antes de agregar (trabajando con IDs)
                 const master = $('#projectTemplate option').map(function() {
-                    return { v: $(this).val(), t: $(this).text() };
+                    return {
+                        v: $(this).val(),
+                        t: $(this).text()
+                    };
                 }).get();
                 const selected = $('select[name="listaProyectos[]"]').map(function() {
                     return $(this).val();
@@ -59,11 +144,16 @@ foreach ($rolesArr as $r) {
             // Inicializar opciones
             refreshProjectOptions();
         });
+        // IDs de roles prohibidos (generado desde PHP)
+        const forbiddenRoleIds = <?= json_encode($forbiddenRoleIds ?? []); ?>;
 
         function refreshProjectOptions() {
             try {
                 const master = $('#projectTemplate option').map(function() {
-                    return { v: $(this).val(), t: $(this).text() };
+                    return {
+                        v: $(this).val(),
+                        t: $(this).text()
+                    };
                 }).get();
                 const selected = $('select[name="listaProyectos[]"]').map(function() {
                     return $(this).val();
@@ -90,6 +180,10 @@ foreach ($rolesArr as $r) {
                 const availableCount = master.filter(p => uniqueSelected.indexOf(p.v) === -1).length;
                 // ocultar por completo el botón "Nuevo" cuando no haya proyectos disponibles
                 $('#btn_add_proyecto').toggle(availableCount > 0);
+
+                // Mostrar/ocultar la tabla según si hay filas
+                const rowCount = $('#tablaProyectos tbody tr').length;
+                $('#tablaProyectos').toggle(rowCount > 0);
             } catch (e) {}
         }
 
@@ -99,7 +193,10 @@ foreach ($rolesArr as $r) {
 
         function agregarProyecto() {
             const master = $('#projectTemplate option').map(function() {
-                return { v: $(this).val(), t: $(this).text() };
+                return {
+                    v: $(this).val(),
+                    t: $(this).text()
+                };
             }).get();
             const selected = $('select[name="listaProyectos[]"]').map(function() {
                 return $(this).val();
@@ -136,6 +233,8 @@ foreach ($rolesArr as $r) {
                 );
 
             $("#tablaProyectos tbody").append($row);
+            // mostrar inmediatamente la tabla y actualizar opciones
+            $("#tablaProyectos").show();
             setTimeout(refreshProjectOptions, 20);
         }
 
@@ -152,6 +251,7 @@ foreach ($rolesArr as $r) {
 
             const rows = $('#tablaProyectos tbody tr');
             let invalid = false;
+            let forbiddenAssigned = false;
             rows.each(function(idx, tr) {
                 const proj = $(tr).find('select[name="listaProyectos[]"]').val();
                 const rol = $(tr).find('select[name="rol[]"]').val();
@@ -165,10 +265,22 @@ foreach ($rolesArr as $r) {
                     invalid = true;
                     return false;
                 }
+
+                // comprobar roles prohibidos por id
+                if (rol && forbiddenRoleIds.indexOf(rol) !== -1) {
+                    forbiddenAssigned = true;
+                    return false;
+                }
             });
+
             if (invalid) {
                 e.preventDefault();
                 alert('Por favor, complete Proyecto y Rol en todas las filas antes de enviar.');
+                return false;
+            }
+            if (forbiddenAssigned) {
+                e.preventDefault();
+                alert('No está permitido asignar los roles "Administrador", "superadmin" o "Sin rol" en proyectos.');
                 return false;
             }
             // otherwise allow submit
@@ -214,12 +326,12 @@ foreach ($rolesArr as $r) {
                     </div>
                     <div class="form-group">
                         <label for="inputMail">Email</label>
-                        <input type="email" name="mail" class="form-control" id="inputMail" placeholder="Ingrese el email del Usuario" required="">
+                        <input type="email" name="mail" class="form-control" id="inputMail" placeholder="Ingrese el email del Usuario">
                     </div>
                     <hr />
                     <!-- Proyectos Roles -->
 
-                    <div class="form-group">
+                    <div class=" form-group">
 
                         <label>
                             Proyecto/s:
@@ -239,7 +351,7 @@ foreach ($rolesArr as $r) {
                             </select>
                         </div>
 
-                        <table class='table table-bordered' id="tablaProyectos">
+                        <table class='table table-bordered' id="tablaProyectos" style="display:none;">
                             <thead class="thead-metricflow">
                                 <tr>
                                     <th>Proyecto</th>

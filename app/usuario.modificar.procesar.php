@@ -4,121 +4,126 @@ ControlAcceso::requierePermiso(PermisosSistema::PERMISO_USUARIOS);
 include_once '../modelo/BDConexion.Class.php';
 
 $DatosFormulario = $_POST;
-$idUsuario = (int)$DatosFormulario["id"];
-$todoOk = true;
-
 $bd = BDConexion::getInstancia();
 $bd->autocommit(false);
 $bd->begin_transaction();
 
-// === Actualizar datos básicos del usuario ===
-$query = "UPDATE usuario 
-          SET nombre_apellido = ?, email = ?
-          WHERE id_usuario = ?";
-$stmt = $bd->prepare($query);
-$stmt->bind_param('ssi', $DatosFormulario["nombre"], $DatosFormulario["email"], $idUsuario);
-if (!$stmt->execute()) {
-    $bd->rollback();
-    die("Error al actualizar usuario: " . $bd->error);
-}
-$stmt->close();
+$idUsuario = (int)$DatosFormulario["id"];
+$nombre = trim($DatosFormulario["nombre"] ?? '');
+$email = trim($DatosFormulario["email"] ?? '');
+$skippedRows = [];
+$resultado = false;
+$mensaje = "Ha ocurrido un error durante la actualización.";
 
-// === Eliminar proyectos previos ===
-$query = "DELETE FROM usuario_proyecto WHERE id_usuario = ?";
-$stmt = $bd->prepare($query);
-$stmt->bind_param('i', $idUsuario);
-if (!$stmt->execute()) {
-    $bd->rollback();
-    die("Error al limpiar proyectos: " . $bd->error);
-}
-$stmt->close();
+// ============================
+// VALIDACIONES BÁSICAS
+// ============================
 
-// === Eliminar roles previos en usuario_rol (mantener sincronía) ===
-$query = "DELETE FROM usuario_rol WHERE id_usuario = ?";
-$stmt = $bd->prepare($query);
-$stmt->bind_param('i', $idUsuario);
-if (!$stmt->execute()) {
-    $bd->rollback();
-    die("Error al limpiar roles de usuario: " . $bd->error);
-}
-$stmt->close();
+// Validar nombre
+if ($nombre === '') {
+    $mensaje = "El nombre no puede estar vacío.";
+} elseif (!preg_match('/^[A-Za-zÁÉÍÓÚáéíóúÑñ ]+$/u', $nombre)) {
+    $mensaje = "El nombre contiene caracteres inválidos.";
+} 
+// Validar email
+elseif (strpos($email, '@gmail.com') === false) {
+    $mensaje = "El correo ingresado no es válido, debe tener dominio '@gmail.com'.";
+} else {
+    // Verificar si ya existe otro usuario con ese email
+    $checkEmail = $bd->prepare("SELECT id_usuario FROM usuario WHERE email = ? AND id_usuario <> ?");
+    $checkEmail->bind_param('si', $email, $idUsuario);
+    $checkEmail->execute();
+    $resEmail = $checkEmail->get_result();
+    if ($resEmail->num_rows > 0) {
+        $mensaje = "Ya existe otro usuario con el correo ingresado.";
+        $checkEmail->close();
+    } else {
+        $checkEmail->close();
 
-// === Reinsertar relaciones usuario-proyecto-rol ===
-if (isset($_POST['listaProyectos'])) {
-    $listaProyectos = $_POST['listaProyectos'];
-    $roles = $_POST['rol'];
-    $total = count($listaProyectos);
-    // Evitar insertar duplicados: map de proyectos ya procesados
-    $seenProjects = [];
-    for ($i = 0; $i < $total; $i++) {
-        $nombreProyecto = trim($listaProyectos[$i] ?? '');
-        $nombreRol = trim($roles[$i] ?? '');
-
-        if ($nombreProyecto === '' || $nombreRol === '') continue;
-
-        // Obtener ID del proyecto
-        $stmtProyecto = $bd->prepare("SELECT id_proyecto FROM proyecto WHERE nombre = ? LIMIT 1");
-        $stmtProyecto->bind_param('s', $nombreProyecto);
-        $stmtProyecto->execute();
-        $resProyecto = $stmtProyecto->get_result();
-        $rowProyecto = $resProyecto->fetch_assoc();
-        $stmtProyecto->close();
-        if (!$rowProyecto) continue;
-        $id_proyecto = (int)$rowProyecto['id_proyecto'];
-
-        // Si ya procesamos este proyecto, saltarlo
-        if (isset($seenProjects[$id_proyecto])) continue;
-
-        // Obtener ID del rol
-        $stmtRol = $bd->prepare("SELECT id FROM rol WHERE nombre = ? LIMIT 1");
-        $stmtRol->bind_param('s', $nombreRol);
-        $stmtRol->execute();
-        $resRol = $stmtRol->get_result();
-        $rowRol = $resRol->fetch_assoc();
-        $stmtRol->close();
-        if (!$rowRol) continue;
-        $id_rol = (int)$rowRol['id'];
-
-        // Insertar relación usuario-proyecto-rol
-        $stmtInsert = $bd->prepare(
-            "INSERT INTO usuario_proyecto (id_usuario, id_proyecto, id_rol) VALUES (?, ?, ?)"
-        );
-        $stmtInsert->bind_param('iii', $idUsuario, $id_proyecto, $id_rol);
-        if (!$stmtInsert->execute()) {
+        // ============================
+        // ACTUALIZAR DATOS DEL USUARIO
+        // ============================
+        $query = "UPDATE usuario SET nombre_apellido = ?, email = ? WHERE id_usuario = ?";
+        $stmt = $bd->prepare($query);
+        $stmt->bind_param('ssi', $nombre, $email, $idUsuario);
+        if (!$stmt->execute()) {
             $bd->rollback();
-            die("Error al insertar usuario_proyecto: " . $bd->error);
+            die("Error al actualizar usuario: " . $bd->error);
         }
-        $stmtInsert->close();
+        $stmt->close();
 
-        // Mantener sincronía en usuario_rol: insertar si no existe
-        $stmtCheckUR = $bd->prepare("SELECT 1 FROM usuario_rol WHERE id_usuario = ? AND id_rol = ? LIMIT 1");
-        $stmtCheckUR->bind_param('ii', $idUsuario, $id_rol);
-        $stmtCheckUR->execute();
-        $resCheckUR = $stmtCheckUR->get_result();
-        $stmtCheckUR->close();
-        if (!($resCheckUR && $resCheckUR->num_rows > 0)) {
-            $stmtInsUR = $bd->prepare("INSERT INTO usuario_rol (id_usuario, id_rol) VALUES (?, ?)");
-            $stmtInsUR->bind_param('ii', $idUsuario, $id_rol);
-            if (!$stmtInsUR->execute()) {
-                $bd->rollback();
-                die("Error al insertar usuario_rol: " . $bd->error);
+        // ============================
+        // REINICIALIZAR RELACIONES
+        // ============================
+        $bd->query("DELETE FROM usuario_proyecto WHERE id_usuario = {$idUsuario}");
+        $bd->query("DELETE FROM usuario_rol WHERE id_usuario = {$idUsuario}");
+
+        // ============================
+        // REINSERTAR PROYECTOS Y ROLES
+        // ============================
+        if (isset($_POST['listaProyectos'])) {
+            $listaProyectos = $_POST['listaProyectos'];
+            $roles = $_POST['rol'];
+            $total = count($listaProyectos);
+
+            for ($i = 0; $i < $total; $i++) {
+                $id_proyecto = intval($listaProyectos[$i] ?? 0);
+                $id_rol = intval($roles[$i] ?? 0);
+
+                if ($id_proyecto <= 0) {
+                    $skippedRows[] = ['index' => $i, 'reason' => 'proyecto inválido o vacío'];
+                    continue;
+                }
+                if ($id_rol <= 0) {
+                    $skippedRows[] = ['index' => $i, 'reason' => 'rol inválido o vacío'];
+                    continue;
+                }
+
+                // Insertar relación usuario-proyecto
+                $stmt = $bd->prepare("INSERT INTO usuario_proyecto (id_usuario, id_proyecto, id_rol) VALUES (?, ?, ?)");
+                $stmt->bind_param('iii', $idUsuario, $id_proyecto, $id_rol);
+                if (!$stmt->execute()) {
+                    $bd->rollback();
+                    die("Error al insertar usuario_proyecto: " . $bd->error);
+                }
+                $stmt->close();
+
+                // Insertar relación usuario-rol si no existe
+                $stmtCheck = $bd->prepare("SELECT 1 FROM usuario_rol WHERE id_usuario = ? AND id_rol = ? LIMIT 1");
+                $stmtCheck->bind_param('ii', $idUsuario, $id_rol);
+                $stmtCheck->execute();
+                $exists = $stmtCheck->get_result();
+                $stmtCheck->close();
+
+                if ($exists->num_rows === 0) {
+                    $stmtUR = $bd->prepare("INSERT INTO usuario_rol (id_usuario, id_rol) VALUES (?, ?)");
+                    $stmtUR->bind_param('ii', $idUsuario, $id_rol);
+                    if (!$stmtUR->execute()) {
+                        $bd->rollback();
+                        die("Error al insertar usuario_rol: " . $bd->error);
+                    }
+                    $stmtUR->close();
+                }
             }
-            $stmtInsUR->close();
         }
 
-        $seenProjects[$id_proyecto] = true;
+        // ============================
+        // COMMIT FINAL
+        // ============================
+        $bd->commit();
+        $bd->autocommit(true);
+        $resultado = true;
+        $mensaje = "Operación realizada con éxito.";
+
+        if (!empty($skippedRows)) {
+            $mensaje .= ' - Algunas filas fueron omitidas: ';
+            $detalle = [];
+            foreach ($skippedRows as $r) {
+                $detalle[] = sprintf('fila %d: %s', $r['index'] + 1, $r['reason']);
+            }
+            $mensaje .= implode('; ', $detalle);
+        }
     }
-}
-
-$bd->commit();
-$bd->autocommit(true);
-
-// === Refrescar sesión si es el mismo usuario ===
-$current = ControlAcceso::usuarioActual();
-if ($current && isset($idUsuario) && $current->id === (int)$idUsuario) {
-    $emailNuevo = trim($_POST['email'] ?? $current->email);
-    $nombreNuevo = trim($_POST['nombre'] ?? $current->nombre);
-    ControlAcceso::creaSesion($emailNuevo, $nombreNuevo);
 }
 ?>
 <html>
@@ -129,43 +134,41 @@ if ($current && isset($idUsuario) && $current->id === (int)$idUsuario) {
     <script type="text/javascript" src="../lib/JQuery/jquery-3.3.1.js"></script>
     <script type="text/javascript" src="../lib/bootstrap-4.1.1-dist/js/bootstrap.min.js"></script>
     <title><?= Constantes::NOMBRE_SISTEMA; ?> - Actualizar Usuario</title>
-<style>
+    <style>
         .btn-outline-secondary {
             border-color: #dee2e6;
             color: #495057;
             background-color: #fff;
         }
-
         .btn-outline-secondary:hover {
             background-color: #f8f9fa;
             color: #212529;
         }
     </style>
-    </head>
+</head>
 
 <body>
-    <?php include_once '../gui/navbar.php'; ?>
-    <div class="container">
-        <div class="mb-3">
-            <a id="btnVolver" href="usuarios.php" class="btn btn-outline-secondary">
-                <span class="oi oi-arrow-left mr-1"></span> Volver
-            </a>
-        </div>
+<?php include_once '../gui/navbar.php'; ?>
+<div class="container">
+    <div class="mb-3">
+        <a href="usuarios.php" class="btn btn-outline-secondary">
+            <span class="oi oi-arrow-left mr-1"></span> Volver
+        </a>
+    </div>
     <div class="card">
         <div class="card-header">
             <h3>Actualizar Usuario</h3>
         </div>
         <div class="card-body">
-            <?php if ($todoOk) { ?>
+            <?php if ($resultado): ?>
                 <div class="alert alert-success" role="alert">
-                    Operaci&oacute;n realizada con &eacute;xito.
+                    <?= htmlspecialchars($mensaje); ?>
                 </div>
-            <?php } else { ?>
+            <?php else: ?>
                 <div class="alert alert-danger" role="alert">
-                    Ha ocurrido un error durante la actualización.
+                    <?= htmlspecialchars($mensaje); ?>
                 </div>
-            <?php } ?>
-           
+            <?php endif; ?>
         </div>
     </div>
 </div>

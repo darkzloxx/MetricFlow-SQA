@@ -34,8 +34,8 @@ if ($consulta->num_rows > 0){
 		$mensaje = "El correo ingresado no es valido, debe ser dominio ''@gmail.com''";
 	} else {
 
-		$query = "INSERT INTO usuario "
-				. "VALUES (null,'{$DatosFormulario["nombre"]}','{$DatosFormulario["mail"]}')";
+		$query = "INSERT INTO usuario (nombre_apellido, email) VALUES ('{$DatosFormulario["nombre"]}','{$DatosFormulario["mail"]}')";
+
 		$consulta = BDConexion::getInstancia()->query($query);
 		if (!$consulta) {
 			BDConexion::getInstancia()->rollback();
