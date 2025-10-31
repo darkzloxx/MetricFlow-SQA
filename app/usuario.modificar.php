@@ -81,280 +81,315 @@ $ocultarProyectos = ($esAdmin || $esSuperAdmin);
         const forbiddenRoleIds = <?= json_encode($forbiddenRoleIds) ?>;
 
         $(document).ready(function() {
-            const ocultarProyectos = <?= $ocultarProyectos ? 'true' : 'false'; ?>;
-            if (ocultarProyectos) {
-                // Si es admin/superadmin, deshabilitamos toda la lógica de proyectos
-                $('#btn_add_proyecto').remove();
-                $('#tablaProyectos').remove();
-            }
+                    const ocultarProyectos = <?= $ocultarProyectos ? 'true' : 'false'; ?>;
+                    if (ocultarProyectos) {
+                        // Si es admin/superadmin, deshabilitamos toda la lógica de proyectos
+                        $('#btn_add_proyecto').remove();
+                        $('#tablaProyectos').remove();
+                    }
 
-            // Handler delegado único para elementos que declaren data-confirm
-            $(document).on('click', 'a[data-confirm], button[data-confirm]', function(e) {
-                
-                var msg = $(this).attr('data-confirm') || '¿Está seguro?'; 
-                if (!confirm(msg)) {
-                    +e.preventDefault(); 
-                } 
-            });
+                    // Handler delegado único para elementos que declaren data-confirm
+                    $(document).on('click', 'a[data-confirm], button[data-confirm]', function(e) {
 
-            // === VALIDACIÓN NOMBRE ===
-            const nameInput = $("#inputNombre");
-            const errorName = $("<div class='invalid-feedback d-block text-danger mt-1'></div>");
-            nameInput.after(errorName);
+                        var msg = $(this).attr('data-confirm') || '¿Está seguro?';
+                        if (!confirm(msg)) {
+                            +e.preventDefault();
+                        }
+                    });
 
-            nameInput.on("input", function() {
-                const val = nameInput.val().trim();
-                const nameRegex = /^[A-Za-zÁÉÍÓÚáéíóúÑñ ]+$/;
-                if (val === "") {
-                    errorName.text("El nombre es obligatorio.");
-                    nameInput.addClass("is-invalid");
-                } else if (!nameRegex.test(val)) {
-                    errorName.text("El nombre solo puede contener letras y espacios.");
-                    nameInput.addClass("is-invalid");
-                } else {
-                    errorName.text("");
-                    nameInput.removeClass("is-invalid");
-                }
-            });
+                    // === VALIDACIÓN NOMBRE ===
+                    const nameInput = $("#inputNombre");
+                    const errorName = $("<div class='invalid-feedback d-block text-danger mt-1'></div>");
+                    nameInput.after(errorName);
 
-            // === VALIDACIÓN EMAIL ===
-            const emailInput = $("#inputEmail");
-            const errorEmail = $("<div class='invalid-feedback d-block text-danger mt-1'></div>");
-            emailInput.after(errorEmail);
+                    nameInput.on("input", function() {
+                        const val = nameInput.val().trim();
+                        const nameRegex = /^[A-Za-zÁÉÍÓÚáéíóúÑñ ]+$/;
+                        if (val === "") {
+                            errorName.text("El nombre es obligatorio.");
+                            nameInput.addClass("is-invalid");
+                        } else if (!nameRegex.test(val)) {
+                            errorName.text("El nombre solo puede contener letras y espacios.");
+                            nameInput.addClass("is-invalid");
+                        } else {
+                            errorName.text("");
+                            nameInput.removeClass("is-invalid");
+                        }
+                    });
 
-            emailInput.on("input", function() {
-                const val = emailInput.val().trim();
-                const gmailRegex = /^[a-zA-Z0-9._%+-]+@gmail\.com$/;
-                if (val === "") {
-                    errorEmail.text("El email es obligatorio.");
-                    emailInput.addClass("is-invalid");
-                } else if (!gmailRegex.test(val)) {
-                    errorEmail.text("El correo debe ser un Gmail válido (ejemplo: usuario@gmail.com).");
-                    emailInput.addClass("is-invalid");
-                } else {
-                    errorEmail.text("");
-                    emailInput.removeClass("is-invalid");
-                }
-            });
+                    // === VALIDACIÓN EMAIL ===
+                    const emailInput = $("#inputEmail");
+                    const errorEmail = $("<div class='invalid-feedback d-block text-danger mt-1'></div>");
+                    emailInput.after(errorEmail);
 
-            // === VALIDACIÓN GENERAL AL ENVIAR ===
-            // === Confirmación inteligente con diferencias ===
-            $("#editUserForm").on("submit", function(e) {
-                e.preventDefault(); // primero detenemos el envío
-                // === VALIDACIÓN GLOBAL ===
-                const nombreVal = $("#inputNombre").val().trim();
-                const emailVal = $("#inputEmail").val().trim();
-                const nameRegex = /^[A-Za-zÁÉÍÓÚáéíóúÑñ ]+$/;
-                const gmailRegex = /^[a-zA-Z0-9._%+-]+@gmail\.com$/;
-                let valid = true;
+                    emailInput.on("input", function() {
+                        const val = emailInput.val().trim();
+                        const gmailRegex = /^[a-zA-Z0-9._%+-]+@gmail\.com$/;
+                        if (val === "") {
+                            errorEmail.text("El email es obligatorio.");
+                            emailInput.addClass("is-invalid");
+                        } else if (!gmailRegex.test(val)) {
+                            errorEmail.text("El correo debe ser un Gmail válido (ejemplo: usuario@gmail.com).");
+                            emailInput.addClass("is-invalid");
+                        } else {
+                            errorEmail.text("");
+                            emailInput.removeClass("is-invalid");
+                        }
+                    });
 
-                if (nombreVal === "" || !nameRegex.test(nombreVal)) {
-                    $("#inputNombre").addClass("is-invalid");
-                    $("#inputNombre").next(".invalid-feedback").text(
-                        nombreVal === "" ? "El nombre es obligatorio." : "El nombre solo puede contener letras y espacios."
-                    );
-                    valid = false;
-                }
+                    // === VALIDACIÓN GENERAL AL ENVIAR ===
+                    // === Confirmación inteligente con diferencias ===
+                    $("#editUserForm").on("submit", function(e) {
+                        e.preventDefault(); // primero detenemos el envío
+                        // === VALIDACIÓN GLOBAL ===
+                        const nombreVal = $("#inputNombre").val().trim();
+                        const emailVal = $("#inputEmail").val().trim();
+                        const nameRegex = /^[A-Za-zÁÉÍÓÚáéíóúÑñ ]+$/;
+                        const gmailRegex = /^[a-zA-Z0-9._%+-]+@gmail\.com$/;
+                        let valid = true;
 
-                if (emailVal === "" || !gmailRegex.test(emailVal)) {
-                    $("#inputEmail").addClass("is-invalid");
-                    $("#inputEmail").next(".invalid-feedback").text(
-                        emailVal === "" ? "El email es obligatorio." : "El correo debe ser un Gmail válido (ejemplo: usuario@gmail.com)."
-                    );
-                    valid = false;
-                }
+                        if (nombreVal === "" || !nameRegex.test(nombreVal)) {
+                            $("#inputNombre").addClass("is-invalid");
+                            $("#inputNombre").next(".invalid-feedback").text(
+                                nombreVal === "" ? "El nombre es obligatorio." : "El nombre solo puede contener letras y espacios."
+                            );
+                            valid = false;
+                        }
 
-                if (!valid) {
-                    e.preventDefault();
-                    return false;
-                }
+                        if (emailVal === "" || !gmailRegex.test(emailVal)) {
+                            $("#inputEmail").addClass("is-invalid");
+                            $("#inputEmail").next(".invalid-feedback").text(
+                                emailVal === "" ? "El email es obligatorio." : "El correo debe ser un Gmail válido (ejemplo: usuario@gmail.com)."
+                            );
+                            valid = false;
+                        }
 
-                const nombreActual = "<?= addslashes($Usuario->getNombre()); ?>";
-                const emailActual = "<?= addslashes($Usuario->getEmail()); ?>";
+                        if (!valid) {
+                            e.preventDefault();
+                            return false;
+                        }
 
-                const nuevoNombre = $("#inputNombre").val().trim();
-                const nuevoEmail = $("#inputEmail").val().trim();
+                        const nombreActual = "<?= addslashes($Usuario->getNombre()); ?>";
+                        const emailActual = "<?= addslashes($Usuario->getEmail()); ?>";
 
-                // Detectar cambios básicos
-                const cambios = [];
-                if (nuevoNombre !== nombreActual) {
-                    cambios.push(`- Nombre: "${nombreActual}" → "${nuevoNombre}"`);
-                }
-                if (nuevoEmail !== emailActual) {
-                    cambios.push(`- Email: "${emailActual}" → "${nuevoEmail}"`);
-                }
+                        const nuevoNombre = $("#inputNombre").val().trim();
+                        const nuevoEmail = $("#inputEmail").val().trim();
 
-                // Detectar cambios en proyectos/roles
-                const proyectosOriginales = <?= json_encode($asignados) ?>; // desde PHP
-                const proyectosNuevos = [];
+                        // Detectar cambios básicos
+                        const cambios = [];
+                        if (nuevoNombre !== nombreActual) {
+                            cambios.push(`- Nombre: "${nombreActual}" → "${nuevoNombre}"`);
+                        }
+                        if (nuevoEmail !== emailActual) {
+                            cambios.push(`- Email: "${emailActual}" → "${nuevoEmail}"`);
+                        }
 
-                $("#tablaProyectos tbody tr").each(function() {
-                    const idProyecto = $(this).find('select[name="listaProyectos[]"]').val();
-                    const idRol = $(this).find('select[name="rol[]"]').val();
-                    if (idProyecto && idRol) {
-                        const nombreProyecto = $(this).find('select[name="listaProyectos[]"] option:selected').text();
-                        const nombreRol = $(this).find('select[name="rol[]"] option:selected').text();
-                        proyectosNuevos.push({
-                            idProyecto,
-                            idRol,
-                            nombreProyecto,
-                            nombreRol
+                        // Detectar cambios en proyectos/roles
+                        const proyectosOriginales = <?= json_encode($asignados) ?>; // desde PHP
+                        const proyectosNuevos = [];
+
+                        $("#tablaProyectos tbody tr").each(function() {
+                            const idProyecto = $(this).find('select[name="listaProyectos[]"]').val();
+                            const idRol = $(this).find('select[name="rol[]"]').val();
+                            if (idProyecto && idRol) {
+                                const nombreProyecto = $(this).find('select[name="listaProyectos[]"] option:selected').text();
+                                const nombreRol = $(this).find('select[name="rol[]"] option:selected').text();
+                                proyectosNuevos.push({
+                                    idProyecto,
+                                    idRol,
+                                    nombreProyecto,
+                                    nombreRol
+                                });
+                            }
+                        });
+
+                        // Comparar con los originales
+                        const idsOriginales = proyectosOriginales.map(p => p.id_proyecto.toString());
+                        const idsNuevos = proyectosNuevos.map(p => p.idProyecto.toString());
+
+                        // Proyectos eliminados
+                        proyectosOriginales.forEach(p => {
+                            if (!idsNuevos.includes(p.id_proyecto.toString())) {
+                                cambios.push(`- Proyecto "${p.nombre_proyecto}" eliminado`);
+                            }
+                        });
+
+                        // Proyectos agregados o roles cambiados
+                        proyectosNuevos.forEach(p => {
+                            const existente = proyectosOriginales.find(o => o.id_proyecto.toString() === p.idProyecto.toString());
+                            if (!existente) {
+                                cambios.push(`- Proyecto "${p.nombreProyecto}" agregado con rol "${p.nombreRol}"`);
+                            } else if (existente.id_rol.toString() !== p.idRol.toString()) {
+                                cambios.push(`- Proyecto "${p.nombreProyecto}": Rol "${existente.nombre_rol}" → "${p.nombreRol}"`);
+                            }
+                        });
+
+                        // Si no hay cambios, advertir
+                        if (cambios.length === 0) {
+                            alert("No se detectaron cambios para guardar.");
+                            return false;
+                        }
+
+                        // Mostrar resumen
+                        const mensaje = `Está a punto de modificar el usuario "${nombreActual}".\n\nCambios detectados:\n${cambios.join("\n")}\n\n¿Desea confirmar los cambios?`;
+                        if (!confirm(mensaje)) return false;
+
+// --- Envío AJAX ---
+const formData = $(this).serialize() + "&ajax=1";
+
+$.post("usuario.modificar.procesar.php", formData)
+    .done(function(resp) {
+        let json;
+        try {
+            json = typeof resp === "object" ? resp : JSON.parse(resp);
+        } catch {
+            mostrarAlerta("Respuesta inesperada del servidor.", "danger");
+            return;
+        }
+
+        if (json.success) {
+            const msg = encodeURIComponent(json.message || "Usuario actualizado correctamente.");
+            window.location.href = "usuarios.php?msg=" + msg + "&type=success";
+        } else {
+            mostrarAlerta(json.message || "Error al actualizar el usuario.", "danger");
+        }
+    })
+    .fail(function(xhr) {
+        const msg = xhr.responseJSON?.error || "Error en la comunicación con el servidor.";
+        mostrarAlerta(msg, "danger");
+    });
+}); // <- cierre del on("submit")
+
+// --- Función alerta reutilizable ---
+function mostrarAlerta(mensaje, tipo) {
+    const $alert = $(`
+        <div class="alert alert-${tipo} alert-dismissible fade show mt-3" role="alert">
+            ${mensaje}
+            <button type="button" class="close" data-dismiss="alert" aria-label="Cerrar">
+                <span aria-hidden="true">&times;</span>
+            </button>
+        </div>
+    `);
+    $("#alertContainer").html($alert);
+    $("html, body").animate({ scrollTop: 0 }, "fast");
+    setTimeout(() => $alert.alert("close"), 3500);
+}
+
+                        // === LÓGICA PROYECTOS/ROLES ===
+                        refreshProjectOptions();
+
+                        $('#btn_add_proyecto').click(function() {
+                            const master = $('#projectTemplate option').map(function() {
+                                return {
+                                    v: $(this).val(),
+                                    t: $(this).text()
+                                };
+                            }).get();
+                            const selected = $('select[name="listaProyectos[]"]').map(function() {
+                                return $(this).val();
+                            }).get().filter(Boolean);
+                            const available = master.filter(p => selected.indexOf(p.v) === -1).length;
+                            if (available <= 0) {
+                                alert('No hay proyectos disponibles para asignar.');
+                                return;
+                            }
+                            agregarProyecto();
+                        });
+
+                        $("body").on('click', "#btn_del_proyecto", eliminarProyecto);
+
+                        $(document).on('submit', '#editUserForm', function(e) {
+                            $('select[name="listaProyectos[]"] option, select[name="rol[]"] option').prop('disabled', false);
+
+                            const rows = $('#tablaProyectos tbody tr');
+                            let invalid = false,
+                                forbidden = false;
+                            rows.each(function() {
+                                const proj = $(this).find('select[name="listaProyectos[]"]').val();
+                                const rol = $(this).find('select[name="rol[]"]').val();
+                                if ((proj && !rol) || (rol && !proj)) invalid = true;
+                                if (rol && forbiddenRoleIds.indexOf(parseInt(rol)) !== -1) forbidden = true;
+                            });
+                            if (invalid) {
+                                e.preventDefault();
+                                alert('Complete Proyecto y Rol en todas las filas.');
+                            } else if (forbidden) {
+                                e.preventDefault();
+                                alert('No puede asignar roles de Administrador, Superadmin o Sin rol.');
+                            }
+                        });
+                    });
+
+                    function refreshProjectOptions() {
+                        const master = $('#projectTemplate option').map(function() {
+                            return {
+                                v: $(this).val(),
+                                t: $(this).text()
+                            };
+                        }).get();
+                        const selected = $('select[name="listaProyectos[]"]').map(function() {
+                            return $(this).val();
+                        }).get().filter(Boolean);
+
+                        $('select[name="listaProyectos[]"]').each(function() {
+                            const $this = $(this);
+                            const myVal = $this.val();
+                            $this.html($('#projectTemplate').html());
+                            if (myVal) $this.val(myVal);
+                            selected.forEach(val => {
+                                if (val !== myVal) $this.find('option[value="' + val + '"]').prop('disabled', true).hide();
+                            });
+                            if ($this.find('option:selected').prop('disabled')) $this.val('');
+                        });
+
+                        const uniqueSelected = [...new Set(selected)];
+                        const availableCount = master.filter(p => uniqueSelected.indexOf(p.v) === -1).length;
+                        $('#btn_add_proyecto').toggle(availableCount > 0);
+
+                        const rowCount = $('#tablaProyectos tbody tr').length;
+                        $('#tablaProyectos').toggle(rowCount > 0);
+                    }
+
+                    function agregarProyecto() {
+                        const master = $('#projectTemplate option').map(function() {
+                            return {
+                                v: $(this).val(),
+                                t: $(this).text()
+                            };
+                        }).get();
+                        const selected = $('select[name="listaProyectos[]"]').map(function() {
+                            return $(this).val();
+                        }).get().filter(Boolean);
+                        const available = master.filter(p => selected.indexOf(p.v) === -1);
+                        if (!available.length) return;
+
+                        const optsHtml = available.map(p => '<option value="' + p.v + '">' + p.t + '</option>').join('');
+                        const $row = $('<tr>')
+                            .append($('<td>').append($('<select>').addClass('form-control').attr('name', 'listaProyectos[]').html(optsHtml)))
+                            .append($('<td>').append($('<select>').addClass('form-control').attr('name', 'rol[]').html($('#roleTemplate').html())))
+                            .append($('<td>').addClass('text-center').append($('<button>').attr('type', 'button').addClass('btn btn-danger btn-sm').attr('id', 'btn_del_proyecto').text('Eliminar')));
+                        $("#tablaProyectos tbody").append($row);
+                        $("#tablaProyectos").show();
+                        setTimeout(refreshProjectOptions, 20);
+                    }
+
+                    function eliminarProyecto() {
+                        // Confirmación antes de eliminar la fila (muestra el nombre del proyecto si está disponible)
+
+                        var $tr = $(this).closest('tr');
+                        var nombreProyecto = $tr.find('select[name="listaProyectos[]"] option:selected').text() || '';
+                        var msg = '¿Confirma que desea eliminar esta asignación';
+                        if (nombreProyecto) msg += ' del proyecto \"' + nombreProyecto + '\"';
+                        msg += '?';
+                        if (!confirm(msg)) {
+
+                            return;
+                        }
+                        $tr.fadeOut("slow", function() {
+                            +$(this).remove();
+                            refreshProjectOptions();
                         });
                     }
-                });
-
-                // Comparar con los originales
-                const idsOriginales = proyectosOriginales.map(p => p.id_proyecto.toString());
-                const idsNuevos = proyectosNuevos.map(p => p.idProyecto.toString());
-
-                // Proyectos eliminados
-                proyectosOriginales.forEach(p => {
-                    if (!idsNuevos.includes(p.id_proyecto.toString())) {
-                        cambios.push(`- Proyecto "${p.nombre_proyecto}" eliminado`);
-                    }
-                });
-
-                // Proyectos agregados o roles cambiados
-                proyectosNuevos.forEach(p => {
-                    const existente = proyectosOriginales.find(o => o.id_proyecto.toString() === p.idProyecto.toString());
-                    if (!existente) {
-                        cambios.push(`- Proyecto "${p.nombreProyecto}" agregado con rol "${p.nombreRol}"`);
-                    } else if (existente.id_rol.toString() !== p.idRol.toString()) {
-                        cambios.push(`- Proyecto "${p.nombreProyecto}": Rol "${existente.nombre_rol}" → "${p.nombreRol}"`);
-                    }
-                });
-
-                // Si no hay cambios, advertir
-                if (cambios.length === 0) {
-                    alert("No se detectaron cambios para guardar.");
-                    return false;
-                }
-
-                // Mostrar resumen
-                const mensaje = `Está a punto de modificar el usuario "${nombreActual}".\n\nCambios detectados:\n${cambios.join("\n")}\n\n¿Desea confirmar los cambios?`;
-                if (confirm(mensaje)) {
-                    this.submit(); // ahora sí enviamos
-                } else {
-                    return false;
-                }
-            });
-
-
-            // === LÓGICA PROYECTOS/ROLES ===
-            refreshProjectOptions();
-
-            $('#btn_add_proyecto').click(function() {
-                const master = $('#projectTemplate option').map(function() {
-                    return {
-                        v: $(this).val(),
-                        t: $(this).text()
-                    };
-                }).get();
-                const selected = $('select[name="listaProyectos[]"]').map(function() {
-                    return $(this).val();
-                }).get().filter(Boolean);
-                const available = master.filter(p => selected.indexOf(p.v) === -1).length;
-                if (available <= 0) {
-                    alert('No hay proyectos disponibles para asignar.');
-                    return;
-                }
-                agregarProyecto();
-            });
-
-            $("body").on('click', "#btn_del_proyecto", eliminarProyecto);
-
-            $(document).on('submit', '#editUserForm', function(e) {
-                $('select[name="listaProyectos[]"] option, select[name="rol[]"] option').prop('disabled', false);
-
-                const rows = $('#tablaProyectos tbody tr');
-                let invalid = false,
-                    forbidden = false;
-                rows.each(function() {
-                    const proj = $(this).find('select[name="listaProyectos[]"]').val();
-                    const rol = $(this).find('select[name="rol[]"]').val();
-                    if ((proj && !rol) || (rol && !proj)) invalid = true;
-                    if (rol && forbiddenRoleIds.indexOf(parseInt(rol)) !== -1) forbidden = true;
-                });
-                if (invalid) {
-                    e.preventDefault();
-                    alert('Complete Proyecto y Rol en todas las filas.');
-                } else if (forbidden) {
-                    e.preventDefault();
-                    alert('No puede asignar roles de Administrador, Superadmin o Sin rol.');
-                }
-            });
-        });
-
-        function refreshProjectOptions() {
-            const master = $('#projectTemplate option').map(function() {
-                return {
-                    v: $(this).val(),
-                    t: $(this).text()
-                };
-            }).get();
-            const selected = $('select[name="listaProyectos[]"]').map(function() {
-                return $(this).val();
-            }).get().filter(Boolean);
-
-            $('select[name="listaProyectos[]"]').each(function() {
-                const $this = $(this);
-                const myVal = $this.val();
-                $this.html($('#projectTemplate').html());
-                if (myVal) $this.val(myVal);
-                selected.forEach(val => {
-                    if (val !== myVal) $this.find('option[value="' + val + '"]').prop('disabled', true).hide();
-                });
-                if ($this.find('option:selected').prop('disabled')) $this.val('');
-            });
-
-            const uniqueSelected = [...new Set(selected)];
-            const availableCount = master.filter(p => uniqueSelected.indexOf(p.v) === -1).length;
-            $('#btn_add_proyecto').toggle(availableCount > 0);
-
-            const rowCount = $('#tablaProyectos tbody tr').length;
-            $('#tablaProyectos').toggle(rowCount > 0);
-        }
-
-        function agregarProyecto() {
-            const master = $('#projectTemplate option').map(function() {
-                return {
-                    v: $(this).val(),
-                    t: $(this).text()
-                };
-            }).get();
-            const selected = $('select[name="listaProyectos[]"]').map(function() {
-                return $(this).val();
-            }).get().filter(Boolean);
-            const available = master.filter(p => selected.indexOf(p.v) === -1);
-            if (!available.length) return;
-
-            const optsHtml = available.map(p => '<option value="' + p.v + '">' + p.t + '</option>').join('');
-            const $row = $('<tr>')
-                .append($('<td>').append($('<select>').addClass('form-control').attr('name', 'listaProyectos[]').html(optsHtml)))
-                .append($('<td>').append($('<select>').addClass('form-control').attr('name', 'rol[]').html($('#roleTemplate').html())))
-                .append($('<td>').addClass('text-center').append($('<button>').attr('type', 'button').addClass('btn btn-danger btn-sm').attr('id', 'btn_del_proyecto').text('Eliminar')));
-            $("#tablaProyectos tbody").append($row);
-            $("#tablaProyectos").show();
-            setTimeout(refreshProjectOptions, 20);
-        }
-
-        function eliminarProyecto() {
-            // Confirmación antes de eliminar la fila (muestra el nombre del proyecto si está disponible)
-
-            var $tr = $(this).closest('tr');
-            var nombreProyecto = $tr.find('select[name="listaProyectos[]"] option:selected').text() || '';
-            var msg = '¿Confirma que desea eliminar esta asignación';
-            if (nombreProyecto) msg += ' del proyecto \"' + nombreProyecto + '\"';
-            msg += '?';
-            if (!confirm(msg)) {
-
-                return;
-            }
-            $tr.fadeOut("slow", function() {
-                +$(this).remove();
-                refreshProjectOptions();
-            });
-        }
     </script>
 
     <style>
