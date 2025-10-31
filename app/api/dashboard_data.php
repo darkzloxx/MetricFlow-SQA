@@ -21,11 +21,7 @@ if ($proyectoId <= 0 || !ControlAcceso::usuarioPerteneceAProyecto($proyectoId)) 
   exit;
 }
 
-// Prefer local dev DB used by tests, then fallback to alternate
-$conexion = @new mysqli('localhost', 'root', '', 'bd_codevit', 3306);
-if ($conexion->connect_error) {
-  $conexion = @new mysqli('localhost', 'root', '', 'bd_21', 3308);
-}
+$conexion = BDConexion::getConexion();
 if ($conexion->connect_error) {
   http_response_code(500);
   echo json_encode(['error' => 'DB connection failed']);
