@@ -2,77 +2,53 @@
 include_once '../lib/ControlAcceso.Class.php';
 ControlAcceso::requierePermiso(PermisosSistema::ABM_PROYECTOS);
 include_once '../modelo/BDConexion.Class.php';
-$DatosFormulario = $_POST;
-BDConexion::getInstancia()->autocommit(false);
-BDConexion::getInstancia()->begin_transaction();
 
-$nombre = $DatosFormulario["nombre"];
+header('Content-Type: application/json; charset=utf-8');
 
-$resultado = "";
-$mensaje = "Ha ocurrido un error.";
+$response = ['success' => false, 'mensaje' => 'Ha ocurrido un error.'];
 
-$query = "select * from proyecto where nombre = '{$nombre}'";
-$consulta = BDConexion::getInstancia()->query($query);
+try {
+    $bd = BDConexion::getInstancia();
+    $bd->autocommit(false);
 
-if ($consulta->num_rows > 0){
-	$resultado = false;
-	$mensaje = "Ya existe un proyecto con el nombre ingresado";
-} else {
+    $nombre = trim($_POST['nombre'] ?? '');
+    $descripcion = trim($_POST['descripcion'] ?? '');
 
-$query = "INSERT INTO proyecto "
-        . "VALUES (null,null,'{$DatosFormulario["descripcion"]}','Registrado','{$DatosFormulario["nombre"]}',null)";
-$consulta = BDConexion::getInstancia()->query($query);
-if (!$consulta) {
-    BDConexion::getInstancia()->rollback();
-    //arrojar una excepcion
-    die(BDConexion::getInstancia()->errno);
+    if ($nombre === '') {
+        throw new Exception("El nombre es obligatorio.");
+    }
+
+    if (!preg_match('/^[A-Za-zÁÉÍÓÚáéíóúÑñ ]+$/u', $nombre)) {
+        throw new Exception("El nombre solo puede contener letras y espacios.");
+    }
+
+    $query = "SELECT 1 FROM proyecto WHERE nombre = ?";
+    $stmt = $bd->prepare($query);
+    $stmt->bind_param('s', $nombre);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    if ($res->num_rows > 0) {
+        throw new Exception("Ya existe un proyecto con el nombre ingresado.");
+    }
+
+    $sql = "INSERT INTO proyecto (objetivo, descripcion, estado, nombre, id_modelo)
+        VALUES (NULL, ?, 'Registrado', ?, NULL)";
+    $stmt = $bd->prepare($sql);
+    $stmt->bind_param('ss', $descripcion, $nombre);
+    if (!$stmt->execute()) {
+        throw new Exception("Error al crear el proyecto: " . $stmt->error);
+    }
+
+    $bd->commit();
+    $response['success'] = true;
+    $response['mensaje'] = "Proyecto creado correctamente.";
+
+} catch (Exception $e) {
+    $bd->rollback();
+    $response['mensaje'] = $e->getMessage();
+} finally {
+    $bd->autocommit(true);
 }
 
-BDConexion::getInstancia()->commit();
-BDConexion::getInstancia()->autocommit(true);
-$resultado = true;
-$mensaje = "Operacion Realizada con Exito";
-}
-?>
-<html>
-    <head>
-        <meta charset="UTF-8">
-        <link rel="stylesheet" href="../lib/bootstrap-4.1.1-dist/css/bootstrap.css" />
-        <link rel="stylesheet" href="../lib/open-iconic-master/font/css/open-iconic-bootstrap.css" />
-        <script type="text/javascript" src="../lib/JQuery/jquery-3.3.1.js"></script>
-        <script type="text/javascript" src="../lib/bootstrap-4.1.1-dist/js/bootstrap.min.js"></script>
-        <title><?= Constantes::NOMBRE_SISTEMA; ?> - Crear Proyecto</title>
-    </head>
-    <body>
-        <?php include_once '../gui/navbar.php'; ?>
-
-        <div class="container">
-            <p></p>
-            <div class="card">
-                <div class="card-header">
-                    <h3>Crear Proyecto</h3>
-                </div>
-                <div class="card-body">
-                    <?php if ($resultado) { ?>
-                        <div class="alert alert-success" role="alert">
-                            <?= $mensaje; ?>
-                        </div>
-                    <?php } ?>   
-                    <?php if (!$resultado) { ?>
-                        <div class="alert alert-danger" role="alert">
-                            <?= $mensaje; ?>
-                        </div>
-                    <?php } ?>
-                    <hr />
-                    <h5 class="card-text">Opciones</h5>
-                    <a href="proyectos.php">
-                        <button type="button" class="btn btn-primary">
-                            <span class="oi oi-account-logout"></span> Salir
-                        </button>
-                    </a>
-                </div>
-            </div>
-        </div>
-        <?php include_once '../gui/footer.php'; ?>
-    </body>
-</html>
+echo json_encode($response);
+exit;

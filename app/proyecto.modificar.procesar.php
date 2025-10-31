@@ -1,51 +1,44 @@
 <?php
-include_once '../lib/ControlAcceso.class.php';
+include_once '../lib/ControlAcceso.Class.php';
 ControlAcceso::requierePermiso(PermisosSistema::ABM_PROYECTOS);
 include_once '../modelo/BDConexion.Class.php';
-$DatosFormulario = $_POST;
-$query = "UPDATE proyecto "
-        . "SET nombre = '{$DatosFormulario["nombre"]}',  descripcion = '{$DatosFormulario["descripcion"]}'  "
-        . "WHERE id_proyecto = {$DatosFormulario["id"]}";
-$consulta = BDConexion::getInstancia()->query($query);
+
+$bd = BDConexion::getInstancia();
+$isAjax = !empty($_POST['ajax']);
+
+try {
+    $id = (int)($_POST['id_proyecto'] ?? 0);
+    $nombre = trim($_POST['nombre'] ?? '');
+    $descripcion = trim($_POST['descripcion'] ?? '');
+    $estado = trim($_POST['estado'] ?? '');
+
+    if ($id <= 0) throw new Exception("ID de proyecto inválido.");
+    if ($nombre === '') throw new Exception("El nombre no puede estar vacío.");
+
+    // Si la descripción está vacía, guardamos NULL
+    $descripcion = ($descripcion === '') ? null : $descripcion;
+
+    $stmt = $bd->prepare("UPDATE proyecto SET nombre = ?, descripcion = ?, estado = ? WHERE id_proyecto = ?");
+    $stmt->bind_param('sssi', $nombre, $descripcion, $estado, $id);
+    if (!$stmt->execute()) throw new Exception("Error al actualizar: " . $stmt->error);
+    $stmt->close();
+
+    $msg = "Proyecto actualizado correctamente.";
+    if ($isAjax) {
+        header('Content-Type: application/json');
+        echo json_encode(['success' => true, 'message' => $msg]);
+        exit;
+    } else {
+        header("Location: proyectos.php?msg=" . urlencode($msg) . "&type=success");
+        exit;
+    }
+} catch (Exception $e) {
+    if ($isAjax) {
+        header('Content-Type: application/json', true, 500);
+        echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+    } else {
+        header("Location: proyectos.php?msg=" . urlencode("Error: " . $e->getMessage()) . "&type=danger");
+    }
+    exit;
+}
 ?>
-<html>
-    <head>
-        <meta charset="UTF-8">
-        <link rel="stylesheet" href="../lib/bootstrap-4.1.1-dist/css/bootstrap.css" />
-        <link rel="stylesheet" href="../lib/open-iconic-master/font/css/open-iconic-bootstrap.css" />
-        <script type="text/javascript" src="../lib/JQuery/jquery-3.3.1.js"></script>
-        <script type="text/javascript" src="../lib/bootstrap-4.1.1-dist/js/bootstrap.min.js"></script>
-        <title><?php echo Constantes::NOMBRE_SISTEMA; ?> - Actualizar Proyecto</title>
-    </head>
-    <body>
-        <?php include_once '../gui/navbar.php'; ?>
-        <div class="container">
-            <p></p>
-            <div class="card">
-                <div class="card-header">
-                    <h3>Actualizar Proyecto</h3>
-                </div>
-                <div class="card-body">
-                    <?php if ($consulta) { ?>
-                        <div class="alert alert-success" role="alert">
-                            Operaci&oacute;n realizada con &eacute;xito.
-                        </div>
-                    <?php } ?>   
-                    <?php if (!$consulta) { ?>
-                        <div class="alert alert-danger" role="alert">
-                            Ha ocurrido un error.
-                        </div>
-                    <?php } ?>
-                    <hr />
-                    <h5 class="card-text">Opciones</h5>
-                    <a href="proyectos.php">
-                        <button type="button" class="btn btn-primary">
-                            <span class="oi oi-account-logout"></span> Salir
-                        </button>
-                    </a>
-                </div>
-            </div>
-        </div>
-        <?php include_once '../gui/footer.php'; ?>
-    </body>
-</html>

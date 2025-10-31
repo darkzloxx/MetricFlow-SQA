@@ -27,6 +27,7 @@ class BDConexion {
             Constantes::DB_NAME,
             Constantes::DB_PORT
         );
+        
         if ($cn->connect_errno) {
             throw new RuntimeException('Error de Conexion a la Base de Datos: ' . $cn->connect_errno . ' - ' . $cn->connect_error);
         }

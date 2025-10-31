@@ -6,6 +6,9 @@
 -- Tiempo de generación: 31-10-2025 a las 05:06:51
 -- Versión del servidor: 10.4.32-MariaDB
 -- Versión de PHP: 8.2.12
+DROP DATABASE IF EXISTS bd_codevit2;
+CREATE DATABASE bd_codevit2 CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
+USE bd_codevit2;
 
 SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
 START TRANSACTION;

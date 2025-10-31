@@ -1,13 +1,10 @@
 <?php
 include_once '../lib/ControlAcceso.Class.php';
-// Cualquier usuario autenticado puede ver sus proyectos; los permisos ABM controlan alta/edición/baja
 ControlAcceso::verificaLogin();
 
-// Helper de permisos y usuario
 $tieneAbmProyectos = ControlAcceso::verificaPermiso(PermisosSistema::ABM_PROYECTOS);
 $usr = ControlAcceso::usuarioActual();
 
-// Consulta: si tiene ABM, ve todos los proyectos. Si no, sólo los que le corresponden.
 $cn = BDConexion::getInstancia();
 if ($tieneAbmProyectos) {
     $sql = "SELECT p.* FROM proyecto p ORDER BY p.id_proyecto";
@@ -28,30 +25,54 @@ if ($tieneAbmProyectos) {
 ?>
 
 <html>
-
 <head>
     <meta charset="UTF-8">
     <link rel="stylesheet" href="../lib/bootstrap-4.1.1-dist/css/bootstrap.css" />
     <link rel="stylesheet" href="../lib/open-iconic-master/font/css/open-iconic-bootstrap.css" />
     <script type="text/javascript" src="../lib/JQuery/jquery-3.3.1.js"></script>
     <script type="text/javascript" src="../lib/bootstrap-4.1.1-dist/js/bootstrap.min.js"></script>
-    <title><?php echo Constantes::NOMBRE_SISTEMA; ?> - Proyectos</title>
+    <title><?= Constantes::NOMBRE_SISTEMA; ?> - Proyectos</title>
 
+    <style>
+        .btn-outline-secondary {
+            border-color: #dee2e6;
+            color: #495057;
+            background-color: #fff;
+        }
+        .btn-outline-secondary:hover {
+            background-color: #f8f9fa;
+            color: #212529;
+        }
+    </style>
 </head>
 
 <body>
+<?php include_once '../gui/navbar.php'; ?>
 
-    <?php include_once '../gui/navbar.php'; ?>
+<div class="container">
 
-    <div class="container">
+    <!-- 🔔 Contenedor de alertas dinámicas -->
+    <div id="alertContainer" class="mt-3">
+        <?php if (isset($_GET['msg'])): ?>
+            <div class="alert alert-<?= ($_GET['type'] === 'success') ? 'success' : 'danger'; ?> alert-dismissible fade show" role="alert">
+                <?= htmlspecialchars($_GET['msg']); ?>
+                <button type="button" class="close" data-dismiss="alert" aria-label="Cerrar">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <script>
+                $('html, body').animate({ scrollTop: 0 }, 'fast');
+                setTimeout(() => $('.alert').alert('close'), 3500);
+            </script>
+        <?php endif; ?>
+    </div>
 
-    <div class="card">
+    <div class="card mt-3">
         <div class="card-header">
-
             <h3>Proyectos</h3>
         </div>
         <div class="card-body">
-            <?php if ($tieneAbmProyectos) { ?>
+            <?php if ($tieneAbmProyectos): ?>
                 <p>
                     <a href="proyecto.crear.php">
                         <button type="button" class="btn btn-success">
@@ -59,17 +80,18 @@ if ($tieneAbmProyectos) {
                         </button>
                     </a>
                 </p>
-            <?php } ?>
-            <?php if (empty($proyectos)) { ?>
+            <?php endif; ?>
+
+            <?php if (empty($proyectos)): ?>
                 <div class="card my-4 text-center"
-                    style="border:1px dashed rgba(23,162,184,0.15); background:rgba(23,162,184,0.03);">
+                     style="border:1px dashed rgba(23,162,184,0.15); background:rgba(23,162,184,0.03);">
                     <div class="card-body p-4">
                         <i class="oi oi-info mb-2" style="font-size:2rem; color:#17a2b8;"></i>
                         <h5 class="text-info font-weight-bold mb-2">No tenés proyectos asignados</h5>
                         <p class="text-muted mb-3">Aún no fuiste asignado a ningún proyecto. Si creés que esto es un error, contactá a un administrador.</p>
                     </div>
                 </div>
-            <?php } else { ?>
+            <?php else: ?>
                 <table class="table table-hover table-sm">
                     <tr class="table-info">
                         <th>Nombre</th>
@@ -77,7 +99,7 @@ if ($tieneAbmProyectos) {
                         <th>Estado</th>
                         <th>Opciones</th>
                     </tr>
-                    <?php foreach ($proyectos as $Proyec) { ?>
+                    <?php foreach ($proyectos as $Proyec): ?>
                         <tr>
                             <td><?= htmlspecialchars($Proyec['nombre'], ENT_QUOTES, 'UTF-8'); ?></td>
                             <td>2025</td>
@@ -93,7 +115,7 @@ if ($tieneAbmProyectos) {
                                         <span class="oi oi-bar-chart"></span>
                                     </button>
                                 </a>
-                                <?php if ($tieneAbmProyectos) { ?>
+                                <?php if ($tieneAbmProyectos): ?>
                                     <a title="Modificar" href="proyecto.modificar.php?id=<?= (int)$Proyec['id_proyecto']; ?>">
                                         <button type="button" class="btn btn-outline-warning">
                                             <span class="oi oi-pencil"></span>
@@ -104,16 +126,17 @@ if ($tieneAbmProyectos) {
                                             <span class="oi oi-trash"></span>
                                         </button>
                                     </a>
-                                <?php } ?>
+                                <?php endif; ?>
                             </td>
                         </tr>
-                    <?php } ?>
+                    <?php endforeach; ?>
                 </table>
-            <?php } ?>
+            <?php endif; ?>
         </div>
     </div>
-    </div>
-    <?php include_once '../gui/footer.php'; ?>
-</body>
+</div>
 
+<?php include_once '../gui/footer.php'; ?>
+
+</body>
 </html>

@@ -1,8 +1,6 @@
 <?php
 include_once '../lib/ControlAcceso.Class.php';
 ControlAcceso::requierePermiso(PermisosSistema::ABM_PROYECTOS);
-include_once '../modelo/ColeccionRoles.php';
-$Roles = new ColeccionRoles();
 ?>
 <html>
 
@@ -10,13 +8,10 @@ $Roles = new ColeccionRoles();
     <meta charset="UTF-8">
     <link rel="stylesheet" href="../lib/bootstrap-4.1.1-dist/css/bootstrap.css" />
     <link rel="stylesheet" href="../lib/open-iconic-master/font/css/open-iconic-bootstrap.css" />
-    <script type="text/javascript" src="../lib/JQuery/jquery-3.3.1.js"></script>
-    <script type="text/javascript" src="../lib/bootstrap-4.1.1-dist/js/bootstrap.min.js"></script>
+    <script src="../lib/JQuery/jquery-3.3.1.js"></script>
+    <script src="../lib/bootstrap-4.1.1-dist/js/bootstrap.min.js"></script>
     <title><?= Constantes::NOMBRE_SISTEMA; ?> - Crear Proyecto</title>
-</head>
 
-<body>
-    <?php include_once '../gui/navbar.php'; ?>
     <style>
         .btn-outline-secondary {
             border-color: #dee2e6;
@@ -29,43 +24,131 @@ $Roles = new ColeccionRoles();
             color: #212529;
         }
     </style>
+
+    <script>
+        $(document).ready(function() {
+            // === Validación del nombre ===
+            const nameInput = $("#inputNombre");
+            const errorName = $("<div class='invalid-feedback d-block text-danger mt-1'></div>");
+            nameInput.after(errorName);
+
+            nameInput.on("input", function() {
+                const val = nameInput.val().trim();
+                const nameRegex = /^[A-Za-zÁÉÍÓÚáéíóúÑñ ]+$/;
+                if (val === "") {
+                    errorName.text("El nombre es obligatorio.");
+                    nameInput.addClass("is-invalid");
+                } else if (!nameRegex.test(val)) {
+                    errorName.text("El nombre solo puede contener letras y espacios.");
+                    nameInput.addClass("is-invalid");
+                } else {
+                    errorName.text("");
+                    nameInput.removeClass("is-invalid");
+                }
+            });
+
+            // === Envío AJAX del formulario ===
+            $("#createProjectForm").on("submit", function(e) {
+                e.preventDefault();
+                const nombre = nameInput.val().trim();
+                const descripcion = $("#inputDescripcion").val().trim();
+                const nameRegex = /^[A-Za-zÁÉÍÓÚáéíóúÑñ ]+$/;
+
+                // Validación básica
+                if (nombre === "" || !nameRegex.test(nombre)) {
+                    errorName.text(nombre === "" ? "El nombre es obligatorio." : "El nombre solo puede contener letras y espacios.");
+                    nameInput.addClass("is-invalid");
+                    return;
+                }
+
+                $.post("proyecto.crear.procesar.php", {
+                        nombre: nombre,
+                        descripcion: descripcion
+                    })
+                    .done(function(resp) {
+                        console.log("📦 Respuesta del servidor:", resp);
+                        let json;
+                        try {
+                            json = typeof resp === "object" ? resp : JSON.parse(resp);
+                        } catch (err) {
+                            console.error("❌ Error al parsear JSON:", err);
+                            mostrarAlerta("Respuesta inesperada del servidor.", "danger");
+                            return;
+                        }
+
+                        if (json.success === true) {
+                            const msg = encodeURIComponent(json.mensaje);
+                            window.location.href = "proyectos.php?msg=" + msg + "&type=success";
+                        } else {
+                            mostrarAlerta(json.mensaje || "Error desconocido.", "danger");
+                        }
+                    })
+                    .fail(function() {
+                        mostrarAlerta("⚠️ Error en la comunicación con el servidor.", "danger");
+                    });
+            });
+
+            // === Cancelar con confirmación ===
+            $(document).on("click", "#btn_cancelar", function(e) {
+                e.preventDefault();
+                if (confirm("¿Está seguro que desea cancelar? Se perderán los datos no guardados.")) {
+                    window.location.href = "proyectos.php";
+                }
+            });
+
+            // === Función para mostrar alertas Bootstrap ===
+            function mostrarAlerta(mensaje, tipo) {
+                const $alert = $(`
+                    <div class="alert alert-${tipo} alert-dismissible fade show mt-3" role="alert">
+                        ${mensaje}
+                        <button type="button" class="close" data-dismiss="alert" aria-label="Cerrar">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                `);
+                $("#alertContainer").html($alert);
+                $("html, body").animate({ scrollTop: 0 }, "fast");
+                setTimeout(() => $alert.alert("close"), 3500);
+            }
+        });
+    </script>
+</head>
+
+<body>
+    <?php include_once '../gui/navbar.php'; ?>
     <div class="container">
-        <div class="mb-3">
-            <a id="btnVolver" href="proyectos.php" class="btn btn-outline-secondary">
-                <span class="oi oi-arrow-left mr-1"></span> Volver
-            </a>
-        </div>
-        <form action="proyecto.crear.procesar.php" method="post">
+
+        <form id="createProjectForm" action="proyecto.crear.procesar.php" method="post">
             <div class="card">
                 <div class="card-header">
                     <h3>Crear Proyecto</h3>
                     <p>
-                        Complete los campos a continuaci&oacute;n.
-                        Luego, presione el bot&oacute;n <b>Confirmar</b>.<br />
-                        Si desea cancelar, presione el bot&oacute;n <b>Cancelar</b>.
+                        Complete los campos a continuación.<br>
+                        Luego, presione <b>Confirmar</b>.<br>
+                        Si desea cancelar, presione <b>Cancelar</b>.
                     </p>
                 </div>
+
                 <div class="card-body">
-                    <h4>Propiedades</h4>
+                    <div id="alertContainer"></div>
                     <div class="form-group">
                         <label for="inputNombre">Nombre</label>
-                        <input type="text" name="nombre" class="form-control" id="inputNombre" placeholder="Ingrese el nombre del Proyecto" required="">
+                        <input type="text" name="nombre" id="inputNombre" class="form-control" placeholder="Ingrese el nombre del Proyecto" required>
                     </div>
+
                     <div class="form-group">
-                        <label for="inputMail">Descripcion</label>
-                        <textarea class="form-control" name="descripcion" id="inputDescripcion" placeholder="Ingrese una breve Descripcion" rows="5" cols="40"></textarea>
+                        <label for="inputDescripcion">Descripción</label>
+                        <textarea name="descripcion" id="inputDescripcion" class="form-control" placeholder="Ingrese una breve descripción" rows="5"></textarea>
                     </div>
-                    <hr />
                 </div>
+
                 <div class="card-footer">
                     <button type="submit" class="btn btn-outline-success">
                         <span class="oi oi-check"></span> Confirmar
                     </button>
-                    <a href="proyectos.php">
-                        <button type="button" class="btn btn-outline-danger">
-                            <span class="oi oi-x"></span> Cancelar
-                        </button>
-                    </a>
+                    <button type="button" id="btn_cancelar" class="btn btn-outline-danger">
+                        <span class="oi oi-x"></span> Cancelar
+                    </button>
                 </div>
             </div>
         </form>
