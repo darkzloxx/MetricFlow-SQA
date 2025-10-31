@@ -50,6 +50,22 @@ foreach ($proyectos as $p) {
     $pname = htmlspecialchars($p['nombre'], ENT_QUOTES, 'UTF-8');
     $projectOptionsHtml .= '<option value="' . $pid . '">' . $pname . '</option>';
 }
+
+$rolesUsuario = $Usuario->getRoles() ?? [];
+$esAdmin = false;
+$esSuperAdmin = false;
+
+foreach ($rolesUsuario as $rol) {
+    // ✅ Accede con el getter en lugar de la propiedad protegida
+    $nombreRol = mb_strtolower(trim($rol->getNombre() ?? ''), 'UTF-8');
+
+    if ($nombreRol === 'administrador') $esAdmin = true;
+    if ($nombreRol === 'superadmin') $esSuperAdmin = true;
+}
+
+$ocultarProyectos = ($esAdmin || $esSuperAdmin);
+
+
 ?>
 <html>
 
@@ -65,6 +81,14 @@ foreach ($proyectos as $p) {
         const forbiddenRoleIds = <?= json_encode($forbiddenRoleIds) ?>;
 
         $(document).ready(function() {
+            const ocultarProyectos = <?= $ocultarProyectos ? 'true' : 'false'; ?>;
+            if (ocultarProyectos) {
+                // Si es admin/superadmin, deshabilitamos toda la lógica de proyectos
+                $('#btn_add_proyecto').remove();
+                $('#tablaProyectos').remove();
+            }
+
+
             // === VALIDACIÓN NOMBRE ===
             const nameInput = $("#inputNombre");
             const errorName = $("<div class='invalid-feedback d-block text-danger mt-1'></div>");
@@ -315,6 +339,8 @@ foreach ($proyectos as $p) {
                 <div class="card-header">
                     <h3>Modificar Usuario</h3>
                     <p>Actualice los datos y presione <b>Confirmar</b>. Si desea cancelar, presione <b>Cancelar</b>.</p>
+                    
+
                 </div>
 
                 <div class="card-body">
@@ -332,58 +358,66 @@ foreach ($proyectos as $p) {
                     <input type="hidden" name="id" value="<?= $Usuario->getId(); ?>">
                     <hr />
 
-                    <label>
-                        Proyecto/s:
-                        <button type="button" class="btn btn-primary btn-sm" id="btn_add_proyecto">
-                            <span class="oi oi-plus mr-1"></span> Nuevo
-                        </button>
-                    </label>
+                    <?php if (!$ocultarProyectos): ?>
+                        <label>
+                            Proyecto/s:
+                            <button type="button" class="btn btn-primary btn-sm" id="btn_add_proyecto">
+                                <span class="oi oi-plus mr-1"></span> Nuevo
+                            </button>
+                        </label>
 
-                    <!-- Plantillas ocultas -->
-                    <div style="display:none;">
-                        <select id="projectTemplate"><?= $projectOptionsHtml ?></select>
-                        <select id="roleTemplate"><?= $rolesOptionsHtml ?></select>
-                    </div>
+                        <!-- Plantillas ocultas -->
+                        <div style="display:none;">
+                            <select id="projectTemplate"><?= $projectOptionsHtml ?></select>
+                            <select id="roleTemplate"><?= $rolesOptionsHtml ?></select>
+                        </div>
 
-                    <table class="table table-bordered" id="tablaProyectos" <?= empty($asignados) ? 'style="display:none;"' : '' ?>>
-                        <thead>
-                            <tr>
-                                <th>Proyecto</th>
-                                <th>Rol</th>
-                                <th>Eliminar</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php foreach ($asignados as $row): ?>
+                        <table class="table table-bordered" id="tablaProyectos" <?= empty($asignados) ? 'style="display:none;"' : '' ?>>
+                            <thead>
                                 <tr>
-                                    <td>
-                                        <select class="form-control" name="listaProyectos[]">
-                                            <?php foreach ($proyectos as $p): ?>
-                                                <option value="<?= $p['id_proyecto']; ?>" <?= $p['id_proyecto'] == $row['id_proyecto'] ? 'selected' : ''; ?>>
-                                                    <?= htmlspecialchars($p['nombre']); ?>
-                                                </option>
-                                            <?php endforeach; ?>
-                                        </select>
-                                    </td>
-                                    <td>
-                                        <select class="form-control" name="rol[]">
-                                            <?php foreach ($rolesArr as $r):
-                                                $rid = (int)$r['id'];
-                                                if (in_array(mb_strtolower($r['nombre']), $forbiddenNames, true)) continue;
-                                            ?>
-                                                <option value="<?= $rid; ?>" <?= $rid == $row['id_rol'] ? 'selected' : ''; ?>>
-                                                    <?= htmlspecialchars($r['nombre']); ?>
-                                                </option>
-                                            <?php endforeach; ?>
-                                        </select>
-                                    </td>
-                                    <td class="text-center">
-                                        <button type="button" class="btn btn-danger btn-sm" id="btn_del_proyecto">Eliminar</button>
-                                    </td>
+                                    <th>Proyecto</th>
+                                    <th>Rol</th>
+                                    <th>Eliminar</th>
                                 </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody>
+
+                                <?php foreach ($asignados as $row): ?>
+                                    <tr>
+                                        <td>
+                                            <select class="form-control" name="listaProyectos[]">
+                                                <?php foreach ($proyectos as $p): ?>
+                                                    <option value="<?= $p['id_proyecto']; ?>" <?= $p['id_proyecto'] == $row['id_proyecto'] ? 'selected' : ''; ?>>
+                                                        <?= htmlspecialchars($p['nombre']); ?>
+                                                    </option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                        </td>
+                                        <td>
+                                            <select class="form-control" name="rol[]">
+                                                <?php foreach ($rolesArr as $r):
+                                                    $rid = (int)$r['id'];
+                                                    if (in_array(mb_strtolower($r['nombre']), $forbiddenNames, true)) continue;
+                                                ?>
+                                                    <option value="<?= $rid; ?>" <?= $rid == $row['id_rol'] ? 'selected' : ''; ?>>
+                                                        <?= htmlspecialchars($r['nombre']); ?>
+                                                    </option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                        </td>
+                                        <td class="text-center">
+                                            <button type="button" class="btn btn-danger btn-sm" id="btn_del_proyecto">Eliminar</button>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    <?php else: ?>
+                        <div class="alert alert-info mt-3">
+                            <strong>Nota:</strong> Los usuarios con rol <b>Administrador</b> o <b>SuperAdmin</b> no pueden tener proyectos asignados ni cambiar su rol.
+                        </div>
+                    <?php endif; ?>
+
                 </div>
 
                 <div class="card-footer">
