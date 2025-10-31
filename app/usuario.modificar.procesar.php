@@ -52,11 +52,31 @@ elseif (strpos($email, '@gmail.com') === false) {
         }
         $stmt->close();
 
+        // ============================================================
+        // Antes de reinicializar relaciones: comprobar si es admin/superadmin
+        // ============================================================
+        include_once '../modelo/Usuario.Class.php';
+        $UsuarioObj = new Usuario($idUsuario);
+        $rolesUsuario = $UsuarioObj->getRoles() ?? [];
+        $esAdmin = false;
+        foreach ($rolesUsuario as $r) {
+            $nombreRol = mb_strtolower(trim($r->getNombre() ?? ''), 'UTF-8');
+            if (in_array($nombreRol, ['administrador', 'superadmin'], true)) {
+                $esAdmin = true;
+                break;
+            }
+        }
+
         // ============================
         // REINICIALIZAR RELACIONES
         // ============================
-        $bd->query("DELETE FROM usuario_proyecto WHERE id_usuario = {$idUsuario}");
-        $bd->query("DELETE FROM usuario_rol WHERE id_usuario = {$idUsuario}");
+        // Si es admin/superadmin preservamos sus relaciones globales (no las borramos).
+        if (!$esAdmin) {
+            $bd->query("DELETE FROM usuario_proyecto WHERE id_usuario = {$idUsuario}");
+            $bd->query("DELETE FROM usuario_rol WHERE id_usuario = {$idUsuario}");
+        } else {
+            // Mantener roles/proyectos tal cual para administradores.
+        }
 
         // ============================
         // REINSERTAR PROYECTOS Y ROLES
