@@ -19,6 +19,7 @@ $listaProyectos = $proyectos ? $proyectos->fetch_all(MYSQLI_ASSOC) : [];
 ?>
 
 <html>
+
 <head>
     <meta charset="UTF-8">
     <link rel="stylesheet" href="../lib/bootstrap-4.1.1-dist/css/bootstrap.css" />
@@ -32,6 +33,7 @@ $listaProyectos = $proyectos ? $proyectos->fetch_all(MYSQLI_ASSOC) : [];
             color: #495057;
             background-color: #fff;
         }
+
         .btn-outline-secondary:hover {
             background-color: #f8f9fa;
             color: #212529;
@@ -40,48 +42,81 @@ $listaProyectos = $proyectos ? $proyectos->fetch_all(MYSQLI_ASSOC) : [];
 </head>
 
 <body>
-<?php include_once '../gui/navbar.php'; ?>
-<div class="container">
-    <div class="mb-3">
-        <a href="usuarios.php" class="btn btn-outline-secondary">
-            <span class="oi oi-arrow-left mr-1"></span> Volver
-        </a>
-    </div>
-
-    <div class="card">
-        <div class="card-header">
-            <h3 class="mb-0">Propiedades del Usuario</h3>
+    <?php include_once '../gui/navbar.php'; ?>
+    <div class="container">
+        <div class="mb-3">
+            <a href="usuarios.php" class="btn btn-outline-secondary">
+                <span class="oi oi-arrow-left mr-1"></span> Volver
+            </a>
         </div>
-        <div class="card-body">
-            <h4 class="card-text">Nombre</h4>
-            <p><?= htmlspecialchars($Usuario->getNombre()); ?></p>
-            <hr/>
-            <h4 class="card-text">Email</h4>
-            <p><?= htmlspecialchars($Usuario->getEmail()); ?></p>
 
-            <?php if (!empty($listaProyectos)) : ?>
-                <hr/>
-                <h4 class="card-text">Proyectos y Roles</h4>
-                <table class="table table-bordered table-striped" id="tablaUsuarios">
-                    <thead>
-                        <tr>
-                            <th>Proyecto</th>
-                            <th>Rol</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php foreach ($listaProyectos as $Proyec): ?>
-                            <tr>
-                                <td><?= htmlspecialchars($Proyec["nombre_proyecto"]) ?></td>
-                                <td><?= htmlspecialchars($Proyec["nombre_rol"]) ?></td>
-                            </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
+        <div class="card">
+            <div class="card-header">
+                <h3 class="mb-0">Propiedades del Usuario</h3>
+            </div>
+            <div class="card-body">
+                <h4 class="card-text">Nombre</h4>
+                <p><?= htmlspecialchars($Usuario->getNombre()); ?></p>
+                <hr />
+                <h4 class="card-text">Email</h4>
+                <p><?= htmlspecialchars($Usuario->getEmail()); ?></p>
+                <?php
+                // Detectar roles principales del usuario
+                $rolesUsuario = $Usuario->getRoles() ?? [];
+                $esAdmin = false;
+                $esSuperAdmin = false;
+
+                foreach ($rolesUsuario as $rol) {
+                    $nombreRol = mb_strtolower(trim($rol->getNombre() ?? ''), 'UTF-8');
+                    if ($nombreRol === 'administrador') $esAdmin = true;
+                    if ($nombreRol === 'superadmin') $esSuperAdmin = true;
+                }
+                ?>
+
+            <?php if ($esAdmin || $esSuperAdmin): ?>
+    <div class="mt-4 p-3 border rounded d-flex align-items-center justify-content-between" 
+         style="background-color: #f8f9fa; border-color: #dee2e6;">
+        <div>
+            <?php if ($esAdmin): ?>
+                <h5 class="mb-1 text-primary">
+                    <span class="oi oi-person mr-1"></span> Rol: Administrador
+                </h5>
+            <?php elseif ($esSuperAdmin): ?>
+                <h5 class="mb-1 text-dark">
+                    <span class="oi oi-star mr-1"></span> Rol: SuperAdmin
+                </h5>
+                <small class="text-muted">Acceso total al sistema, incluyendo configuración avanzada.</small>
             <?php endif; ?>
         </div>
+        <span class="oi oi-lock-locked text-secondary" title="Rol fijo"></span>
     </div>
-</div>
-<?php include_once '../gui/footer.php'; ?>
+<?php endif; ?>
+
+
+                <?php if (!empty($listaProyectos)) : ?>
+                    <hr />
+                    <h4 class="card-text">Proyectos y Roles</h4>
+                    <table class="table table-bordered table-striped" id="tablaUsuarios">
+                        <thead>
+                            <tr>
+                                <th>Proyecto</th>
+                                <th>Rol</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($listaProyectos as $Proyec): ?>
+                                <tr>
+                                    <td><?= htmlspecialchars($Proyec["nombre_proyecto"]) ?></td>
+                                    <td><?= htmlspecialchars($Proyec["nombre_rol"]) ?></td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+    <?php include_once '../gui/footer.php'; ?>
 </body>
+
 </html>

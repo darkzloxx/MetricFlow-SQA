@@ -4,11 +4,19 @@ if (!class_exists('ControlAcceso')) { require_once __DIR__ . '/../lib/ControlAcc
 
 $nombre = isset($_SESSION['usuario']) ? ($_SESSION['usuario']->nombre ?? 'Usuario') : 'Invitado';
 
-// -------------------------------
-// Recuperar roles y proyectos
-// -------------------------------
-$proyectosRoles = []; // array de ["proyecto" => ..., "rol" => ...]
-if (isset($_SESSION['usuario']) && isset($_SESSION['usuario']->proyectos) && is_array($_SESSION['usuario']->proyectos)) {
+// ------------------------------------------
+// Recuperar roles globales y de proyectos
+// ------------------------------------------
+$rolesGlobales = [];
+$proyectosRoles = [];
+
+if (isset($_SESSION['usuario']->roles) && is_array($_SESSION['usuario']->roles)) {
+    foreach ($_SESSION['usuario']->roles as $r) {
+        $rolesGlobales[] = $r->nombre;
+    }
+}
+
+if (isset($_SESSION['usuario']->proyectos) && is_array($_SESSION['usuario']->proyectos)) {
     foreach ($_SESSION['usuario']->proyectos as $p) {
         if (isset($p->roles) && is_array($p->roles)) {
             foreach ($p->roles as $r) {
@@ -19,32 +27,49 @@ if (isset($_SESSION['usuario']) && isset($_SESSION['usuario']->proyectos) && is_
             }
         }
     }
-} elseif (isset($_SESSION['usuario']->roles) && is_array($_SESSION['usuario']->roles)) {
-    foreach ($_SESSION['usuario']->roles as $r) {
-        $proyectosRoles[] = ['proyecto' => 'General', 'rol' => $r->nombre];
+}
+
+// ------------------------------------------
+// Detectar si es Admin o SuperAdmin
+// ------------------------------------------
+$esAdmin = false;
+$esSuperAdmin = false;
+foreach (array_merge($rolesGlobales, array_column($proyectosRoles, 'rol')) as $rol) {
+    $rolLower = mb_strtolower(trim($rol), 'UTF-8');
+    if ($rolLower === 'administrador') $esAdmin = true;
+    if ($rolLower === 'superadmin') $esSuperAdmin = true;
+}
+
+// ------------------------------------------
+// Determinar texto final
+// ------------------------------------------
+if ($esSuperAdmin) {
+    $detalle = '<span class="rol-superadmin">⭐ Rol: SuperAdmin</span>';
+} elseif ($esAdmin) {
+    $detalle = '<span class="rol-admin">🔧 Rol: Administrador</span>';
+} elseif (!empty($proyectosRoles)) {
+    if (count($proyectosRoles) === 1) {
+        $detalle = htmlspecialchars($proyectosRoles[0]['proyecto']) . 
+                   ' (' . htmlspecialchars($proyectosRoles[0]['rol']) . ')';
+    } else {
+        $primer = $proyectosRoles[0];
+        $resto = count($proyectosRoles) - 1;
+        $detalle = htmlspecialchars($primer['proyecto']) . 
+                   ' (' . htmlspecialchars($primer['rol']) . ') + ' . $resto . ' más';
     }
-}
-
-// -------------------------------
-// Formateo visual
-// -------------------------------
-if (empty($proyectosRoles)) {
-    $detalle = 'Sin proyecto asignado';
-} elseif (count($proyectosRoles) === 1) {
-    $detalle = htmlspecialchars($proyectosRoles[0]['proyecto']) . 
-               ' (' . htmlspecialchars($proyectosRoles[0]['rol']) . ')';
 } else {
-    $primer = $proyectosRoles[0];
-    $resto = count($proyectosRoles) - 1;
-    $detalle = htmlspecialchars($primer['proyecto']) . 
-               ' (' . htmlspecialchars($primer['rol']) . ') + ' . $resto . ' más';
+    $detalle = '<span class="rol-default">Usuario sin proyectos asignados</span>';
 }
 
+// ------------------------------------------
+// Tooltip con roles/proyectos (si hay varios)
+// ------------------------------------------
 $tooltipText = '';
 foreach ($proyectosRoles as $pr) {
     $tooltipText .= htmlspecialchars($pr['proyecto']) . ' → ' . htmlspecialchars($pr['rol']) . '&#10;';
 }
 ?>
+
 
 <link href="../lib/bootstrap-4.1.1-dist/css/uargflow_footer.css" type="text/css" rel="stylesheet" />
 
@@ -58,6 +83,21 @@ foreach ($proyectosRoles as $pr) {
   border-radius: 6px;
   text-align: left;
   max-width: 260px;
+}
+/* 🌙 Ajustes visuales para roles dentro del footer */
+.footer .rol-superadmin {
+  color: #ffd700; /* dorado brillante */
+  font-weight: 600;
+}
+
+.footer .rol-admin {
+  color: #4da3ff; /* celeste luminoso */
+  font-weight: 600;
+}
+
+.footer .rol-default {
+  color: #adb5bd; /* gris claro */
+  font-weight: 500;
 }
 
 /* Flecha del tooltip */
