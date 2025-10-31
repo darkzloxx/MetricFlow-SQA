@@ -133,6 +133,33 @@ $ocultarProyectos = ($esAdmin || $esSuperAdmin);
             // === Confirmación inteligente con diferencias ===
             $("#editUserForm").on("submit", function(e) {
                 e.preventDefault(); // primero detenemos el envío
+                // === VALIDACIÓN GLOBAL ===
+                const nombreVal = $("#inputNombre").val().trim();
+                const emailVal = $("#inputEmail").val().trim();
+                const nameRegex = /^[A-Za-zÁÉÍÓÚáéíóúÑñ ]+$/;
+                const gmailRegex = /^[a-zA-Z0-9._%+-]+@gmail\.com$/;
+                let valid = true;
+
+                if (nombreVal === "" || !nameRegex.test(nombreVal)) {
+                    $("#inputNombre").addClass("is-invalid");
+                    $("#inputNombre").next(".invalid-feedback").text(
+                        nombreVal === "" ? "El nombre es obligatorio." : "El nombre solo puede contener letras y espacios."
+                    );
+                    valid = false;
+                }
+
+                if (emailVal === "" || !gmailRegex.test(emailVal)) {
+                    $("#inputEmail").addClass("is-invalid");
+                    $("#inputEmail").next(".invalid-feedback").text(
+                        emailVal === "" ? "El email es obligatorio." : "El correo debe ser un Gmail válido (ejemplo: usuario@gmail.com)."
+                    );
+                    valid = false;
+                }
+
+                if (!valid) {
+                    e.preventDefault();
+                    return false;
+                }
 
                 const nombreActual = "<?= addslashes($Usuario->getNombre()); ?>";
                 const emailActual = "<?= addslashes($Usuario->getEmail()); ?>";
@@ -339,7 +366,7 @@ $ocultarProyectos = ($esAdmin || $esSuperAdmin);
                 <div class="card-header">
                     <h3>Modificar Usuario</h3>
                     <p>Actualice los datos y presione <b>Confirmar</b>. Si desea cancelar, presione <b>Cancelar</b>.</p>
-                    
+
 
                 </div>
 
