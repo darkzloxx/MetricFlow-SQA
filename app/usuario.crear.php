@@ -244,48 +244,63 @@ foreach ($rolesArr as $r) {
                 refreshProjectOptions();
             });
         }
-        // Validar antes de enviar: asegurarse que si hay filas, cada una tenga proyecto y rol
-        $(document).on('submit', '#createUserForm', function(e) {
-            // habilitar opciones deshabilitadas para que los valores seleccionados se envíen
-            $('select[name="listaProyectos[]"] option, select[name="rol[]"] option').prop('disabled', false);
+        $(document).ready(function() {
+            $("#createUserForm").on("submit", function(e) {
+                e.preventDefault();
 
-            const rows = $('#tablaProyectos tbody tr');
-            let invalid = false;
-            let forbiddenAssigned = false;
-            rows.each(function(idx, tr) {
-                const proj = $(tr).find('select[name="listaProyectos[]"]').val();
-                const rol = $(tr).find('select[name="rol[]"]').val();
-                // si hay proyecto pero no rol, marcar inválido
-                if ((proj && proj.trim() !== '') && (!rol || rol.trim() === '')) {
-                    invalid = true;
-                    return false; // break
-                }
-                // si hay rol pero no proyecto, también inválido
-                if ((rol && rol.trim() !== '') && (!proj || proj.trim() === '')) {
-                    invalid = true;
-                    return false;
-                }
+                // Validación previa ya está implementada arriba
+                const form = $(this);
+                const formData = form.serialize();
 
-                // comprobar roles prohibidos por id
-                if (rol && forbiddenRoleIds.indexOf(rol) !== -1) {
-                    forbiddenAssigned = true;
-                    return false;
-                }
+                $.post("usuario.crear.procesar.php", formData)
+                    .done(function(resp) {
+                        console.log("📦 Respuesta del servidor:", resp);
+
+                        let json;
+                        try {
+                            json = typeof resp === "object" ? resp : JSON.parse(resp);
+                        } catch (err) {
+                            console.error("❌ Error al parsear JSON:", err);
+                            mostrarAlerta("Respuesta inesperada del servidor.", "danger");
+                            return;
+                        }
+
+                        console.log("✅ JSON interpretado:", json);
+
+                        if (json.success === true) {
+                            console.log("➡️ Redirigiendo a usuarios.php ...");
+                            const msg = encodeURIComponent(json.mensaje);
+                            window.location.href = "usuarios.php?msg=" + msg + "&type=success";
+                        } else {
+                            console.warn("⚠️ json.success no es true:", json);
+                            mostrarAlerta(json.mensaje || "Error desconocido.", "danger");
+                        }
+                    })
+                    .fail(function() {
+                        mostrarAlerta("⚠️ Error en la comunicación con el servidor.", "danger");
+                    });
+
             });
 
-            if (invalid) {
-                e.preventDefault();
-                alert('Por favor, complete Proyecto y Rol en todas las filas antes de enviar.');
-                return false;
+            // Función para mostrar alertas Bootstrap
+            function mostrarAlerta(mensaje, tipo) {
+                const $alert = $(`
+            <div class="alert alert-${tipo} alert-dismissible fade show mt-3" role="alert">
+                ${mensaje}
+                <button type="button" class="close" data-dismiss="alert" aria-label="Cerrar">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+        `);
+                $("#alertContainer").html($alert);
+                $("html, body").animate({
+                    scrollTop: 0
+                }, "fast");
+                setTimeout(() => $alert.alert("close"), 3500);
             }
-            if (forbiddenAssigned) {
-                e.preventDefault();
-                alert('No está permitido asignar los roles "Administrador", "superadmin" o "Sin rol" en proyectos.');
-                return false;
-            }
-            // otherwise allow submit
         });
     </script>
+
     <style>
         .btn-outline-secondary {
             border-color: #dee2e6;
@@ -303,11 +318,6 @@ foreach ($rolesArr as $r) {
 <body>
     <?php include_once '../gui/navbar.php'; ?>
     <div class="container">
-        <div class="mb-3">
-            <a id="btnVolver" href="usuarios.php" class="btn btn-outline-secondary">
-                <span class="oi oi-arrow-left mr-1"></span> Volver
-            </a>
-        </div>
         <form id="createUserForm" action="usuario.crear.procesar.php" method="post">
             <div class="card">
                 <div class="card-header">
@@ -319,6 +329,9 @@ foreach ($rolesArr as $r) {
                     </p>
                 </div>
                 <div class="card-body">
+                    <!-- Contenedor de alertas -->
+                    <div id="alertContainer"></div>
+
                     <h4>Propiedades</h4>
                     <div class="form-group">
                         <label for="inputNombre">Nombre</label>
@@ -369,11 +382,11 @@ foreach ($rolesArr as $r) {
                         <button type="submit" class="btn btn-outline-success">
                             <span class="oi oi-check"></span> Confirmar
                         </button>
-                        <a href="usuarios.php">
-                            <button type="button" class="btn btn-outline-danger">
-                                <span class="oi oi-x"></span> Cancelar
-                            </button>
+                        <a href="usuarios.php" class="btn btn-outline-danger" id="btn_cancelar"
+                            onclick="return confirm('¿Está seguro que desea cancelar? Se perderán los datos no guardados.');">
+                            <span class="oi oi-x"></span> Cancelar
                         </a>
+
                     </div>
                 </div>
             </div>
