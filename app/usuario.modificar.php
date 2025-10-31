@@ -88,6 +88,14 @@ $ocultarProyectos = ($esAdmin || $esSuperAdmin);
                 $('#tablaProyectos').remove();
             }
 
+            // Handler delegado único para elementos que declaren data-confirm
+            $(document).on('click', 'a[data-confirm], button[data-confirm]', function(e) {
+                
+                var msg = $(this).attr('data-confirm') || '¿Está seguro?'; 
+                if (!confirm(msg)) {
+                    +e.preventDefault(); 
+                } 
+            });
 
             // === VALIDACIÓN NOMBRE ===
             const nameInput = $("#inputNombre");
@@ -331,8 +339,19 @@ $ocultarProyectos = ($esAdmin || $esSuperAdmin);
         }
 
         function eliminarProyecto() {
-            $(this).closest('tr').fadeOut("slow", function() {
-                $(this).remove();
+            // Confirmación antes de eliminar la fila (muestra el nombre del proyecto si está disponible)
+
+            var $tr = $(this).closest('tr');
+            var nombreProyecto = $tr.find('select[name="listaProyectos[]"] option:selected').text() || '';
+            var msg = '¿Confirma que desea eliminar esta asignación';
+            if (nombreProyecto) msg += ' del proyecto \"' + nombreProyecto + '\"';
+            msg += '?';
+            if (!confirm(msg)) {
+
+                return;
+            }
+            $tr.fadeOut("slow", function() {
+                +$(this).remove();
                 refreshProjectOptions();
             });
         }
@@ -355,11 +374,7 @@ $ocultarProyectos = ($esAdmin || $esSuperAdmin);
 <body>
     <?php include_once '../gui/navbar.php'; ?>
     <div class="container">
-        <div class="mb-3">
-            <a href="usuarios.php" class="btn btn-outline-secondary">
-                <span class="oi oi-arrow-left mr-1"></span> Volver
-            </a>
-        </div>
+
 
         <form id="editUserForm" action="usuario.modificar.procesar.php" method="post">
             <div class="card">
@@ -451,7 +466,8 @@ $ocultarProyectos = ($esAdmin || $esSuperAdmin);
                     <button type="submit" class="btn btn-outline-success">
                         <span class="oi oi-check"></span> Confirmar
                     </button>
-                    <a href="usuarios.php" class="btn btn-outline-danger">
+                    <a href="usuarios.php" class="btn btn-outline-danger" id="btn_cancelar"
+                        onclick="return confirm('¿Está seguro que desea cancelar? Se perderán los cambios no guardados.');">
                         <span class="oi oi-x"></span> Cancelar
                     </a>
                 </div>
