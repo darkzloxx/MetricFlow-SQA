@@ -20,7 +20,7 @@ $id = $_GET["id"];
             <form action="proyecto.eliminar.procesar.php" method="post">
                 <div class="card">
                     <div class="card-header">
-                        <h3>Eliminar Permiso</h3>
+                        <h3>Eliminar Proyecto</h3>
                     </div>
                     <div class="card-body">
                         <p class="alert alert-warning ">
