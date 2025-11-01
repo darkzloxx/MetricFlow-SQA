@@ -135,10 +135,11 @@ if ($tieneAbmProyectos) {
                                             <span class="oi oi-pencil" aria-hidden="true"></span>
                                         </a>
 
-                                        <a title="Eliminar" href="proyecto.eliminar.php?id=<?= (int)$Proyec['id_proyecto']; ?>"
-                                            class="btn btn-outline-danger" role="button" aria-label="Eliminar proyecto <?= htmlspecialchars($Proyec['nombre'], ENT_QUOTES, 'UTF-8'); ?>">
-                                            <span class="oi oi-trash" aria-hidden="true"></span>
-                                        </a>
+                                        <button title="Eliminar" class="btn btn-outline-danger btn-eliminar"
+                                            data-id="<?= (int)$Proyec['id_proyecto']; ?>"
+                                            data-nombre="<?= htmlspecialchars($Proyec['nombre'], ENT_QUOTES, 'UTF-8'); ?>">
+                                            <span class="oi oi-trash"></span>
+                                        </button>
                                     <?php endif; ?>
                                 </td>
                             </tr>
@@ -148,9 +149,61 @@ if ($tieneAbmProyectos) {
             </div>
         </div>
     </div>
-
     <?php include_once '../gui/footer.php'; ?>
+    <script>
+        (function($) {
+            $(document).on('click', '.btn-eliminar', function(e) {
+                e.preventDefault();
+                const $btn = $(this);
+                const id = $btn.data('id');
+                const nombre = $btn.data('nombre');
 
+                if (!confirm(`¿Confirma que desea eliminar el proyecto "${nombre}"? Esta operación no puede deshacerse.`)) return;
+
+                $.post('proyecto.eliminar.procesar.php', {
+                        id: id,
+                        ajax: 1
+                    })
+                    .done(function(resp) {
+                        let json;
+                        try {
+                            json = (typeof resp === 'object') ? resp : JSON.parse(resp);
+                        } catch {
+                            mostrarAlerta('Respuesta inesperada del servidor.', 'danger');
+                            return;
+                        }
+
+                        if (json.success) {
+                            $btn.closest('tr').fadeOut(300, function() {
+                                $(this).remove();
+                            });
+                            mostrarAlerta(json.message || 'Proyecto eliminado correctamente.', 'success');
+                        } else {
+                            mostrarAlerta(json.message || 'No se pudo eliminar el proyecto.', 'danger');
+                        }
+                    })
+                    .fail(function() {
+                        mostrarAlerta('⚠️ Error en la comunicación con el servidor.', 'danger');
+                    });
+            });
+
+            function mostrarAlerta(mensaje, tipo) {
+                const $alert = $(`
+                    <div class="alert alert-${tipo} alert-dismissible fade show mt-3" role="alert">
+                        ${mensaje}
+                        <button type="button" class="close" data-dismiss="alert" aria-label="Cerrar">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                `);
+                $('#alertContainer').html($alert);
+                $('html, body').animate({
+                    scrollTop: 0
+                }, 'fast');
+                setTimeout(() => $alert.alert('close'), 3000);
+            }
+        })(jQuery);
+    </script>
 </body>
 
 </html>

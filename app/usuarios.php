@@ -78,14 +78,14 @@ $ColeccionUsuarios = new ColeccionUsuarios();
                     <?php foreach ($ColeccionUsuarios->getUsuarios() as $Usuario): ?>
                         <tr>
                             <td><?= $Usuario->getNombre(); ?><br /><?= $Usuario->getEmail(); ?></td>
-                           <td>
+                            <td>
                                 <a title="Ver detalle" href="usuario.ver.php?id=<?= $Usuario->getId(); ?>"
-                                   class="btn btn-outline-info" role="button" aria-label="Ver usuario <?= htmlspecialchars($Usuario->getNombre(), ENT_QUOTES, 'UTF-8'); ?>">
+                                    class="btn btn-outline-info" role="button" aria-label="Ver usuario <?= htmlspecialchars($Usuario->getNombre(), ENT_QUOTES, 'UTF-8'); ?>">
                                     <span class="oi oi-zoom-in" aria-hidden="true"></span>
                                 </a>
 
                                 <a title="Modificar" href="usuario.modificar.php?id=<?= $Usuario->getId(); ?>"
-                                   class="btn btn-outline-warning" role="button" aria-label="Modificar usuario <?= htmlspecialchars($Usuario->getNombre(), ENT_QUOTES, 'UTF-8'); ?>">
+                                    class="btn btn-outline-warning" role="button" aria-label="Modificar usuario <?= htmlspecialchars($Usuario->getNombre(), ENT_QUOTES, 'UTF-8'); ?>">
                                     <span class="oi oi-pencil" aria-hidden="true"></span>
                                 </a>
 
@@ -94,6 +94,7 @@ $ColeccionUsuarios = new ColeccionUsuarios();
                                     data-nombre="<?= htmlspecialchars($Usuario->getNombre(), ENT_QUOTES, 'UTF-8'); ?>">
                                     <span class="oi oi-trash" aria-hidden="true"></span>
                                 </a>
+
                             </td>
                         </tr>
                     <?php endforeach; ?>
