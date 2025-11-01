@@ -96,10 +96,13 @@ $urlDashboard = 'dashboard.php?proyecto=' . $idProyecto;
                     <h5 class="mb-1">Estado</h5>
                     <div><?= htmlspecialchars($Proyecto['estado'], ENT_QUOTES, 'UTF-8'); ?></div>
                 </div>
-                <div class="mb-3">
-                    <h5 class="mb-1">Descripción</h5>
-                    <div><?= nl2br(htmlspecialchars((string)$Proyecto['descripcion'], ENT_QUOTES, 'UTF-8')); ?></div>
-                </div>
+                <?php if (!empty($Proyecto['descripcion'])) { ?>
+                    <div class="mb-3">
+                        <h5 class="mb-1">Descripción</h5>
+                        <div><?= nl2br(htmlspecialchars((string)$Proyecto['descripcion'], ENT_QUOTES, 'UTF-8')); ?></div>
+                    </div>
+                <?php } ?>
+
                 <?php if (!empty($Proyecto['objetivo'])) { ?>
                     <div class="mb-4">
                         <h5 class="mb-1">Objetivo</h5>

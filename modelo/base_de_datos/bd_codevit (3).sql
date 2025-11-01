@@ -335,7 +335,7 @@ CREATE TABLE `proyecto` (
   `id_proyecto` int(11) NOT NULL,
   `objetivo` text DEFAULT NULL,
   `descripcion` text DEFAULT NULL,
-  `estado` enum('Registrado','En_Progreso','Finalizado','Cancelado') NOT NULL DEFAULT 'Registrado',
+  `estado` enum('Registrado','En Progreso','Finalizado','Cancelado') NOT NULL DEFAULT 'Registrado',
   `nombre` varchar(100) NOT NULL,
   `id_modelo` int(11) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;

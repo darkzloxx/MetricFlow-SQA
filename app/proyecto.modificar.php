@@ -9,7 +9,8 @@ $bd = BDConexion::getInstancia();
 // ==========================
 // CARGA DE DATOS DEL PROYECTO
 // ==========================
-$stmt = $bd->prepare("SELECT id_proyecto, nombre, descripcion, estado FROM proyecto WHERE id_proyecto = ?");
+// 👇 agregamos "objetivo" en el SELECT
+$stmt = $bd->prepare("SELECT id_proyecto, nombre, descripcion, objetivo, estado FROM proyecto WHERE id_proyecto = ?");
 $stmt->bind_param("i", $id);
 $stmt->execute();
 $res = $stmt->get_result();
@@ -33,9 +34,6 @@ if (!$Proyecto) {
     <script>
         $(document).ready(function() {
 
-            // ===============================
-            // VALIDACIÓN NOMBRE DEL PROYECTO
-            // ===============================
             const nameInput = $("#inputNombre");
             const errorName = $("<div class='invalid-feedback d-block text-danger mt-1'></div>");
             nameInput.after(errorName);
@@ -55,18 +53,15 @@ if (!$Proyecto) {
                 }
             });
 
-            // ===============================
-            // SUBMIT CON CONFIRMACIÓN Y AJAX
-            // ===============================
             $("#editProjectForm").on("submit", function(e) {
                 e.preventDefault();
 
-                const nombreVal = nameInput.val().trim();
+                const nombreVal = $("#inputNombre").val().trim();
                 const descVal = $("#inputDescripcion").val().trim();
+                const objVal  = $("#inputObjetivo").val().trim(); // 👈 nuevo
                 const estadoVal = $("#inputEstado").val();
                 let valid = true;
 
-                // Revalidar nombre
                 const nameRegex = /^[A-Za-zÁÉÍÓÚáéíóúÑñ0-9 _-]+$/;
                 if (nombreVal === "") {
                     errorName.text("El nombre es obligatorio.");
@@ -86,14 +81,16 @@ if (!$Proyecto) {
                     return false;
                 }
 
-                // Detección de cambios
+                // ===== Detección de cambios =====
                 const nombreActual = "<?= addslashes($Proyecto['nombre']); ?>";
-                const descActual = "<?= addslashes($Proyecto['descripcion']); ?>";
+                const descActual   = "<?= addslashes($Proyecto['descripcion']); ?>";
+                const objActual    = "<?= addslashes($Proyecto['objetivo'] ?? ''); ?>";
                 const estadoActual = "<?= addslashes($Proyecto['estado']); ?>";
 
                 const cambios = [];
                 if (nombreVal !== nombreActual) cambios.push(`- Nombre: "${nombreActual}" → "${nombreVal}"`);
-                if (descVal !== descActual) cambios.push(`- Descripción modificada`);
+                if (descVal !== descActual)     cambios.push(`- Descripción modificada`);
+                if (objVal  !== objActual)      cambios.push(`- Objetivo modificado`);
                 if (estadoVal !== estadoActual) cambios.push(`- Estado: "${estadoActual}" → "${estadoVal}"`);
 
                 if (cambios.length === 0) {
@@ -101,11 +98,10 @@ if (!$Proyecto) {
                     return false;
                 }
 
-                // Confirmación de cambios
                 const msg = `Está a punto de modificar el proyecto "${nombreActual}".\n\nCambios detectados:\n${cambios.join("\n")}\n\n¿Desea confirmar los cambios?`;
                 if (!confirm(msg)) return false;
 
-                // Envío AJAX
+                // Envío AJAX con el nuevo campo objetivo
                 $.ajax({
                     url: "proyecto.modificar.procesar.php",
                     type: "POST",
@@ -141,7 +137,7 @@ if (!$Proyecto) {
                     <div class="form-group">
                         <label for="inputNombre">Nombre</label>
                         <input type="text" name="nombre" class="form-control" id="inputNombre"
-                            value="<?= htmlspecialchars($Proyecto['nombre']); ?>">
+                               value="<?= htmlspecialchars($Proyecto['nombre']); ?>">
                     </div>
 
                     <div class="form-group">
@@ -149,11 +145,17 @@ if (!$Proyecto) {
                         <textarea name="descripcion" class="form-control" id="inputDescripcion" rows="4"><?= htmlspecialchars($Proyecto['descripcion']); ?></textarea>
                     </div>
 
+                    <!-- 👇 Nuevo campo, misma lógica que Descripción -->
+                    <div class="form-group">
+                        <label for="inputObjetivo">Objetivo <small class="text-muted">(opcional)</small></label>
+                        <textarea name="objetivo" class="form-control" id="inputObjetivo" rows="3"><?= htmlspecialchars($Proyecto['objetivo'] ?? ''); ?></textarea>
+                    </div>
+
                     <div class="form-group">
                         <label for="inputEstado">Estado</label>
                         <select name="estado" id="inputEstado" class="form-control">
                             <?php
-                            $estados = ['Registrado', 'En_Progreso', 'Finalizado', 'Cancelado'];
+                            $estados = ['Registrado', 'En Progreso', 'Finalizado', 'Cancelado'];
                             foreach ($estados as $e) {
                                 $sel = ($Proyecto['estado'] === $e) ? 'selected' : '';
                                 echo "<option value='$e' $sel>$e</option>";
@@ -170,7 +172,7 @@ if (!$Proyecto) {
                         <span class="oi oi-check"></span> Confirmar
                     </button>
                     <a href="proyectos.php" class="btn btn-outline-danger"
-                        onclick="return confirm('¿Está seguro que desea cancelar? Se perderán los cambios no guardados.');">
+                       onclick="return confirm('¿Está seguro que desea cancelar? Se perderán los cambios no guardados.');">
                         <span class="oi oi-x"></span> Cancelar
                     </a>
                 </div>

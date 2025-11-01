@@ -52,6 +52,7 @@ ControlAcceso::requierePermiso(PermisosSistema::ABM_PROYECTOS);
                 e.preventDefault();
                 const nombre = nameInput.val().trim();
                 const descripcion = $("#inputDescripcion").val().trim();
+                const objetivo = $("#inputObjetivo").val().trim();
                 const nameRegex = /^[A-Za-zÁÉÍÓÚáéíóúÑñ ]+$/;
 
                 // Validación básica
@@ -63,7 +64,8 @@ ControlAcceso::requierePermiso(PermisosSistema::ABM_PROYECTOS);
 
                 $.post("proyecto.crear.procesar.php", {
                         nombre: nombre,
-                        descripcion: descripcion
+                        descripcion: descripcion,
+                        objetivo: objetivo // 👈 nuevo campo opcional
                     })
                     .done(function(resp) {
                         console.log("📦 Respuesta del servidor:", resp);
@@ -107,7 +109,9 @@ ControlAcceso::requierePermiso(PermisosSistema::ABM_PROYECTOS);
                     </div>
                 `);
                 $("#alertContainer").html($alert);
-                $("html, body").animate({ scrollTop: 0 }, "fast");
+                $("html, body").animate({
+                    scrollTop: 0
+                }, "fast");
                 setTimeout(() => $alert.alert("close"), 3500);
             }
         });
@@ -137,21 +141,28 @@ ControlAcceso::requierePermiso(PermisosSistema::ABM_PROYECTOS);
                     </div>
 
                     <div class="form-group">
-                        <label for="inputDescripcion">Descripción</label>
+                        <label for="inputDescripcion">Descripción <small class="text-muted">(opcional)</small></label>
                         <textarea name="descripcion" id="inputDescripcion" class="form-control" placeholder="Ingrese una breve descripción" rows="5"></textarea>
+                    </div>
+                    <!-- 👇 Nuevo campo, misma lógica que Descripción -->
+                    <div class="form-group">
+                        <label for="inputObjetivo">Objetivo <small class="text-muted">(opcional)</small></label>
+                        <textarea name="objetivo" id="inputObjetivo" class="form-control" placeholder="Describa el objetivo principal del proyecto" rows="5"></textarea>
                     </div>
                 </div>
 
-                <div class="card-footer">
-                    <button type="submit" class="btn btn-outline-success">
-                        <span class="oi oi-check"></span> Confirmar
-                    </button>
-                    <button type="button" id="btn_cancelar" class="btn btn-outline-danger">
-                        <span class="oi oi-x"></span> Cancelar
-                    </button>
-                </div>
+
             </div>
-        </form>
+            <div class="card-footer">
+                <button type="submit" class="btn btn-outline-success">
+                    <span class="oi oi-check"></span> Confirmar
+                </button>
+                <button type="button" id="btn_cancelar" class="btn btn-outline-danger">
+                    <span class="oi oi-x"></span> Cancelar
+                </button>
+            </div>
+    </div>
+    </form>
     </div>
     <?php include_once '../gui/footer.php'; ?>
 </body>

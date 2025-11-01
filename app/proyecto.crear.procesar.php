@@ -13,6 +13,7 @@ try {
 
     $nombre = trim($_POST['nombre'] ?? '');
     $descripcion = trim($_POST['descripcion'] ?? '');
+    $objetivo = trim($_POST['objetivo'] ?? '');
 
     if ($nombre === '') {
         throw new Exception("El nombre es obligatorio.");
@@ -22,6 +23,7 @@ try {
         throw new Exception("El nombre solo puede contener letras y espacios.");
     }
 
+    // Verificar duplicado
     $query = "SELECT 1 FROM proyecto WHERE nombre = ?";
     $stmt = $bd->prepare($query);
     $stmt->bind_param('s', $nombre);
@@ -30,11 +32,14 @@ try {
     if ($res->num_rows > 0) {
         throw new Exception("Ya existe un proyecto con el nombre ingresado.");
     }
+    $stmt->close();
 
+    // Insertar nuevo proyecto (con objetivo opcional)
     $sql = "INSERT INTO proyecto (objetivo, descripcion, estado, nombre, id_modelo)
-        VALUES (NULL, ?, 'Registrado', ?, NULL)";
+            VALUES (?, ?, 'Registrado', ?, NULL)";
     $stmt = $bd->prepare($sql);
-    $stmt->bind_param('ss', $descripcion, $nombre);
+    $stmt->bind_param('sss', $objetivo, $descripcion, $nombre); // 👈 tipos y orden correctos
+
     if (!$stmt->execute()) {
         throw new Exception("Error al crear el proyecto: " . $stmt->error);
     }
@@ -44,10 +49,10 @@ try {
     $response['mensaje'] = "Proyecto creado correctamente.";
 
 } catch (Exception $e) {
-    $bd->rollback();
+    if (isset($bd)) $bd->rollback();
     $response['mensaje'] = $e->getMessage();
 } finally {
-    $bd->autocommit(true);
+    if (isset($bd)) $bd->autocommit(true);
 }
 
 echo json_encode($response);
