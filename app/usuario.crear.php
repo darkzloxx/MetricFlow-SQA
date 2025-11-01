@@ -335,7 +335,7 @@ foreach ($rolesArr as $r) {
                     <h4>Propiedades</h4>
                     <div class="form-group">
                         <label for="inputNombre">Nombre</label>
-                        <input type="text" name="nombre" pattern="[A-Za-z]+" class="form-control" id="inputNombre" placeholder="Ingrese el nombre del Usuario" required="">
+                        <input type="text" name="nombre" pattern="[A-Za-z]+" class="form-control" id="inputNombre" placeholder="Ingrese el nombre del Usuario" >
                     </div>
                     <div class="form-group">
                         <label for="inputMail">Email</label>
