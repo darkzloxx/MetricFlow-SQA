@@ -44,6 +44,37 @@ try {
         throw new Exception("Error al crear el proyecto: " . $stmt->error);
     }
 
+    // Obtener id del proyecto insertado
+    $idProyecto = $bd->insert_id;
+
+    // Asociar el nuevo proyecto a todas las fases existentes (fechas NULL por defecto)
+    $sqlFases = "SELECT id_fase FROM fase ORDER BY id_fase";
+    $resFases = $bd->query($sqlFases);
+    if ($resFases === false) {
+        throw new Exception("Error al obtener fases: " . $bd->error);
+    }
+
+    $fases = $resFases->fetch_all(MYSQLI_ASSOC);
+    $resFases->free();
+
+    if (!empty($fases)) {
+        $stmtIns = $bd->prepare("INSERT INTO proyecto_fase (id_proyecto, id_fase, fecha_inicio, fecha_fin) VALUES (?, ?, NULL, NULL)");
+        if ($stmtIns === false) {
+            throw new Exception("Error al preparar inserción en proyecto_fase: " . $bd->error);
+        }
+
+        foreach ($fases as $f) {
+            $idFase = (int)$f['id_fase'];
+            $stmtIns->bind_param('ii', $idProyecto, $idFase);
+            if (!$stmtIns->execute()) {
+                $stmtIns->close();
+                throw new Exception("Error al asignar fase (id_fase={$idFase}) al proyecto: " . $stmtIns->error);
+            }
+        }
+
+        $stmtIns->close();
+    }
+
     $bd->commit();
     $response['success'] = true;
     $response['mensaje'] = "Proyecto creado correctamente.";

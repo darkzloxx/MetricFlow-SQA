@@ -35,14 +35,25 @@ if ($tieneAbmProyectos) {
 
     <style>
         .btn-outline-secondary {
+            /* Mantener estilo "outline" pero con borde visible sobre fondo claro */
+            border: 1px solid #dee2e6;
             border-color: #dee2e6;
             color: #495057;
-            background-color: #fff;
+            background-color: transparent;
+            transition: background-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out, border-color 0.15s ease-in-out;
         }
 
         .btn-outline-secondary:hover {
             background-color: #f8f9fa;
             color: #212529;
+            border-color: #ced4da;
+            box-shadow: 0 0 0 0.15rem rgba(108,117,125,0.08);
+        }
+        /* Uniformizar tamaño de iconos Open Iconic dentro de botones */
+        .btn .oi {
+            font-size: 1.05rem; /* ajustar valor para igualar visualmente */
+            vertical-align: middle;
+            line-height: 1;
         }
     </style>
 </head>
@@ -125,16 +136,25 @@ if ($tieneAbmProyectos) {
                                         <span class="oi oi-eye" aria-hidden="true"></span>
                                     </a>
 
-                                    <a title="Dashboard" href="dashboard.php?proyecto=<?= (int)$Proyec['id_proyecto']; ?>"
+                                    <a title="Dashboard Inicial" href="dashboard.php?proyecto=<?= (int)$Proyec['id_proyecto']; ?>"
                                         class="btn btn-outline-info" role="button" aria-label="Ver dashboard del proyecto <?= htmlspecialchars($Proyec['nombre'], ENT_QUOTES, 'UTF-8'); ?>">
                                         <span class="oi oi-bar-chart" aria-hidden="true"></span>
                                     </a>
+                                    <!--Dashboard exclusivo (solo si tiene permiso de métricas o es SuperAdmin/Líder/Gerente) -->
+                                    <?php if (ControlAcceso::verificaPermiso(PermisosSistema::VISUALIZACION_METRICAS)): ?>
+                                        <a title="Dashboard de Calidad"
+                                            href="dashboard_exclusivo.php?proyecto=<?= (int)$Proyec['id_proyecto']; ?>"
+                                            class="btn btn-outline-secondary"
+                                            role="button"
+                                            aria-label="Dashboard de Calidad del proyecto <?= htmlspecialchars($Proyec['nombre'], ENT_QUOTES, 'UTF-8'); ?>">
+                                            <span class="oi oi-graph oi-lg" aria-hidden="true"></span>
+                                        </a>
+                                    <?php endif; ?>
                                     <?php if ($tieneAbmProyectos): ?>
                                         <a title="Modificar" href="proyecto.modificar.php?id=<?= (int)$Proyec['id_proyecto']; ?>"
                                             class="btn btn-outline-warning" role="button" aria-label="Modificar proyecto <?= htmlspecialchars($Proyec['nombre'], ENT_QUOTES, 'UTF-8'); ?>">
                                             <span class="oi oi-pencil" aria-hidden="true"></span>
                                         </a>
-
                                         <button title="Eliminar" class="btn btn-outline-danger btn-eliminar"
                                             data-id="<?= (int)$Proyec['id_proyecto']; ?>"
                                             data-nombre="<?= htmlspecialchars($Proyec['nombre'], ENT_QUOTES, 'UTF-8'); ?>">

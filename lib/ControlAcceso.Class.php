@@ -13,12 +13,14 @@ class PermisosSistema
     public const DASHBOARD = 'Visualización de Dashboard Inicial';
     public const ABM_USUARIOS = 'ABM Usuarios';
     public const ABM_PROYECTOS = 'ABM Proyectos';
+    // Permiso para ver las métricas individuales / dashboard exclusivo
+    public const VISUALIZACION_METRICAS = 'Visualización de Métricas';
     public const GESTION_MODELO_CALIDAD = 'Gestión de Modelo de Calidad';
     // Alias de compatibilidad con código antiguo
     public const PERMISO_USUARIOS = self::ABM_USUARIOS;
     public const PERMISO_PERMISOS = 'ABM Permisos';
     public const PERMISO_ROLES = 'ABM Roles';
-
+    
     // Rol por defecto para auto-registro
     public const ROL_ESTANDAR = 'Espectador';
 }

@@ -1,42 +1,34 @@
--- =====================================================
--- CREACIÓN Y CONFIGURACIÓN DE BASE DE DATOS
--- =====================================================
-
-DROP DATABASE IF EXISTS `bd_codevit`;
-CREATE DATABASE `bd_codevit` CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
-USE `bd_codevit`;
-
--- =====================================================
--- ESTRUCTURA COMPLETA (phpMyAdmin SQL Dump)
--- =====================================================
-
 -- phpMyAdmin SQL Dump
 -- version 5.2.1
 -- https://www.phpmyadmin.net/
+--
 -- Servidor: 127.0.0.1
--- Tiempo de generación: 28-10-2025 a las 13:02:20
+-- Tiempo de generación: 31-10-2025 a las 05:06:51
 -- Versión del servidor: 10.4.32-MariaDB
 -- Versión de PHP: 8.2.12
+DROP DATABASE IF EXISTS bd_codevit2;
+CREATE DATABASE bd_codevit2 CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
+USE bd_codevit2;
 
 SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
 START TRANSACTION;
 SET time_zone = "+00:00";
 
- /*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
- /*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
- /*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
- /*!40101 SET NAMES utf8mb4 */;
 
--- =====================================================
--- A PARTIR DE AQUÍ, TU SCRIPT ORIGINAL SIN CAMBIOS
--- =====================================================
+/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
+/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
+/*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
+/*!40101 SET NAMES utf8mb4 */;
 
--- (todo el contenido que ya tenías: tablas, inserts, índices, constraints, commits...)
+--
+-- Base de datos: `bd_codevit`
+--
 
+-- --------------------------------------------------------
 
- /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
- /*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
- /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
+--
+-- Estructura de tabla para la tabla `fase`
+--
 
 CREATE TABLE `fase` (
   `id_fase` int(11) NOT NULL,
@@ -157,7 +149,7 @@ INSERT INTO `metrica_iteracion` (`id_metrica`, `id_iteracion`, `valor_planificad
 (6, 3, 22, 22, 10),
 (6, 4, 18, 20, 10),
 (7, 3, 0, 3, 10),
-(7, 4, 3, 79, 10);
+(7, 4, 3, 75, 10);
 
 -- --------------------------------------------------------
 
@@ -343,7 +335,7 @@ CREATE TABLE `proyecto` (
   `id_proyecto` int(11) NOT NULL,
   `objetivo` text DEFAULT NULL,
   `descripcion` text DEFAULT NULL,
-  `estado` enum('Registrado','En_Progreso','Finalizado','Cancelado') NOT NULL DEFAULT 'Registrado',
+  `estado` enum('Registrado','En Progreso','Finalizado','Cancelado') NOT NULL DEFAULT 'Registrado',
   `nombre` varchar(100) NOT NULL,
   `id_modelo` int(11) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -353,7 +345,7 @@ CREATE TABLE `proyecto` (
 --
 
 INSERT INTO `proyecto` (`id_proyecto`, `objetivo`, `descripcion`, `estado`, `nombre`, `id_modelo`) VALUES
-(1, 'MetricFlow SQA es un software web para registrar, seguir y analizar métricas de calidad durante las iteraciones del proyecto.', 'Permite el seguimiento de estándares de calidad mediante métricas e indicadores definidos en el plan de SQA.', 'En_Progreso', 'MetricFlow-SQA', 7);
+(1, 'MetricFlow SQA es un software web para registrar, seguir y analizar métricas de calidad durante las iteraciones del proyecto.', 'Permite el seguimiento de estándares de calidad mediante métricas e indicadores definidos en el plan de SQA.', 'En Progreso', 'MetricFlow-SQA', 7);
 
 -- --------------------------------------------------------
 
@@ -397,7 +389,9 @@ INSERT INTO `rol` (`id`, `nombre`) VALUES
 (1, 'Administrador'),
 (2, 'Gerente de Calidad'),
 (3, 'Líder de Proyecto'),
-(4, 'Espectador');
+(4, 'Espectador'),
+(5, 'Sin Rol'),
+(6, 'SuperAdmin');
 
 -- --------------------------------------------------------
 
@@ -437,7 +431,18 @@ INSERT INTO `rol_permiso` (`id_rol`, `id_permiso`) VALUES
 (3, 9),
 (3, 10),
 (3, 11),
-(4, 11);
+(4, 11),
+(6, 1),
+(6, 2),
+(6, 3),
+(6, 4),
+(6, 5),
+(6, 6),
+(6, 7),
+(6, 8),
+(6, 9),
+(6, 10),
+(6, 11);
 
 -- --------------------------------------------------------
 
@@ -504,28 +509,20 @@ INSERT INTO `usuario` (`id_usuario`, `nombre_apellido`, `email`) VALUES
 --
 
 CREATE TABLE `usuario_proyecto` (
-  `id_usuario` INT(11) NOT NULL,
-  `id_proyecto` INT(11) NOT NULL,
-  `id_rol` INT(11) NOT NULL,
-  PRIMARY KEY (`id_usuario`, `id_proyecto`)
+  `id_usuario` int(11) NOT NULL,
+  `id_proyecto` int(11) NOT NULL,
+  `id_rol` int(11) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
-INSERT INTO `usuario_proyecto` (`id_usuario`, `id_proyecto`, `id_rol`) VALUES
-(1, 1, 2),
-(2, 1, 4),
-(3, 1, 1),
-(4, 1, 3),
-(5, 1, 4),
-(6, 1, 1),
-(7, 1, 1),
-(8, 1, 1);
-
 
 --
 -- Volcado de datos para la tabla `usuario_proyecto`
 --
 
-
+INSERT INTO `usuario_proyecto` (`id_usuario`, `id_proyecto`, `id_rol`) VALUES
+(1, 1, 2),
+(4, 1, 3),
+(2, 1, 4),
+(5, 1, 4);
 
 -- --------------------------------------------------------
 
@@ -535,7 +532,7 @@ INSERT INTO `usuario_proyecto` (`id_usuario`, `id_proyecto`, `id_rol`) VALUES
 
 CREATE TABLE `usuario_rol` (
   `id_usuario` int(11) NOT NULL,
-  `id_rol` int(11) NOT NULL
+  `id_rol` int(11) NOT NULL DEFAULT 5
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
@@ -545,7 +542,7 @@ CREATE TABLE `usuario_rol` (
 INSERT INTO `usuario_rol` (`id_usuario`, `id_rol`) VALUES
 (1, 2),
 (2, 4),
-(3, 1),
+(3, 6),
 (4, 3),
 (5, 4),
 (6, 1),
@@ -657,6 +654,11 @@ ALTER TABLE `usuario`
 
 --
 -- Indices de la tabla `usuario_proyecto`
+--
+ALTER TABLE `usuario_proyecto`
+  ADD PRIMARY KEY (`id_usuario`,`id_proyecto`),
+  ADD KEY `usuario_proyecto_ibfk_2` (`id_proyecto`),
+  ADD KEY `usuario_proyecto_ibfk_3` (`id_rol`);
 
 --
 -- Indices de la tabla `usuario_rol`
@@ -703,13 +705,13 @@ ALTER TABLE `permiso`
 -- AUTO_INCREMENT de la tabla `proyecto`
 --
 ALTER TABLE `proyecto`
-  MODIFY `id_proyecto` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `id_proyecto` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
 
 --
 -- AUTO_INCREMENT de la tabla `rol`
 --
 ALTER TABLE `rol`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
 
 --
 -- AUTO_INCREMENT de la tabla `tarea`
@@ -721,7 +723,7 @@ ALTER TABLE `tarea`
 -- AUTO_INCREMENT de la tabla `usuario`
 --
 ALTER TABLE `usuario`
-  MODIFY `id_usuario` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=9;
+  MODIFY `id_usuario` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=12;
 
 --
 -- Restricciones para tablas volcadas
@@ -770,9 +772,16 @@ ALTER TABLE `proyecto`
 --
 -- Filtros para la tabla `proyecto_fase`
 --
+-- Filtros para la tabla `proyecto_fase`
 ALTER TABLE `proyecto_fase`
-  ADD CONSTRAINT `proyecto_fase_ibfk_1` FOREIGN KEY (`id_proyecto`) REFERENCES `proyecto` (`id_proyecto`),
-  ADD CONSTRAINT `proyecto_fase_ibfk_2` FOREIGN KEY (`id_fase`) REFERENCES `fase` (`id_fase`);
+  ADD CONSTRAINT `proyecto_fase_ibfk_1`
+    FOREIGN KEY (`id_proyecto`)
+    REFERENCES `proyecto` (`id_proyecto`)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE,
+  ADD CONSTRAINT `proyecto_fase_ibfk_2`
+    FOREIGN KEY (`id_fase`)
+    REFERENCES `fase` (`id_fase`);
 
 --
 -- Filtros para la tabla `rol_permiso`
@@ -781,29 +790,21 @@ ALTER TABLE `rol_permiso`
   ADD CONSTRAINT `rol_permiso_ibfk_1` FOREIGN KEY (`id_rol`) REFERENCES `rol` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
   ADD CONSTRAINT `rol_permiso_ibfk_2` FOREIGN KEY (`id_permiso`) REFERENCES `permiso` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
+--
+-- Filtros para la tabla `usuario_proyecto`
+--
+ALTER TABLE `usuario_proyecto`
+  ADD CONSTRAINT `usuario_proyecto_ibfk_1` FOREIGN KEY (`id_usuario`) REFERENCES `usuario` (`id_usuario`) ON DELETE CASCADE ON UPDATE CASCADE,
+  ADD CONSTRAINT `usuario_proyecto_ibfk_2` FOREIGN KEY (`id_proyecto`) REFERENCES `proyecto` (`id_proyecto`) ON DELETE CASCADE ON UPDATE CASCADE,
+  ADD CONSTRAINT `usuario_proyecto_ibfk_3` FOREIGN KEY (`id_rol`) REFERENCES `rol` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- Filtros para la tabla `usuario_rol`
 --
 ALTER TABLE `usuario_rol`
   ADD CONSTRAINT `usuario_rol_ibfk_1` FOREIGN KEY (`id_usuario`) REFERENCES `usuario` (`id_usuario`) ON DELETE CASCADE ON UPDATE CASCADE,
   ADD CONSTRAINT `usuario_rol_ibfk_2` FOREIGN KEY (`id_rol`) REFERENCES `rol` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
-
--- --------------------------------------------------------
--- Filtros para la tabla `usuario_proyecto`
--- --------------------------------------------------------
-
-ALTER TABLE `usuario_proyecto`
-  ADD CONSTRAINT `usuario_proyecto_ibfk_1`
-    FOREIGN KEY (`id_usuario`) REFERENCES `usuario` (`id_usuario`)
-    ON DELETE CASCADE ON UPDATE CASCADE,
-  ADD CONSTRAINT `usuario_proyecto_ibfk_2`
-    FOREIGN KEY (`id_proyecto`) REFERENCES `proyecto` (`id_proyecto`)
-    ON DELETE CASCADE ON UPDATE CASCADE,
-  ADD CONSTRAINT `usuario_proyecto_ibfk_3`
-    FOREIGN KEY (`id_rol`) REFERENCES `rol` (`id`)
-    ON DELETE CASCADE ON UPDATE CASCADE;
+COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
 /*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
-COMMIT;
