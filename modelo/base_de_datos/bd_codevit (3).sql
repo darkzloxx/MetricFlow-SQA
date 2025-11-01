@@ -791,6 +791,13 @@ ALTER TABLE `usuario_proyecto`
   ADD CONSTRAINT `usuario_proyecto_ibfk_2` FOREIGN KEY (`id_proyecto`) REFERENCES `proyecto` (`id_proyecto`) ON DELETE CASCADE ON UPDATE CASCADE,
   ADD CONSTRAINT `usuario_proyecto_ibfk_3` FOREIGN KEY (`id_rol`) REFERENCES `rol` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
+ALTER TABLE proyecto_fase
+DROP FOREIGN KEY proyecto_fase_ibfk_1,
+ADD CONSTRAINT proyecto_fase_ibfk_1
+  FOREIGN KEY (id_proyecto)
+  REFERENCES proyecto(id_proyecto)
+  ON DELETE CASCADE ON UPDATE CASCADE;
+
 --
 -- Filtros para la tabla `usuario_rol`
 --
