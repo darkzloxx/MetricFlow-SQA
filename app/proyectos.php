@@ -120,26 +120,24 @@ if ($tieneAbmProyectos) {
                                 <td>2025</td>
                                 <td><?= htmlspecialchars($Proyec['estado'], ENT_QUOTES, 'UTF-8'); ?></td>
                                 <td>
-                                    <a title="Ver" href="proyecto.ver.php?id=<?= (int)$Proyec['id_proyecto']; ?>">
-                                        <button type="button" class="btn btn-outline-primary">
-                                            <span class="oi oi-eye"></span>
-                                        </button>
+                                    <a title="Ver" href="proyecto.ver.php?id=<?= (int)$Proyec['id_proyecto']; ?>"
+                                        class="btn btn-outline-primary" role="button" aria-label="Ver proyecto <?= htmlspecialchars($Proyec['nombre'], ENT_QUOTES, 'UTF-8'); ?>">
+                                        <span class="oi oi-eye" aria-hidden="true"></span>
                                     </a>
-                                    <a title="Dashboard" href="dashboard.php?proyecto=<?= (int)$Proyec['id_proyecto']; ?>">
-                                        <button type="button" class="btn btn-outline-info">
-                                            <span class="oi oi-bar-chart"></span>
-                                        </button>
+
+                                    <a title="Dashboard" href="dashboard.php?proyecto=<?= (int)$Proyec['id_proyecto']; ?>"
+                                        class="btn btn-outline-info" role="button" aria-label="Ver dashboard del proyecto <?= htmlspecialchars($Proyec['nombre'], ENT_QUOTES, 'UTF-8'); ?>">
+                                        <span class="oi oi-bar-chart" aria-hidden="true"></span>
                                     </a>
                                     <?php if ($tieneAbmProyectos): ?>
-                                        <a title="Modificar" href="proyecto.modificar.php?id=<?= (int)$Proyec['id_proyecto']; ?>">
-                                            <button type="button" class="btn btn-outline-warning">
-                                                <span class="oi oi-pencil"></span>
-                                            </button>
+                                        <a title="Modificar" href="proyecto.modificar.php?id=<?= (int)$Proyec['id_proyecto']; ?>"
+                                            class="btn btn-outline-warning" role="button" aria-label="Modificar proyecto <?= htmlspecialchars($Proyec['nombre'], ENT_QUOTES, 'UTF-8'); ?>">
+                                            <span class="oi oi-pencil" aria-hidden="true"></span>
                                         </a>
-                                        <a title="Eliminar" href="proyecto.eliminar.php?id=<?= (int)$Proyec['id_proyecto']; ?>">
-                                            <button type="button" class="btn btn-outline-danger">
-                                                <span class="oi oi-trash"></span>
-                                            </button>
+
+                                        <a title="Eliminar" href="proyecto.eliminar.php?id=<?= (int)$Proyec['id_proyecto']; ?>"
+                                            class="btn btn-outline-danger" role="button" aria-label="Eliminar proyecto <?= htmlspecialchars($Proyec['nombre'], ENT_QUOTES, 'UTF-8'); ?>">
+                                            <span class="oi oi-trash" aria-hidden="true"></span>
                                         </a>
                                     <?php endif; ?>
                                 </td>
