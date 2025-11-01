@@ -21,6 +21,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['email'])) {
     <script type="text/javascript" src="../lib/JQuery/jquery-3.3.1.js"></script>
     <script type="text/javascript" src="../lib/login.js"></script>
     <title><?php echo Constantes::NOMBRE_SISTEMA; ?> - Login</title>
+    <style>
+        /* Alinear verticalmente y ajustar el tamaño del logo de Google */
+        .abcRioButtonIcon {
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            padding: 6px !important;
+            /* menos padding vertical */
+        }
+    </style>
 </head>
 
 <body>
