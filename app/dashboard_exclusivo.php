@@ -1,5 +1,5 @@
 <?php
-  // Removed stray JavaScript fragments
+// Removed stray JavaScript fragments
 /**
  * Dashboard de Calidad por Iteración/Métrica
  * - Misma obtención de datos que el dashboard principal
@@ -292,10 +292,15 @@ if (count($DATA) === 0) {
 
     /* Ajustes responsivos */
     @media (max-width: 991.98px) {
-      .metric-grid { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+      .metric-grid {
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      }
     }
+
     @media (max-width: 575.98px) {
-      .metric-grid { grid-template-columns: 1fr; }
+      .metric-grid {
+        grid-template-columns: 1fr;
+      }
     }
 
     .icon-bg-success {
@@ -369,11 +374,66 @@ if (count($DATA) === 0) {
       font-weight: 600;
     }
 
+    /* === LEYENDA DE ESTADOS DE MÉTRICAS === */
+    .legend-metricas {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px 18px;
+      align-items: center;
+      margin-top: .35rem;
+      margin-bottom: .35rem;
+      color: #495057;
+      font-size: .9rem;
+    }
+
+    .legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      white-space: nowrap;
+    }
+
+    .legend-dot {
+      width: 14px;
+      height: 14px;
+      border-radius: 3px;
+      border: 1px solid rgba(0, 0, 0, .2);
+      display: inline-block;
+    }
+
+    .legend-dash {
+      width: 24px;
+      height: 0;
+      border-top: 2px dashed #0d6efd;
+      /* coincide con la línea punteada de referencia */
+      display: inline-block;
+      vertical-align: middle;
+    }
+
+    /* leyenda pequeña por tarjeta para mostrar el umbral */
+    .legend-threshold {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: .75rem;
+      color: #6c757d;
+    }
+
+    .legend-threshold-line {
+      width: 20px;
+      height: 0;
+      display: inline-block;
+      vertical-align: middle;
+      border-top: 2px solid #343a40;
+      /* color de la línea de umbral */
+    }
+
     /* grid de iteraciones: una iteración por fila */
     #iterCards {
       display: grid;
-      grid-template-columns: 1fr; /* fuerza una iteración por fila */
-      gap: 1.25rem; 
+      grid-template-columns: 1fr;
+      /* fuerza una iteración por fila */
+      gap: 1.25rem;
       margin-top: 1rem;
       margin-bottom: 4rem;
     }
@@ -579,16 +639,35 @@ if (count($DATA) === 0) {
 
     <!-- CONTROLES -->
     <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap">
-    <div>
-  <h6 class="mb-1">Métricas</h6>
-  <small class="text-muted">
-    Cada tarjeta representa una <b>iteración</b> del proyecto.<br>
-    Podés hacer clic sobre una métrica para <b>filtrar y analizar la misma</b> entre iteraciones.<br>
-    Además, podés alternar la vista entre <b>gráfico de dona</b> y <b>gráfico de barras</b> según tu preferencia y filtrar por iteración.
-  </small>
-</div>
+      <div>
+        <h6 class="mb-1">Métricas</h6>
+        <small class="text-muted">
+          Cada tarjeta representa una <b>iteración</b> del proyecto.<br>
+          Podés hacer clic sobre una métrica para <b>filtrar y analizar la misma</b> entre iteraciones.<br>
+          Además, podés alternar la vista entre <b>gráfico de dona</b> y <b>gráfico de barras</b>.
+        </small>
+        <!-- Leyenda de colores de las métricas -->
+        <div class="legend-metricas">
+          <span class="legend-item"><span class="legend-dot" style="background:#28a745"></span>Se cumplió</span>
+          <span class="legend-item"><span class="legend-dot" style="background:#8cdcab"></span>Se superó el plan</span>
+          <span class="legend-item"><span class="legend-dot" style="background:#ffc107"></span>Dentro del umbral</span>
+          <span class="legend-item"><span class="legend-dot" style="background:#64aaff"></span>Planificación=0</span>
+          <span class="legend-item"><span class="legend-dot" style="background:#dc3545"></span>Debajo del umbral</span>
+          <span class="legend-item"><span class="legend-dash"></span>Progreso de la iteración</span>
+        </div>
+      </div>
 
       <div class="chart-controls mt-2 mt-md-0">
+        <!-- Filtro por Métrica -->
+        <div class="d-inline-flex align-items-center mr-2" id="metricFilterControls">
+          <label for="metricFilterSelect" class="mb-0 mr-2 small text-muted">Métrica</label>
+          <select id="metricFilterSelect" class="form-control form-control-sm" style="min-width:240px">
+            <option value="">Todas las métricas</option>
+          </select>
+          <button id="clearMetricFilter" type="button" class="btn btn-outline-secondary btn-sm ml-2">Limpiar</button>
+        </div>
+
+        <!-- Toggle de modo -->
         <button id="modeToggle" class="btn-toggle" data-mode="donut">
           <i class="oi oi-pie-chart"></i> Ver como barras
         </button>
@@ -604,12 +683,17 @@ if (count($DATA) === 0) {
     // Registro global de charts para poder redimensionarlos
     const __CHARTS = Object.create(null);
     let __chartsResizeScheduled = false;
+
     function __scheduleChartsResize() {
       if (__chartsResizeScheduled) return;
       __chartsResizeScheduled = true;
       requestAnimationFrame(() => {
         try {
-          Object.values(__CHARTS).forEach(ch => { try { ch.resize && ch.resize(); } catch(_){} });
+          Object.values(__CHARTS).forEach(ch => {
+            try {
+              ch.resize && ch.resize();
+            } catch (_) {}
+          });
         } finally {
           __chartsResizeScheduled = false;
         }
@@ -621,6 +705,7 @@ if (count($DATA) === 0) {
     // Datos PHP -> JS
     const DATA = <?= json_encode($DATA, JSON_UNESCAPED_UNICODE | JSON_NUMERIC_CHECK); ?>;
     const ID_PROYECTO = <?= (int)$idProyecto ?>;
+  let SELECTED_METRIC_ID = null; // Filtro actual por métrica (id) o null para todas
 
     // misma lógica de semáforo
     function colorSemaforo(valorPct, minPct, maxPct) {
@@ -668,6 +753,45 @@ if (count($DATA) === 0) {
       });
     }
 
+    // Obtiene métricas únicas a partir de DATA
+    function uniqueMetricsFromData(data) {
+      const map = new Map();
+      (data || []).forEach(it => (it.metricas || []).forEach(m => {
+        const id = Number(m.id);
+        if (!map.has(id)) map.set(id, m.nombre);
+      }));
+      // ordenar por nombre
+      return Array.from(map, ([id, nombre]) => ({ id, nombre })).sort((a, b) => String(a.nombre).localeCompare(String(b.nombre)));
+    }
+
+    // Construye el select de filtro de métricas y eventos
+    function buildMetricFilter() {
+      const sel = document.getElementById('metricFilterSelect');
+      const btnClear = document.getElementById('clearMetricFilter');
+      if (!sel) return;
+      const uniques = uniqueMetricsFromData(DATA);
+      sel.innerHTML = '<option value="">Todas las métricas</option>' + uniques.map(m => `<option value="${m.id}">#${m.id} - ${m.nombre}</option>`).join('');
+      sel.value = SELECTED_METRIC_ID != null ? String(SELECTED_METRIC_ID) : '';
+
+      sel.addEventListener('change', () => {
+        const v = sel.value.trim();
+        SELECTED_METRIC_ID = v ? Number(v) : null;
+        const active = document.querySelector('#iterFilter .iter-pill.active');
+        const iter = active ? active.dataset.iter : null;
+        renderIterCards(iter === 'ALL' ? null : iter);
+      });
+
+      if (btnClear) {
+        btnClear.addEventListener('click', () => {
+          SELECTED_METRIC_ID = null;
+          sel.value = '';
+          const active = document.querySelector('#iterFilter .iter-pill.active');
+          const iter = active ? active.dataset.iter : null;
+          renderIterCards(iter === 'ALL' ? null : iter);
+        });
+      }
+    }
+
     // render cards de iteración
     function renderIterCards(filterIter = null) {
       const wrap = document.getElementById('iterCards');
@@ -700,21 +824,39 @@ if (count($DATA) === 0) {
           const grid = document.createElement('div');
           grid.className = 'metric-grid';
 
-          (it.metricas || []).forEach((m, mIdx) => {
+          let metrics = Array.isArray(it.metricas) ? it.metricas.slice() : [];
+          if (SELECTED_METRIC_ID != null) {
+            const found = metrics.find(mm => Number(mm.id) === Number(SELECTED_METRIC_ID));
+            metrics = found ? [found] : [];
+          }
+
+          metrics.forEach((m, mIdx) => {
             const mCard = document.createElement('div');
             mCard.className = 'metric-card';
 
             const idChart = `metric-chart-${idx}-${mIdx}`;
             const pct = safePct(m);
             const color = colorSemaforo(pct, m.min, m.max);
+            const umbralPct = Math.round(Math.max(0, 100 - (Number(m.min ?? 100))));
 
             mCard.innerHTML = `
               <div class="metric-name">#${m.id} - ${m.nombre}</div>
               <div id="${idChart}" class="metric-body-chart"></div>
               <div class="metric-foot">
                 Planificado: <b>${m.planned}</b> | Ejecutado: <b>${m.executedReal}</b><br>
+                <span class="legend-threshold"><span class="legend-threshold-line"></span> Umbral: <b>${100-  umbralPct}%</b></span>
               </div>
             `;
+
+            // Click en la tarjeta -> fijar filtro por esa métrica
+            mCard.addEventListener('click', () => {
+              SELECTED_METRIC_ID = Number(m.id);
+              const sel = document.getElementById('metricFilterSelect');
+              if (sel) sel.value = String(SELECTED_METRIC_ID);
+              const active = document.querySelector('#iterFilter .iter-pill.active');
+              const iter = active ? active.dataset.iter : null;
+              renderIterCards(iter === 'ALL' ? null : iter);
+            });
 
             grid.appendChild(mCard);
 
@@ -728,10 +870,12 @@ if (count($DATA) === 0) {
             }, 0);
           });
 
-          if (!it.metricas || it.metricas.length === 0) {
+          if (!metrics || metrics.length === 0) {
             const emp = document.createElement('div');
             emp.className = 'text-muted';
-            emp.textContent = 'No hay métricas planificadas para esta iteración.';
+            emp.textContent = (SELECTED_METRIC_ID != null)
+              ? 'Esta iteración no contiene la métrica seleccionada.'
+              : 'No hay métricas planificadas para esta iteración.';
             body.appendChild(emp);
           } else {
             body.appendChild(grid);
@@ -768,6 +912,83 @@ if (count($DATA) === 0) {
       return baseColor;
     }
 
+    // === Cálculo pct y nota según reglas del backend + caso "sin ejecución" ===
+    function computePctAndNote(metric) {
+      const plan = Number(metric?.planned ?? 0);
+      const ejec = Number(metric?.executedReal ?? 0);
+      let pct = 0;
+      let nota = '';
+      if (plan === 0 && ejec === 0) {
+        pct = 100;
+        nota = 'Se cumplió';
+      } else if (plan === 0 && ejec > 0) {
+        pct = 100;
+        nota = `Se planificó 0 (${ejec})`;
+      } else if (ejec > plan) {
+        pct = Math.round((ejec / plan) * 100);
+        nota = `Supera planificado (+${(ejec - plan)})`;
+      } else if (plan > 0 && ejec === 0) {
+        pct = 0;
+        nota = `Sin ejecución (0/${plan})`;
+      } else {
+        pct = plan > 0 ? Math.round((ejec / plan) * 100) : 0;
+        nota = '';
+      }
+      return {
+        pct,
+        nota,
+        plan,
+        ejec
+      };
+    }
+
+    function buildTooltipHtml(metric) {
+      const { pct, plan, ejec } = computePctAndNote(metric);
+      const title = `#${metric?.id ?? ''} - ${metric?.nombre ?? ''}`;
+      const min = Math.max(0, Number(metric?.min ?? 100)); // 1 - umbral
+      let html = `<b>${title}</b><br>`;
+      html += `Planificado: <b>${plan}</b><br>`;
+      html += `Ejecutado: <b>${ejec}</b><br>`;
+      html += `Cumplimiento: <b>${pct}%</b><br>`;
+
+      // Mensaje de estado con los mismos colores que dashboard.php
+      switch (true) {
+        // planificado 0 y ejecutado > 0
+        case (plan === 0 && ejec > 0):
+          html += `<span style="color:#17a2b8;font-weight:bold;">ℹ️ Se planificó 0 (+${ejec})</span><br>`;
+          break;
+        // planificado 0 y ejecutado 0
+        case (plan === 0 && ejec === 0):
+          html += `<span style="color:#198754;font-weight:bold;">✔️ Cumple lo planificado (0/0)</span><br>`;
+          break;
+        // Superó lo planificado
+        case (plan > 0 && pct > 100):
+          html += `<span style="color:#28a745;font-weight:bold;">▲ Supera lo planificado (+${(ejec - plan).toFixed(0)})</span><br>`;
+          break;
+        // Cumplió exactamente lo planificado
+        case (plan > 0 && Math.round(pct) === 100):
+          html += `<span style="color:#198754;font-weight:bold;">✔️ Cumple lo planificado (=${plan})</span><br>`;
+          break;
+        // Dentro del umbral (amarillo)
+        case (plan > 0 && pct >= min && pct < 100):
+          html += `<span style="color:#ffc107;font-weight:bold;">⚠️ Dentro del umbral (${pct.toFixed(1)}%)</span><br>`;
+          break;
+        // Por debajo del plan (rojo), pero con ejecución > 0
+        case (plan > 0 && pct > 0 && pct < min):
+          html += `<span style="color:#dc3545;font-weight:bold;">▼ Por debajo del plan (-${(plan - ejec).toFixed(0)})</span><br>`;
+          break;
+        // Sin ejecución
+        case (plan > 0 && ejec === 0):
+          html += `<span style="color:#6c757d;font-weight:bold;">⛔ Sin ejecución (0/${plan})</span><br>`;
+          break;
+        default:
+          html += `<span style="color:#999;">❔ Sin datos disponibles</span><br>`;
+      }
+
+      html += `Límite de desviación (1 − umbral): <b>${min}%</b>`;
+      return html;
+    }
+
     // === Donut Circular ===
     function renderDonut(domId, metric) {
       const dom = document.getElementById(domId);
@@ -777,7 +998,11 @@ if (count($DATA) === 0) {
 
       const chart = echarts.init(dom);
       __CHARTS[domId] = chart;
-      if (__RO) { try { __RO.observe(dom); } catch(_){} }
+      if (__RO) {
+        try {
+          __RO.observe(dom);
+        } catch (_) {}
+      }
       const pctReal = Math.max(0, safePct(metric)); // puede ser >100
       const ringPct = Math.min(100, pctReal); // el anillo siempre suma 100
       const color = resolveColor(metric, pctReal); // mantiene semáforo original
@@ -820,6 +1045,19 @@ if (count($DATA) === 0) {
       }
 
       chart.setOption({
+        tooltip: {
+          trigger: 'item',
+          appendToBody: true,
+          backgroundColor: 'rgba(255,255,255,0.95)',
+          borderColor: '#ccc',
+          borderWidth: 1,
+          textStyle: {
+            color: '#222',
+            fontSize: 13
+          },
+          extraCssText: 'box-shadow: 0 2px 8px rgba(0,0,0,0.2); border-radius: 6px;',
+          formatter: () => buildTooltipHtml(metric)
+        },
         backgroundColor: 'transparent',
         graphic: [{
           type: 'group',
@@ -879,7 +1117,9 @@ if (count($DATA) === 0) {
             labelLine: {
               show: false
             },
-            itemStyle: { borderWidth: 0 },
+            itemStyle: {
+              borderWidth: 0
+            },
             z: 10,
             zlevel: 2,
             data: (function() {
@@ -898,9 +1138,9 @@ if (count($DATA) === 0) {
                 {
                   value: wedge,
                   itemStyle: {
-                    color: '#000000ff',
-                    shadowColor: 'rgba(0, 0, 0, 0.35)',
-                    shadowBlur: 6
+                    color: '#343a40',
+                    shadowColor: 'rgba(0, 0, 0, 0.25)',
+                    shadowBlur: 5
                   }
                 },
                 {
@@ -926,14 +1166,38 @@ if (count($DATA) === 0) {
 
       const chart = echarts.init(dom);
       __CHARTS[domId] = chart;
-      if (__RO) { try { __RO.observe(dom); } catch(_){} }
+      if (__RO) {
+        try {
+          __RO.observe(dom);
+        } catch (_) {}
+      }
       const pctReal = Math.max(0, safePct(metric)); // % real ejecutado vs plan
       const executedColor = resolveColor(metric, pctReal);
       const plannedPct = 100; // baseline 100%
-      const yMax = pctReal > 120 ? Math.min(300, Math.ceil(pctReal / 10) * 10 + 10) : 120; // escala dinámica
-      const capHeight = pctReal > 0 ? 1 : 0; // tapa blanca finita
+      const VISIBLE_MAX = 120; // tope visible
+      const OVERFLOW_TOP = 130; // mostrar "un poquito" por arriba si supera 120
+      const yMax = pctReal > VISIBLE_MAX ? OVERFLOW_TOP : VISIBLE_MAX;
+      const baseVal = Math.min(100, pctReal);
+      const overflowVal = pctReal > 100 ? Math.max(0, Math.min(OVERFLOW_TOP, pctReal) - 100) : 0;
+      const minLine = Math.max(0, Math.min(yMax, Number(metric?.min ?? 100)));
 
       chart.setOption({
+        tooltip: {
+          trigger: 'axis',
+          axisPointer: {
+            type: 'shadow'
+          },
+          appendToBody: true,
+          backgroundColor: 'rgba(255,255,255,0.95)',
+          borderColor: '#ccc',
+          borderWidth: 1,
+          textStyle: {
+            color: '#222',
+            fontSize: 13
+          },
+          extraCssText: 'box-shadow: 0 2px 8px rgba(0,0,0,0.2); border-radius: 6px;',
+          formatter: () => buildTooltipHtml(metric)
+        },
         grid: {
           left: 40,
           right: 60, // más espacio para que se vea el label del markLine
@@ -944,50 +1208,112 @@ if (count($DATA) === 0) {
         xAxis: {
           type: 'category',
           data: ['Planificado', 'Ejecutado'],
-          axisLine: { lineStyle: { color: '#d7dbe8' } },
-          axisTick: { show: false },
-          axisLabel: { color: '#6c7a92', fontWeight: 600 }
+          axisLine: {
+            lineStyle: {
+              color: '#d7dbe8'
+            }
+          },
+          axisTick: {
+            show: false
+          },
+          axisLabel: {
+            color: '#6c7a92',
+            fontWeight: 600
+          }
         },
         yAxis: {
           type: 'value',
           min: 0,
           max: yMax,
-          splitLine: { lineStyle: { type: 'dashed', color: '#e5e9f2' } },
-          axisLabel: { color: '#6c7a92', formatter: '{value}%' }
+          splitLine: {
+            lineStyle: {
+              type: 'dashed',
+              color: '#e5e9f2'
+            }
+          },
+          axisLabel: {
+            color: '#6c7a92',
+            formatter: '{value}%'
+          }
         },
         series: [
-              // barra plan = 100%
-              {
-                name: 'Planificado',
-                type: 'bar',
-                barWidth: 34,
-                itemStyle: { borderRadius: 0, color: '#a8b5d7' },
-                label: {
-                  show: true,
-                  position: 'top',
-                  fontWeight: 700,
-                  color: '#1b2533',
-                  formatter: (p) => p.dataIndex === 0 ? '100%' : ''
-                },
-                data: [plannedPct, null]
+          // 1) Barra plan = 100% con borde
+          {
+            name: 'Planificado',
+            type: 'bar',
+            barWidth: 34,
+            itemStyle: {
+              borderRadius: 0,
+              color: '#a8b5d7',
+              borderColor: '#000',
+              borderWidth: 1.5
+            },
+            label: {
+              show: true,
+              position: 'top',
+              fontWeight: 700,
+              color: '#1b2533',
+              formatter: (p) => p.dataIndex === 0 ? '100%' : ''
+            },
+            data: [plannedPct, null]
+          },
+          // 2) Marco hasta 100% para Ejecutado (solo borde, sin relleno)
+          {
+            name: 'Marco 100',
+            type: 'bar',
+            barWidth: 34,
+            barGap: '30%',
+            itemStyle: {
+              color: 'rgba(0,0,0,0)',
+              borderColor: '#000',
+              borderWidth: 1.5,
+              borderRadius: 0
+            },
+            emphasis: {
+              disabled: true
+            },
+            silent: true,
+            data: [null, 100]
+          },
+          // 3) Ejecutado base (0-100) relleno
+          {
+            name: 'Ejecutado',
+            type: 'bar',
+            barWidth: 34,
+            barGap: '-100%', // superpuesto al marco
+            stack: 'exec',
+            itemStyle: {
+              borderRadius: 0,
+              color: executedColor,
+              borderColor: '#000',
+              borderWidth: 1.5
+            },
+            label: {
+              show: true,
+              position: 'top',
+              fontWeight: 700,
+              color: '#1b2533',
+              formatter: (p) => p.dataIndex === 1 ? `${pctReal}%` : ''
+            },
+            markLine: {
+              symbol: 'none',
+              lineStyle: {
+                type: 'dashed',
+                color: '#0d6efd',
+                width: 2
               },
-              // barra ejecutado = pct
-              {
-                name: 'Ejecutado',
-                type: 'bar',
-                barWidth: 34,
-                barGap: '30%',
-                itemStyle: { borderRadius: 0, color: executedColor },
-                label: {
-                  show: true,
-                  position: 'top',
-                  fontWeight: 700,
-                  color: '#1b2533',
-                  formatter: (p) => p.dataIndex === 1 ? `${pctReal}%` : ''
-                },
-                markLine: {
-                  symbol: 'none',
-                  lineStyle: { type: 'dashed', color: '#0d6efd', width: 2 },
+              label: {
+                show: false
+              },
+              data: [
+                // Línea de referencia 100%
+                {
+                  yAxis: 100,
+                  lineStyle: {
+                    type: 'dashed',
+                    color: '#0d6efd',
+                    width: 2
+                  },
                   label: {
                     show: true,
                     formatter: '100%',
@@ -997,25 +1323,44 @@ if (count($DATA) === 0) {
                     backgroundColor: '#ffffff',
                     padding: [1, 4],
                     borderRadius: 3
-                  },
-                  data: [{ yAxis: 100 }]
+                  }
                 },
-                markArea: (pctReal > 100) ? {
-                  itemStyle: { color: 'rgba(13,110,253,0.15)' },
-                  data: [[{ yAxis: 100 }, { yAxis: Math.min(pctReal, yMax) }]]
-                } : undefined,
-                data: [null, Math.min(pctReal, yMax)]
-              },
-              // tapa blanca arriba de ejecutado para simular cap
-              {
-                type: 'bar',
-                barWidth: 34,
-                barGap: '-100%',
-                itemStyle: { color: '#ffffff', borderRadius: 0 },
-                silent: true,
-                data: [null, capHeight]
-              }
-            ],
+                // Umbral inferior (1 - umbral)
+                {
+                  yAxis: minLine,
+                  lineStyle: {
+                    type: 'solid',
+                    color: '#343a40',
+                    width: 1.5
+                  },
+                  label: {
+                    show: false
+                  }
+                }
+              ]
+            },
+            data: [null, baseVal]
+          },
+          // 4) Overflow (100 -> min(pctReal, OVERFLOW_TOP))
+          {
+            name: 'Overflow',
+            type: 'bar',
+            barWidth: 34,
+            barGap: '-100%',
+            stack: 'exec',
+            itemStyle: {
+              color: executedColor,
+              opacity: 0.35,
+              borderRadius: 0,
+              borderColor: '#000',
+              borderWidth: 1.5
+            },
+            emphasis: {
+              disabled: true
+            },
+            data: [null, overflowVal]
+          }
+        ],
         animation: true
       });
     }
@@ -1044,6 +1389,7 @@ if (count($DATA) === 0) {
 
     // init
     document.addEventListener('DOMContentLoaded', () => {
+      buildMetricFilter();
       buildIterFilter(Array.isArray(DATA) ? DATA : []);
       renderIterCards(null);
       __scheduleChartsResize();
