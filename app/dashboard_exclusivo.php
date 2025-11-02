@@ -579,10 +579,15 @@ if (count($DATA) === 0) {
 
     <!-- CONTROLES -->
     <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap">
-      <div>
-        <h6 class="mb-1">FASE + Iteración</h6>
-        <small class="text-muted">Podés filtrar las iteraciones para ver solo las métricas de esa fase.</small>
-      </div>
+    <div>
+  <h6 class="mb-1">Métricas</h6>
+  <small class="text-muted">
+    Cada tarjeta representa una <b>iteración</b> del proyecto.<br>
+    Podés hacer clic sobre una métrica para <b>filtrar y analizar la misma</b> entre iteraciones.<br>
+    Además, podés alternar la vista entre <b>gráfico de dona</b> y <b>gráfico de barras</b> según tu preferencia y filtrar por iteración.
+  </small>
+</div>
+
       <div class="chart-controls mt-2 mt-md-0">
         <button id="modeToggle" class="btn-toggle" data-mode="donut">
           <i class="oi oi-pie-chart"></i> Ver como barras
