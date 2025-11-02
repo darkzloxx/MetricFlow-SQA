@@ -249,12 +249,11 @@ if (count($DATA) === 0) {
 
     /* ==== DISTRIBUCIÓN DE MÉTRICAS === */
     .metric-grid {
-      display: flex;
-      flex-wrap: wrap; /* que las métricas ocupen varias columnas sin scroll horizontal */
-      overflow-x: visible; /* sin barra de desplazamiento */
-      padding-bottom: 0.5rem;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
       gap: 1rem;
-      scroll-snap-type: none;
+      padding-bottom: 0.5rem;
+      align-items: stretch;
     }
 
     .metric-card {
@@ -262,10 +261,7 @@ if (count($DATA) === 0) {
       border: 1px solid rgba(0, 0, 0, 0.05);
       border-radius: 0.75rem;
       box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
-      flex: 1 1 230px; /* permite que se acomoden en filas y ajusten ancho */
-      /* ancho mínimo sugerido 230px */
       height: 300px;
-      scroll-snap-align: start;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -294,18 +290,12 @@ if (count($DATA) === 0) {
       margin-top: 0.35rem;
     }
 
-    /* Scroll suave y estética */
-    .metric-grid::-webkit-scrollbar {
-      height: 8px;
+    /* Ajustes responsivos */
+    @media (max-width: 991.98px) {
+      .metric-grid { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
     }
-
-    .metric-grid::-webkit-scrollbar-thumb {
-      background: rgba(0, 0, 0, 0.1);
-      border-radius: 4px;
-    }
-
-    .metric-grid::-webkit-scrollbar-thumb:hover {
-      background: rgba(0, 0, 0, 0.25);
+    @media (max-width: 575.98px) {
+      .metric-grid { grid-template-columns: 1fr; }
     }
 
     .icon-bg-success {
@@ -383,7 +373,7 @@ if (count($DATA) === 0) {
     #iterCards {
       display: grid;
       grid-template-columns: 1fr; /* fuerza una iteración por fila */
-      gap: 1.25rem;
+      gap: 1.25rem; 
       margin-top: 1rem;
       margin-bottom: 4rem;
     }
@@ -606,6 +596,23 @@ if (count($DATA) === 0) {
   </div>
 
   <script>
+    // Registro global de charts para poder redimensionarlos
+    const __CHARTS = Object.create(null);
+    let __chartsResizeScheduled = false;
+    function __scheduleChartsResize() {
+      if (__chartsResizeScheduled) return;
+      __chartsResizeScheduled = true;
+      requestAnimationFrame(() => {
+        try {
+          Object.values(__CHARTS).forEach(ch => { try { ch.resize && ch.resize(); } catch(_){} });
+        } finally {
+          __chartsResizeScheduled = false;
+        }
+      });
+    }
+    // ResizeObserver para redimensionar cuando cambie el tamaño del contenedor
+    const __RO = (typeof ResizeObserver !== 'undefined') ? new ResizeObserver(() => __scheduleChartsResize()) : null;
+    window.addEventListener('resize', __scheduleChartsResize);
     // Datos PHP -> JS
     const DATA = <?= json_encode($DATA, JSON_UNESCAPED_UNICODE | JSON_NUMERIC_CHECK); ?>;
     const ID_PROYECTO = <?= (int)$idProyecto ?>;
@@ -764,6 +771,8 @@ if (count($DATA) === 0) {
       if (prev) prev.dispose();
 
       const chart = echarts.init(dom);
+      __CHARTS[domId] = chart;
+      if (__RO) { try { __RO.observe(dom); } catch(_){} }
       const pctReal = Math.max(0, safePct(metric)); // puede ser >100
       const ringPct = Math.min(100, pctReal); // el anillo siempre suma 100
       const color = resolveColor(metric, pctReal); // mantiene semáforo original
@@ -847,7 +856,8 @@ if (count($DATA) === 0) {
               show: false
             },
             itemStyle: {
-              borderWidth: 0
+              borderWidth: 1.5,
+              borderColor: '#000'
             },
             data: ringData
           },
@@ -864,9 +874,7 @@ if (count($DATA) === 0) {
             labelLine: {
               show: false
             },
-            itemStyle: {
-              borderWidth: 0
-            },
+            itemStyle: { borderWidth: 0 },
             z: 10,
             zlevel: 2,
             data: (function() {
@@ -912,6 +920,8 @@ if (count($DATA) === 0) {
       if (prev) prev.dispose();
 
       const chart = echarts.init(dom);
+      __CHARTS[domId] = chart;
+      if (__RO) { try { __RO.observe(dom); } catch(_){} }
       const pctReal = Math.max(0, safePct(metric)); // % real ejecutado vs plan
       const executedColor = resolveColor(metric, pctReal);
       const plannedPct = 100; // baseline 100%
@@ -1031,6 +1041,7 @@ if (count($DATA) === 0) {
     document.addEventListener('DOMContentLoaded', () => {
       buildIterFilter(Array.isArray(DATA) ? DATA : []);
       renderIterCards(null);
+      __scheduleChartsResize();
     });
   </script>
   <?php include_once '../gui/footer.php'; ?>
