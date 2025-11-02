@@ -16,6 +16,8 @@ ini_set('zlib.output_compression', '0');
 $proyectoId = isset($_GET['proyecto']) ? (int)$_GET['proyecto'] : 0;
 
 require_once __DIR__ . '/../../lib/ControlAcceso.Class.php';
+// BD centralizada
+// BDConexion ya es cargado por ControlAcceso
 // Función liviana para enviar evento SSE inmediatamente
 function sse_error($msg, $code = 403) {
   if (function_exists('http_response_code')) { @http_response_code($code); }
@@ -27,17 +29,31 @@ function sse_error($msg, $code = 403) {
 
 $usr = ControlAcceso::usuarioActual();
 if (!$usr) { sse_error('No autenticado', 401); }
-if ($proyectoId <= 0 || !ControlAcceso::usuarioPerteneceAProyecto($proyectoId)) {
-  sse_error('Acceso denegado al proyecto', 403);
+if ($proyectoId <= 0) { sse_error('Acceso denegado al proyecto', 403); }
+
+// Autorización consistente con requiereProyecto():
+// admin/superadmin o ABM_PROYECTOS acceden; si no, debe pertenecer al proyecto
+$esAdminGlobal = false;
+if (isset($usr->roles) && is_array($usr->roles)) {
+  foreach ($usr->roles as $r) {
+    $rolName = mb_strtolower(trim($r->nombre ?? ''), 'UTF-8');
+    if (in_array($rolName, ['administrador', 'superadmin'], true)) { $esAdminGlobal = true; break; }
+  }
+}
+if (!$esAdminGlobal && !ControlAcceso::verificaPermiso(PermisosSistema::DASHBOARD)) {
+  if (!ControlAcceso::usuarioPerteneceAProyecto($proyectoId)) {
+    sse_error('Acceso denegado al proyecto', 403);
+  }
 }
 
-function build_payload_and_version($proyectoId) {
-  // Prefer the DB used by tests first, then fallback
-  $conexion = @new mysqli('localhost', 'root', '', 'bd_codevit', 3306);
-  if ($conexion->connect_error) {
-    $conexion = @new mysqli('localhost', 'root', '', 'bd_CU12_1', 3308);
-    if ($conexion->connect_error) { return [null, null]; }
-  }
+function build_payload_and_version(mysqli $conexion, int $proyectoId) {
+
+  // Detectar si la tabla iteracion tiene columna id_proyecto para armar consultas compatibles
+  $hasIteracionProyecto = false;
+  try {
+    $chk = $conexion->query("SELECT COUNT(*) AS c FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'iteracion' AND COLUMN_NAME = 'id_proyecto'");
+    if ($chk && $row = $chk->fetch_assoc()) { $hasIteracionProyecto = ((int)$row['c'] > 0); }
+  } catch (Throwable $e) { $hasIteracionProyecto = false; }
 
   // Proyecto existe?
   $sqlProyecto = "SELECT nombre, estado FROM proyecto WHERE id_proyecto = $proyectoId";
@@ -53,50 +69,84 @@ function build_payload_and_version($proyectoId) {
   }
 
   // Totales
-  $sqlMetricas = "SELECT COUNT(DISTINCT mi.id_metrica) AS total
-                  FROM metrica_iteracion mi
-                  JOIN iteracion i ON mi.id_iteracion = i.id_iteracion
-                  JOIN fase f ON f.id_fase = i.id_fase
-                  JOIN proyecto_fase pf ON pf.id_fase = f.id_fase
-                  WHERE pf.id_proyecto = $proyectoId";
+  $sqlMetricas = $hasIteracionProyecto ?
+   "SELECT COUNT(DISTINCT mi.id_metrica) AS total
+     FROM metrica_iteracion mi
+     JOIN iteracion i ON mi.id_iteracion = i.id_iteracion
+     JOIN fase f ON f.id_fase = i.id_fase
+     JOIN proyecto_fase pf ON pf.id_fase = f.id_fase
+     WHERE pf.id_proyecto = $proyectoId" :
+   "SELECT COUNT(DISTINCT mi.id_metrica) AS total
+     FROM metrica_iteracion mi
+     JOIN iteracion i ON mi.id_iteracion = i.id_iteracion
+     JOIN fase f ON f.id_fase = i.id_fase
+     JOIN proyecto_fase pf ON pf.id_fase = f.id_fase AND pf.id_proyecto = $proyectoId";
   $resMetricas = $conexion->query($sqlMetricas);
   $totalMetricas = ($resMetricas && $resMetricas->num_rows > 0) ? (int)$resMetricas->fetch_assoc()['total'] : 0;
 
-  $sqlIter = "SELECT COUNT(*) AS total
-              FROM iteracion i
-              JOIN fase f ON f.id_fase = i.id_fase
-              JOIN proyecto_fase pf ON pf.id_fase = f.id_fase
-              WHERE pf.id_proyecto = $proyectoId";
+  $sqlIter = $hasIteracionProyecto ?
+   "SELECT COUNT(*) AS total
+     FROM iteracion i
+     JOIN fase f ON f.id_fase = i.id_fase
+     JOIN proyecto_fase pf ON pf.id_fase = f.id_fase
+     WHERE pf.id_proyecto = $proyectoId" :
+   "SELECT COUNT(*) AS total
+     FROM iteracion i
+     JOIN fase f ON f.id_fase = i.id_fase
+     JOIN proyecto_fase pf ON pf.id_fase = f.id_fase AND pf.id_proyecto = $proyectoId";
   $resIter = $conexion->query($sqlIter);
   $totalIteraciones = ($resIter && $resIter->num_rows > 0) ? (int)$resIter->fetch_assoc()['total'] : 0;
 
-  $sqlHayIter = "SELECT COUNT(*) AS total
-                 FROM iteracion i
-                 JOIN fase f ON f.id_fase = i.id_fase
-                 JOIN proyecto_fase pf ON pf.id_fase = f.id_fase
-                 WHERE pf.id_proyecto = $proyectoId";
+  $sqlHayIter = $hasIteracionProyecto ?
+   "SELECT COUNT(*) AS total
+     FROM iteracion i
+     JOIN fase f ON f.id_fase = i.id_fase
+     JOIN proyecto_fase pf ON pf.id_fase = f.id_fase
+     WHERE pf.id_proyecto = $proyectoId" :
+   "SELECT COUNT(*) AS total
+     FROM iteracion i
+     JOIN fase f ON f.id_fase = i.id_fase
+     JOIN proyecto_fase pf ON pf.id_fase = f.id_fase AND pf.id_proyecto = $proyectoId";
   $resHayIter = $conexion->query($sqlHayIter);
   $hayIteraciones = ($resHayIter && $resHayIter->num_rows > 0 && (int)$resHayIter->fetch_assoc()['total'] > 0);
 
   // Core data (igual a dashboard.php)
-  $query = "
+  $query = $hasIteracionProyecto ? "
   SELECT 
-      i.id_iteracion,
-      i.numero_iteracion,
-      f.nombre AS fase,
-      i.fecha_inicio AS inicio,
-      i.fecha_fin AS fin,
-      m.id_metrica AS id_metrica,
-      m.nombre AS metrica,
-      mi.valor_planificado AS planificado,
-      mi.valor_ejecutado AS ejecutado,
-      mi.umbral_desviacion AS umbral
+    i.id_iteracion,
+    i.numero_iteracion,
+    f.nombre AS fase,
+    i.fecha_inicio AS inicio,
+    i.fecha_fin AS fin,
+    m.id_metrica AS id_metrica,
+    m.nombre AS metrica,
+    mi.valor_planificado AS planificado,
+    mi.valor_ejecutado AS ejecutado,
+    mi.umbral_desviacion AS umbral
   FROM metrica_iteracion mi
   JOIN metrica m ON mi.id_metrica = m.id_metrica
   JOIN iteracion i ON mi.id_iteracion = i.id_iteracion
   JOIN fase f ON i.id_fase = f.id_fase
   JOIN proyecto_fase pf ON pf.id_fase = f.id_fase
   WHERE pf.id_proyecto = $proyectoId
+  ORDER BY f.id_fase, i.numero_iteracion, m.id_metrica;
+  " : "
+  SELECT 
+    i.id_iteracion,
+    i.numero_iteracion,
+    f.nombre AS fase,
+    i.fecha_inicio AS inicio,
+    i.fecha_fin AS fin,
+    m.id_metrica AS id_metrica,
+    m.nombre AS metrica,
+    mi.valor_planificado AS planificado,
+    mi.valor_ejecutado AS ejecutado,
+    mi.umbral_desviacion AS umbral
+  FROM metrica_iteracion mi
+  JOIN metrica m ON mi.id_metrica = m.id_metrica
+  JOIN iteracion i ON mi.id_iteracion = i.id_iteracion
+  JOIN fase f ON i.id_fase = f.id_fase
+  JOIN proyecto_fase pf ON pf.id_fase = f.id_fase AND pf.id_proyecto = $proyectoId
   ORDER BY f.id_fase, i.numero_iteracion, m.id_metrica;
   ";
   $result = $conexion->query($query);
@@ -159,8 +209,6 @@ function build_payload_and_version($proyectoId) {
     if (count($anteriores) > 0) { $anteriorIter = end($anteriores); }
   }
 
-  $conexion->close();
-
   $payload = [
     'data' => $DATA,
     'actual' => $actualIter,
@@ -183,7 +231,9 @@ function send_event($event, $data) {
   @flush();
 }
 
-list($initialPayload, $currentVersion) = build_payload_and_version($proyectoId);
+// Una sola conexión reutilizable (Singleton)
+$__cn = BDConexion::getConexion();
+list($initialPayload, $currentVersion) = build_payload_and_version($__cn, $proyectoId);
 if ($initialPayload === null) {
   send_event('error', ['error' => 'DB connection failed']);
   exit;
@@ -200,7 +250,7 @@ $maxSeconds = 300; // mantener la conexión ~5 minutos; el cliente se reconectar
 while (!connection_aborted()) {
   // Chequeo periódico
   usleep(1500000); // 1.5s
-  list($payload, $ver) = build_payload_and_version($proyectoId);
+  list($payload, $ver) = build_payload_and_version($__cn, $proyectoId);
   if ($payload === null) {
     send_event('error', ['error' => 'DB connection lost']);
     break;

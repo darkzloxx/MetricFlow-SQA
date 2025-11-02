@@ -732,8 +732,17 @@ ALTER TABLE `usuario`
 --
 -- Filtros para la tabla `iteracion`
 --
+-- 1️⃣ Agregar la columna id_proyecto
 ALTER TABLE `iteracion`
-  ADD CONSTRAINT `iteracion_ibfk_1` FOREIGN KEY (`id_fase`) REFERENCES `fase` (`id_fase`);
+ADD COLUMN `id_proyecto` INT NOT NULL AFTER `id_iteracion`;
+
+-- 2️⃣ Crear la foreign key que vincula iteracion → proyecto
+ALTER TABLE `iteracion`
+ADD CONSTRAINT `fk_iteracion_proyecto`
+  FOREIGN KEY (`id_proyecto`)
+  REFERENCES `proyecto` (`id_proyecto`)
+  ON DELETE CASCADE
+  ON UPDATE CASCADE;
 
 --
 -- Filtros para la tabla `iteracion_tarea`

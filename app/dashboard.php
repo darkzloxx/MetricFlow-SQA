@@ -30,7 +30,7 @@ $idProyecto = isset($_GET['proyecto']) ? (int)$_GET['proyecto'] : 0;
 if ($idProyecto <= 0) {
   $asignados = ControlAcceso::proyectosAsignadosDelUsuario();
   if (!empty($asignados)) {
-    header('Location: ' . '/metricflowsqa/app/dashboard.php?proyecto=' . (int)$asignados[0]);
+    header('Location: ' . '/metricflow/app/dashboard.php?proyecto=' . (int)$asignados[0]);
     exit;
   } else {
     // No tiene proyectos asignados: vuelve al home autenticado (listado de proyectos)
@@ -41,8 +41,14 @@ if ($idProyecto <= 0) {
 
 // Verifica pertenencia al proyecto
 ControlAcceso::requiereProyecto($idProyecto);
-
-$sqlProyecto = "SELECT nombre, estado FROM proyecto WHERE id_proyecto = $idProyecto";
+// ------------------------------------------------------------
+// 2️⃣ Información del proyecto actual
+// ------------------------------------------------------------
+$sqlProyecto = "
+  SELECT nombre, estado
+  FROM proyecto
+  WHERE id_proyecto = $idProyecto
+";
 $resProyecto = $conexion->query($sqlProyecto);
 
 if ($resProyecto && $resProyecto->num_rows > 0) {
@@ -56,37 +62,70 @@ if ($resProyecto && $resProyecto->num_rows > 0) {
   $estadoProyecto = "No disponible";
 }
 
+// ------------------------------------------------------------
+// 3️⃣ Cantidad de métricas ejecutadas
+// ------------------------------------------------------------
+// Total de métricas
+$sqlMetricas = "
+SELECT COUNT(DISTINCT mi.id_metrica) AS total
+FROM fase f
+LEFT JOIN proyecto_fase pf 
+    ON pf.id_fase = f.id_fase AND pf.id_proyecto = $idProyecto
+LEFT JOIN iteracion i 
+    ON i.id_fase = f.id_fase AND i.id_proyecto = $idProyecto
+LEFT JOIN metrica_iteracion mi 
+    ON mi.id_iteracion = i.id_iteracion
+WHERE pf.id_proyecto = $idProyecto;
+";
 
-//cantidad de metricas con datos ejecutados
-$sqlMetricas = "SELECT COUNT(DISTINCT mi.id_metrica) AS total
-            FROM metrica_iteracion mi
-            JOIN iteracion i ON mi.id_iteracion = i.id_iteracion
-            JOIN fase f ON f.id_fase = i.id_fase
-            JOIN proyecto_fase pf ON pf.id_fase = f.id_fase
-            WHERE pf.id_proyecto = $idProyecto";
 $resMetricas = $conexion->query($sqlMetricas);
-$totalMetricas = ($resMetricas && $resMetricas->num_rows > 0) ? (int)$resMetricas->fetch_assoc()['total'] : 0;
-
-// Total iteraciones
-$sqlIter = "SELECT COUNT(*) AS total
-            FROM iteracion i
-            JOIN fase f ON f.id_fase = i.id_fase
-            JOIN proyecto_fase pf ON pf.id_fase = f.id_fase
-            WHERE pf.id_proyecto = $idProyecto";
+$totalMetricas = ($resMetricas && $resMetricas->num_rows > 0)
+  ? (int)$resMetricas->fetch_assoc()['total']
+  : 0;
+// Total de iteraciones
+$sqlIter = "
+SELECT COUNT(i.id_iteracion) AS total
+FROM fase f
+LEFT JOIN proyecto_fase pf 
+    ON pf.id_fase = f.id_fase AND pf.id_proyecto = $idProyecto
+LEFT JOIN iteracion i 
+    ON i.id_fase = f.id_fase AND i.id_proyecto = $idProyecto
+WHERE pf.id_proyecto = $idProyecto;
+";
 $resIter = $conexion->query($sqlIter);
-$totalIteraciones = ($resIter && $resIter->num_rows > 0) ? (int)$resIter->fetch_assoc()['total'] : 0;
+$totalIteraciones = ($resIter && $resIter->num_rows > 0)
+  ? (int)$resIter->fetch_assoc()['total']
+  : 0;
 
-// Verificar si hay iteraciones aunque no haya métricas
-$sqlHayIter = "SELECT COUNT(*) AS total
-               FROM iteracion i
-               JOIN fase f ON f.id_fase = i.id_fase
-               JOIN proyecto_fase pf ON pf.id_fase = f.id_fase
-               WHERE pf.id_proyecto = $idProyecto";
+// ------------------------------------------------------------
+// 5️⃣ Verificar si el proyecto tiene iteraciones (aunque sin métricas)
+// ------------------------------------------------------------
+$sqlHayIter = "
+  SELECT COUNT(*) AS total
+  FROM iteracion
+  WHERE id_proyecto = $idProyecto
+";
+
 $resHayIter = $conexion->query($sqlHayIter);
 $hayIteraciones = ($resHayIter && $resHayIter->num_rows > 0 && (int)$resHayIter->fetch_assoc()['total'] > 0);
+if (!$hayIteraciones) {
+  $DATA = [
+    "proyecto" => [
+      "id"     => $idProyecto,
+      "nombre" => $nombreProyecto,
+      "estado" => $estadoProyecto
+    ],
+    "iteraciones"       => [],
+    "totalMetricas"     => 0,
+    "totalIteraciones"  => 0,
+    "mensaje"           => "Este proyecto aún no tiene iteraciones creadas."
+  ];
 
+  header('Content-Type: application/json; charset=utf-8');  
+  echo json_encode($DATA, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+  exit;
+}
 
-// Datos para los gráficos
 $query = "
 SELECT 
     i.id_iteracion,
@@ -99,14 +138,21 @@ SELECT
     mi.valor_planificado AS planificado,
     mi.valor_ejecutado AS ejecutado,
     mi.umbral_desviacion AS umbral
-FROM metrica_iteracion mi
-JOIN metrica m ON mi.id_metrica = m.id_metrica
-JOIN iteracion i ON mi.id_iteracion = i.id_iteracion
-JOIN fase f ON i.id_fase = f.id_fase
-JOIN proyecto_fase pf ON pf.id_fase = f.id_fase
+FROM fase f
+LEFT JOIN proyecto_fase pf 
+    ON pf.id_fase = f.id_fase 
+   AND pf.id_proyecto = $idProyecto
+LEFT JOIN iteracion i 
+    ON i.id_fase = f.id_fase 
+   AND i.id_proyecto = $idProyecto
+LEFT JOIN metrica_iteracion mi 
+    ON mi.id_iteracion = i.id_iteracion
+LEFT JOIN metrica m 
+    ON m.id_metrica = mi.id_metrica
 WHERE pf.id_proyecto = $idProyecto
 ORDER BY f.id_fase, i.numero_iteracion, m.id_metrica;
 ";
+
 $result = $conexion->query($query);
 
 // ============================
