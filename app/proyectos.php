@@ -34,26 +34,27 @@ if ($tieneAbmProyectos) {
     <title><?= Constantes::NOMBRE_SISTEMA; ?> - Proyectos</title>
 
     <style>
+        /* Restaurar comportamiento estándar de Bootstrap para botones outline-secondary
+           (evita que un override local haga que parezca diferente a los demás botones) */
         .btn-outline-secondary {
-            /* Mantener estilo "outline" pero con borde visible sobre fondo claro */
-            border: 1px solid #dee2e6;
-            border-color: #dee2e6;
-            color: #495057;
+            color: #6c757d;
+            /* color del texto/borde */
             background-color: transparent;
-            transition: background-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out, border-color 0.15s ease-in-out;
+            border-color: #6c757d;
         }
 
         .btn-outline-secondary:hover {
-            background-color: #f8f9fa;
-            color: #212529;
-            border-color: #ced4da;
-            box-shadow: 0 0 0 0.15rem rgba(108,117,125,0.08);
+            color: #fff;
+            background-color: #6c757d;
+            border-color: #6c757d;
         }
-        /* Uniformizar tamaño de iconos Open Iconic dentro de botones */
-        .btn .oi {
-            font-size: 1.05rem; /* ajustar valor para igualar visualmente */
-            vertical-align: middle;
-            line-height: 1;
+
+        /* Ajuste opcional para botones que solo contienen icono */
+        .btn-icon {
+
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
         }
     </style>
 </head>
@@ -144,10 +145,10 @@ if ($tieneAbmProyectos) {
                                     <?php if (ControlAcceso::verificaPermiso(PermisosSistema::VISUALIZACION_METRICAS)): ?>
                                         <a title="Dashboard de Calidad"
                                             href="dashboard_exclusivo.php?proyecto=<?= (int)$Proyec['id_proyecto']; ?>"
-                                            class="btn btn-outline-secondary"
+                                            class="btn btn-outline-secondary btn-icon"
                                             role="button"
                                             aria-label="Dashboard de Calidad del proyecto <?= htmlspecialchars($Proyec['nombre'], ENT_QUOTES, 'UTF-8'); ?>">
-                                            <span class="oi oi-graph oi-lg" aria-hidden="true"></span>
+                                            <span class="oi oi-pie-chart" aria-hidden="true"></span>
                                         </a>
                                     <?php endif; ?>
                                     <?php if ($tieneAbmProyectos): ?>
