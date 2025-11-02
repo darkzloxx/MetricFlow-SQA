@@ -2,13 +2,10 @@
 -- version 5.2.1
 -- https://www.phpmyadmin.net/
 --
--- Servidor: 127.0.0.1
--- Tiempo de generación: 31-10-2025 a las 05:06:51
+-- Servidor: 127.0.0.1:3306
+-- Tiempo de generación: 02-11-2025 a las 22:18:57
 -- Versión del servidor: 10.4.32-MariaDB
 -- Versión de PHP: 8.2.12
-DROP DATABASE IF EXISTS bd_codevit2;
-CREATE DATABASE bd_codevit2 CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
-USE bd_codevit2;
 
 SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
 START TRANSACTION;
@@ -21,7 +18,7 @@ SET time_zone = "+00:00";
 /*!40101 SET NAMES utf8mb4 */;
 
 --
--- Base de datos: `bd_codevit`
+-- Base de datos: `bd_codevit2`
 --
 
 -- --------------------------------------------------------
@@ -53,6 +50,7 @@ INSERT INTO `fase` (`id_fase`, `nombre`) VALUES
 
 CREATE TABLE `iteracion` (
   `id_iteracion` int(11) NOT NULL,
+  `id_proyecto` int(11) NOT NULL,
   `numero_iteracion` int(11) NOT NULL,
   `fecha_inicio` date DEFAULT NULL,
   `fecha_fin` date DEFAULT NULL,
@@ -64,14 +62,14 @@ CREATE TABLE `iteracion` (
 -- Volcado de datos para la tabla `iteracion`
 --
 
-INSERT INTO `iteracion` (`id_iteracion`, `numero_iteracion`, `fecha_inicio`, `fecha_fin`, `objetivo`, `id_fase`) VALUES
-(1, 1, '2025-08-19', '2025-09-09', 'Definición del alcance y plan de calidad.', 1),
-(2, 1, '2025-09-10', '2025-09-23', 'Primera iteración de elaboración: definición de métricas.', 2),
-(3, 2, '2025-09-24', '2025-10-10', 'Segunda iteración de elaboración: revisión del modelo híbrido.', 2),
-(4, 1, '2025-10-11', '2025-10-28', 'Implementación del módulo de métricas.', 3),
-(5, 2, '2025-10-29', '2025-11-07', 'Validación del modelo híbrido.', 3),
-(6, 3, '2025-11-08', '2025-11-14', 'Integración del dashboard de calidad.', 3),
-(7, 1, '2025-11-15', '2025-11-28', 'Despliegue y cierre del proyecto.', 4);
+INSERT INTO `iteracion` (`id_iteracion`, `id_proyecto`, `numero_iteracion`, `fecha_inicio`, `fecha_fin`, `objetivo`, `id_fase`) VALUES
+(1, 1, 1, '2025-08-19', '2025-09-09', 'Definición del alcance y plan de calidad.', 1),
+(2, 1, 1, '2025-09-10', '2025-09-23', 'Primera iteración de elaboración: definición de métricas.', 2),
+(3, 1, 2, '2025-09-24', '2025-10-10', 'Segunda iteración de elaboración: revisión del modelo híbrido.', 2),
+(4, 1, 1, '2025-10-11', '2025-10-28', 'Implementación del módulo de métricas.', 3),
+(5, 1, 2, '2025-10-29', '2025-11-07', 'Validación del modelo híbrido.', 3),
+(6, 1, 3, '2025-11-08', '2025-11-14', 'Integración del dashboard de calidad.', 3),
+(7, 1, 1, '2025-11-15', '2025-11-28', 'Despliegue y cierre del proyecto.', 4);
 
 -- --------------------------------------------------------
 
@@ -140,16 +138,22 @@ CREATE TABLE `metrica_iteracion` (
 INSERT INTO `metrica_iteracion` (`id_metrica`, `id_iteracion`, `valor_planificado`, `valor_ejecutado`, `umbral_desviacion`) VALUES
 (1, 3, 8, 8, 10),
 (1, 4, 9, 9, 10),
+(1, 5, 6, 1, 10),
 (2, 3, 1, 2, 10),
 (2, 4, 1, 1, 10),
+(2, 5, 0, 0, 10),
 (3, 3, 2, 2, 15),
 (3, 4, 3, 3, 15),
+(3, 5, 2, 0, 15),
 (5, 3, 130, 143, 15),
 (5, 4, 120, 137, 15),
+(5, 5, 70, 6, 15),
 (6, 3, 22, 22, 10),
 (6, 4, 18, 20, 10),
+(6, 5, 16, 2, 10),
 (7, 3, 0, 3, 10),
-(7, 4, 3, 75, 10);
+(7, 4, 3, 75, 10),
+(7, 5, 30, 0, 10);
 
 -- --------------------------------------------------------
 
@@ -345,7 +349,8 @@ CREATE TABLE `proyecto` (
 --
 
 INSERT INTO `proyecto` (`id_proyecto`, `objetivo`, `descripcion`, `estado`, `nombre`, `id_modelo`) VALUES
-(1, 'MetricFlow SQA es un software web para registrar, seguir y analizar métricas de calidad durante las iteraciones del proyecto.', 'Permite el seguimiento de estándares de calidad mediante métricas e indicadores definidos en el plan de SQA.', 'En Progreso', 'MetricFlow-SQA', 7);
+(1, 'MetricFlow SQA es un software web para registrar, seguir y analizar métricas de calidad durante las iteraciones del proyecto.', 'Permite el seguimiento de estándares de calidad mediante métricas e indicadores definidos en el plan de SQA.', 'En Progreso', 'MetricFlow-SQA', 7),
+(3, '', '', 'Registrado', 'Kairos', NULL);
 
 -- --------------------------------------------------------
 
@@ -368,7 +373,11 @@ INSERT INTO `proyecto_fase` (`id_proyecto`, `id_fase`, `fecha_inicio`, `fecha_fi
 (1, 1, '2025-08-19', '2025-09-09'),
 (1, 2, '2025-09-10', '2025-10-10'),
 (1, 3, '2025-10-11', '2025-11-14'),
-(1, 4, '2025-11-15', '2025-11-28');
+(1, 4, '2025-11-15', '2025-11-28'),
+(3, 1, NULL, NULL),
+(3, 2, NULL, NULL),
+(3, 3, NULL, NULL),
+(3, 4, NULL, NULL);
 
 -- --------------------------------------------------------
 
@@ -500,7 +509,8 @@ INSERT INTO `usuario` (`id_usuario`, `nombre_apellido`, `email`) VALUES
 (5, 'Santiago Pacheco', 'pacheco.santi990@gmail.com'),
 (6, 'Osiris Sofia', 'osofia@uarg.unpa.edu.ar'),
 (7, 'Karim Hallar', 'khallar@uarg.unpa.edu.ar'),
-(8, 'Esteban Gesto', 'estebangesto@gmail.com');
+(8, 'Esteban Gesto', 'estebangesto@gmail.com'),
+(12, 'Lorenzo Teppa', 'sistemasprexa@gmail.com');
 
 -- --------------------------------------------------------
 
@@ -520,6 +530,7 @@ CREATE TABLE `usuario_proyecto` (
 
 INSERT INTO `usuario_proyecto` (`id_usuario`, `id_proyecto`, `id_rol`) VALUES
 (1, 1, 2),
+(12, 3, 2),
 (4, 1, 3),
 (2, 1, 4),
 (5, 1, 4);
@@ -547,7 +558,8 @@ INSERT INTO `usuario_rol` (`id_usuario`, `id_rol`) VALUES
 (5, 4),
 (6, 1),
 (7, 1),
-(8, 1);
+(8, 1),
+(12, 2);
 
 --
 -- Índices para tablas volcadas
@@ -564,7 +576,8 @@ ALTER TABLE `fase`
 --
 ALTER TABLE `iteracion`
   ADD PRIMARY KEY (`id_iteracion`),
-  ADD KEY `id_fase` (`id_fase`);
+  ADD KEY `id_fase` (`id_fase`),
+  ADD KEY `fk_iteracion_proyecto` (`id_proyecto`);
 
 --
 -- Indices de la tabla `iteracion_tarea`
@@ -705,7 +718,7 @@ ALTER TABLE `permiso`
 -- AUTO_INCREMENT de la tabla `proyecto`
 --
 ALTER TABLE `proyecto`
-  MODIFY `id_proyecto` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
+  MODIFY `id_proyecto` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
 
 --
 -- AUTO_INCREMENT de la tabla `rol`
@@ -723,7 +736,7 @@ ALTER TABLE `tarea`
 -- AUTO_INCREMENT de la tabla `usuario`
 --
 ALTER TABLE `usuario`
-  MODIFY `id_usuario` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=12;
+  MODIFY `id_usuario` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=13;
 
 --
 -- Restricciones para tablas volcadas
@@ -732,26 +745,9 @@ ALTER TABLE `usuario`
 --
 -- Filtros para la tabla `iteracion`
 --
-
--- 1️⃣ Agregar la columna temporalmente como NULL
 ALTER TABLE `iteracion`
-ADD COLUMN `id_proyecto` INT NULL AFTER `id_iteracion`;
+  ADD CONSTRAINT `fk_iteracion_proyecto` FOREIGN KEY (`id_proyecto`) REFERENCES `proyecto` (`id_proyecto`) ON DELETE CASCADE ON UPDATE CASCADE;
 
--- 2️⃣ Asignar el proyecto existente (id_proyecto = 1)
-UPDATE `iteracion`
-SET `id_proyecto` = 1;
-
--- 3️⃣ Modificar la columna para que sea NOT NULL
-ALTER TABLE `iteracion`
-MODIFY `id_proyecto` INT NOT NULL;
-
--- 4️⃣ Crear la clave foránea con cascada
-ALTER TABLE `iteracion`
-ADD CONSTRAINT `fk_iteracion_proyecto`
-  FOREIGN KEY (`id_proyecto`)
-  REFERENCES `proyecto` (`id_proyecto`)
-  ON DELETE CASCADE
-  ON UPDATE CASCADE;
 --
 -- Filtros para la tabla `iteracion_tarea`
 --
@@ -789,16 +785,9 @@ ALTER TABLE `proyecto`
 --
 -- Filtros para la tabla `proyecto_fase`
 --
--- Filtros para la tabla `proyecto_fase`
 ALTER TABLE `proyecto_fase`
-  ADD CONSTRAINT `proyecto_fase_ibfk_1`
-    FOREIGN KEY (`id_proyecto`)
-    REFERENCES `proyecto` (`id_proyecto`)
-    ON DELETE CASCADE
-    ON UPDATE CASCADE,
-  ADD CONSTRAINT `proyecto_fase_ibfk_2`
-    FOREIGN KEY (`id_fase`)
-    REFERENCES `fase` (`id_fase`);
+  ADD CONSTRAINT `proyecto_fase_ibfk_1` FOREIGN KEY (`id_proyecto`) REFERENCES `proyecto` (`id_proyecto`) ON DELETE CASCADE ON UPDATE CASCADE,
+  ADD CONSTRAINT `proyecto_fase_ibfk_2` FOREIGN KEY (`id_fase`) REFERENCES `fase` (`id_fase`);
 
 --
 -- Filtros para la tabla `rol_permiso`
@@ -815,6 +804,7 @@ ALTER TABLE `usuario_proyecto`
   ADD CONSTRAINT `usuario_proyecto_ibfk_2` FOREIGN KEY (`id_proyecto`) REFERENCES `proyecto` (`id_proyecto`) ON DELETE CASCADE ON UPDATE CASCADE,
   ADD CONSTRAINT `usuario_proyecto_ibfk_3` FOREIGN KEY (`id_rol`) REFERENCES `rol` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
+--
 -- Filtros para la tabla `usuario_rol`
 --
 ALTER TABLE `usuario_rol`

@@ -5,6 +5,26 @@ $tieneAbmProyectos = ControlAcceso::verificaPermiso(PermisosSistema::ABM_PROYECT
 $usr = ControlAcceso::usuarioActual();
 
 $cn = BDConexion::getInstancia();
+// Helper: obtiene el nombre del rol del usuario en un proyecto específico
+function getRolUsuarioEnProyecto(mysqli $cn, int $idUsuario, int $idProyecto): ?string {
+    $sql = "SELECT r.nombre AS rol_nombre\n            FROM usuario_proyecto up\n            JOIN rol r ON r.id = up.id_rol\n            WHERE up.id_usuario = ? AND up.id_proyecto = ?\n            LIMIT 1";
+    if (!$stmt = $cn->prepare($sql)) { return null; }
+    $stmt->bind_param('ii', $idUsuario, $idProyecto);
+    if (!$stmt->execute()) { $stmt->close(); return null; }
+    $res = $stmt->get_result();
+    $row = $res ? $res->fetch_assoc() : null;
+    $stmt->close();
+    return $row && !empty($row['rol_nombre']) ? (string)$row['rol_nombre'] : null;
+}
+
+// Flag global: si el usuario tiene rol SuperAdmin (global)
+$esSuperAdmin = false;
+if (isset($usr->roles) && is_array($usr->roles)) {
+    foreach ($usr->roles as $r) {
+        $name = mb_strtolower(trim($r->nombre ?? ''), 'UTF-8');
+        if ($name === 'superadmin') { $esSuperAdmin = true; break; }
+    }
+}
 if ($tieneAbmProyectos) {
     $sql = "SELECT p.* FROM proyecto p ORDER BY p.id_proyecto";
     $proyectos = $cn->query($sql)->fetch_all(MYSQLI_ASSOC);
@@ -124,6 +144,7 @@ if ($tieneAbmProyectos) {
                             <th>Nombre</th>
                             <th>Año</th>
                             <th>Estado</th>
+                            <th>Rol</th>
                             <th>Opciones</th>
                         </tr>
                         <?php foreach ($proyectos as $Proyec): ?>
@@ -132,6 +153,19 @@ if ($tieneAbmProyectos) {
                                 <td>2025</td>
                                 <td><?= htmlspecialchars($Proyec['estado'], ENT_QUOTES, 'UTF-8'); ?></td>
                                 <td>
+                                    <?php
+                                        $rolProyecto = $esSuperAdmin
+                                            ? 'SuperAdmin'
+                                            : (getRolUsuarioEnProyecto($cn, (int)$usr->id, (int)$Proyec['id_proyecto']) ?? '—');
+                                        // Normalizamos para comparaciones
+                                        $rolLower = mb_strtolower($rolProyecto, 'UTF-8');
+                                        $esGerenteOLider = in_array($rolLower, ['gerente de calidad','líder de proyecto','lider de proyecto'], true);
+                                        $esAdminProyecto = ($rolLower === 'administrador');
+                                    ?>
+                                    <span class="badge badge-secondary" title="Rol en este proyecto"><?= htmlspecialchars($rolProyecto, ENT_QUOTES, 'UTF-8'); ?></span>
+                                </td>
+                                <td>
+                                    <!-- Ver y Dashboard Inicial: disponibles para todos los roles -->
                                     <a title="Ver" href="proyecto.ver.php?id=<?= (int)$Proyec['id_proyecto']; ?>"
                                         class="btn btn-outline-primary" role="button" aria-label="Ver proyecto <?= htmlspecialchars($Proyec['nombre'], ENT_QUOTES, 'UTF-8'); ?>">
                                         <span class="oi oi-eye" aria-hidden="true"></span>
@@ -141,8 +175,9 @@ if ($tieneAbmProyectos) {
                                         class="btn btn-outline-info" role="button" aria-label="Ver dashboard del proyecto <?= htmlspecialchars($Proyec['nombre'], ENT_QUOTES, 'UTF-8'); ?>">
                                         <span class="oi oi-bar-chart" aria-hidden="true"></span>
                                     </a>
-                                    <!--Dashboard exclusivo (solo si tiene permiso de métricas o es SuperAdmin/Líder/Gerente) -->
-                                    <?php if (ControlAcceso::verificaPermiso(PermisosSistema::VISUALIZACION_METRICAS)): ?>
+
+                                    <!-- Dashboard exclusivo: SuperAdmin o Gerente de Calidad / Líder de Proyecto -->
+                                    <?php if ($esSuperAdmin || $esGerenteOLider): ?>
                                         <a title="Dashboard de Calidad"
                                             href="dashboard_exclusivo.php?proyecto=<?= (int)$Proyec['id_proyecto']; ?>"
                                             class="btn btn-outline-secondary btn-icon"
@@ -151,7 +186,9 @@ if ($tieneAbmProyectos) {
                                             <span class="oi oi-pie-chart" aria-hidden="true"></span>
                                         </a>
                                     <?php endif; ?>
-                                    <?php if ($tieneAbmProyectos): ?>
+
+                                    <!-- Modificar / Eliminar: SuperAdmin o Administrador del proyecto -->
+                                    <?php if ($esSuperAdmin || $esAdminProyecto): ?>
                                         <a title="Modificar" href="proyecto.modificar.php?id=<?= (int)$Proyec['id_proyecto']; ?>"
                                             class="btn btn-outline-warning" role="button" aria-label="Modificar proyecto <?= htmlspecialchars($Proyec['nombre'], ENT_QUOTES, 'UTF-8'); ?>">
                                             <span class="oi oi-pencil" aria-hidden="true"></span>
