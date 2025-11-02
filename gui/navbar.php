@@ -78,11 +78,12 @@ $currentPage = isset($_SERVER['SCRIPT_NAME']) ? basename($_SERVER['SCRIPT_NAME']
     </div>
 </nav>
 
-
+<?php /*
 <div class="alert alert-info alert-dismissible fade show" role="alert">
     <?php $nom = isset($_SESSION['usuario']) ? ($_SESSION['usuario']->nombre ?? 'Usuario') : 'Invitado'; ?>
-    Ud. est&aacute; conectad@ como <strong><?= htmlspecialchars($nom, ENT_QUOTES, 'UTF-8'); ?></strong>.
+    Ud. est&aacute; conectad@ como <strong><?= htmlspecialchars($nom, ENT_QUOTES, 'UTF-8') ?></strong>.
     <button type="button" class="close" data-dismiss="alert" aria-label="Close">
         <span aria-hidden="true">&times;</span>
     </button>
 </div>
+*/ ?>

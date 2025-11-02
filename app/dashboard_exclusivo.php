@@ -1,80 +1,140 @@
 <?php
-include_once '../lib/ControlAcceso.Class.php';
-// Requiere login
-ControlAcceso::verificaLogin();
-// Permiso requerido para ver este dashboard
-$permVisualizacionMetricas = PermisosSistema::VISUALIZACION_METRICAS;
 
-// Usuario en sesión
-$usuarioActual = ControlAcceso::usuarioActual();
-$isSuper = false;
-if ($usuarioActual && isset($usuarioActual->roles) && is_array($usuarioActual->roles)) {
-    foreach ($usuarioActual->roles as $r) {
-        $rolName = mb_strtolower(trim($r->nombre ?? ''), 'UTF-8');
-        if ($rolName === 'superadmin') {
-            $isSuper = true;
-            break;
-        }
-    }
-}
+/**
+ * Dashboard exclusivo de calidad
+ * Visualización individual de métricas con semáforo según umbral.
+ * 
+ * @author    Lorenzo Teppa
+ * @project   MetricFlow-SQA
+ * @since     2025
+ */
 
-// Debe ser superadmin o tener el permiso de visualización de métricas
-if (!$isSuper && !ControlAcceso::verificaPermiso($permVisualizacionMetricas)) {
-    // No autorizado
-    header('Location: ' . Constantes::HOMEAUTH);
-    exit;
-}
-
+require_once __DIR__ . '/../lib/ControlAcceso.Class.php';
 include_once '../modelo/BDConexion.Class.php';
 
-// Proyecto requerido (igual que en dashboard.php): si no viene, redirigir al primer proyecto asignado
-$idProyecto = isset($_GET['proyecto']) ? (int)$_GET['proyecto'] : 1;
-if ($idProyecto <= 0) {
-    $asignados = ControlAcceso::proyectosAsignadosDelUsuario();
-    if (!empty($asignados)) {
-        header('Location: ' . '/metricflowsqa/app/dashboard_exclusivo.php?proyecto=' . (int)$asignados[0]);
-        exit;
-    } else {
-        // Si no tiene proyectos asignados y no es superadmin, volver al HOMEAUTH
-        if (!$isSuper) {
-            header('Location: ' . Constantes::HOMEAUTH);
-            exit;
-        }
-        // Si es superadmin y no hay proyecto en GET, pedir que se indique uno (redirigir a proyectos)
-        header('Location: ' . Constantes::HOMEAUTH);
-        exit;
+// ==============================
+// Validación de acceso
+// ==============================
+ControlAcceso::verificaLogin();
+$permVisualizacionMetricas = PermisosSistema::VISUALIZACION_METRICAS;
+$usuarioActual = ControlAcceso::usuarioActual();
+
+$isSuper = false;
+if ($usuarioActual && isset($usuarioActual->roles) && is_array($usuarioActual->roles)) {
+  foreach ($usuarioActual->roles as $r) {
+    if (strtolower(trim($r->nombre ?? '')) === 'superadmin') {
+      $isSuper = true;
+      break;
     }
+  }
 }
 
-// Si no es superadmin, debe pertenecer al proyecto
-if (!$isSuper && !ControlAcceso::usuarioPerteneceAProyecto($idProyecto)) {
+if (!$isSuper && !ControlAcceso::verificaPermiso($permVisualizacionMetricas)) {
+  header('Location: ' . Constantes::HOMEAUTH);
+  exit;
+}
+
+// ==============================
+// Identificación de proyecto
+// ==============================
+$idProyecto = isset($_GET['proyecto']) ? (int)$_GET['proyecto'] : 0;
+if ($idProyecto <= 0) {
+  $asignados = ControlAcceso::proyectosAsignadosDelUsuario();
+  if (!empty($asignados)) {
+    header('Location: /metricflowsqa/app/dashboard_exclusivo.php?proyecto=' . (int)$asignados[0]);
+    exit;
+  } else {
     header('Location: ' . Constantes::HOMEAUTH);
     exit;
+  }
 }
 
-// Conexión y carga dinámica de métricas para el proyecto (agregadas por todas las iteraciones)
+if (!$isSuper && !ControlAcceso::usuarioPerteneceAProyecto($idProyecto)) {
+  header('Location: ' . Constantes::HOMEAUTH);
+  exit;
+}
+
+// ==============================
+// Datos de proyecto
+// ==============================
 $cn = BDConexion::getConexion();
-$sql = "SELECT m.id_metrica AS id, m.nombre AS nombre, COALESCE(SUM(mi.valor_planificado),0) AS planificado, COALESCE(SUM(mi.valor_ejecutado),0) AS ejecutado
-        FROM metrica m
-        JOIN metrica_iteracion mi ON m.id_metrica = mi.id_metrica
-        JOIN iteracion i ON mi.id_iteracion = i.id_iteracion
-        JOIN fase f ON i.id_fase = f.id_fase
-        JOIN proyecto_fase pf ON pf.id_fase = f.id_fase
-        WHERE pf.id_proyecto = ?
-        GROUP BY m.id_metrica, m.nombre
-        ORDER BY m.nombre;";
+$sqlProyecto = "SELECT nombre, estado FROM proyecto WHERE id_proyecto = ?";
+$stmt = $cn->prepare($sqlProyecto);
+$stmt->bind_param('i', $idProyecto);
+$stmt->execute();
+$resProyecto = $stmt->get_result();
+$proyectoExiste = ($resProyecto && $resProyecto->num_rows > 0);
+
+if ($proyectoExiste) {
+  $proyecto = $resProyecto->fetch_assoc();
+  $nombreProyecto = $proyecto['nombre'];
+  $estadoProyecto = $proyecto['estado'];
+} else {
+  $nombreProyecto = "Proyecto no encontrado";
+  $estadoProyecto = "No disponible";
+}
+$stmt->close();
+
+// ==============================
+// Consulta de métricas
+// ==============================
+$sql = "
+SELECT 
+  m.id_metrica,
+  m.nombre AS nombre_metrica,
+  f.nombre AS fase,
+  i.numero_iteracion,
+  SUM(mi.valor_planificado) AS planificado,
+  SUM(mi.valor_ejecutado) AS ejecutado,
+  MAX(mi.umbral_desviacion) AS umbral
+FROM metrica_iteracion mi
+JOIN metrica m ON mi.id_metrica = m.id_metrica
+JOIN iteracion i ON mi.id_iteracion = i.id_iteracion
+JOIN fase f ON i.id_fase = f.id_fase
+JOIN proyecto_fase pf ON pf.id_fase = f.id_fase
+WHERE pf.id_proyecto = ?
+GROUP BY m.id_metrica, m.nombre, f.nombre, i.numero_iteracion
+ORDER BY f.id_fase, i.numero_iteracion, m.id_metrica;
+";
 $stmt = $cn->prepare($sql);
 $stmt->bind_param('i', $idProyecto);
 $stmt->execute();
 $res = $stmt->get_result();
+
 $metricas = [];
-while ($row = $res->fetch_assoc()) {
-    $metricas[] = [
-        'id' => (int)$row['id'],
-        'nombre' => $row['nombre'],
-        'planificado' => (float)$row['planificado'],
-        'ejecutado' => (float)$row['ejecutado']
-    ];
+while ($r = $res->fetch_assoc()) {
+  $faseIter = trim($r['fase'] . ' ' . $r['numero_iteracion']);
+  $plan = (float)($r['planificado'] ?? 0);
+  $ejec = (float)($r['ejecutado'] ?? 0);
+  $umbral = (float)($r['umbral'] ?? 10);
+
+  if ($plan == 0 && $ejec == 0) {
+    $pct = 100;
+  } elseif ($plan == 0 && $ejec > 0) {
+    $pct = 100;
+  } else {
+    $pct = ($plan > 0) ? round(($ejec / $plan) * 100, 1) : 0;
+  }
+
+  // Determinar color semáforo
+  if ($pct >= 100) {
+    $color = "#28a745"; // verde
+  } elseif ($pct >= (100 - $umbral)) {
+    $color = "#ffc107"; // amarillo
+  } else {
+    $color = "#dc3545"; // rojo
+  }
+
+  $metricas[] = [
+    "id" => (int)$r['id_metrica'],
+    "nombre" => $r['nombre_metrica'],
+    "fase_iteracion" => $faseIter,
+    "planificado" => $plan,
+    "ejecutado" => $ejec,
+    "umbral" => $umbral,
+    "porcentaje" => $pct,
+    "color" => $color
+  ];
 }
 $stmt->close();
 ?>
@@ -84,13 +144,13 @@ $stmt->close();
 
 <head>
   <meta charset="UTF-8">
-  <title><?php echo Constantes::NOMBRE_SISTEMA; ?> - Dashboard Exclusivo</title>
-
+  <title><?= Constantes::NOMBRE_SISTEMA; ?> - Dashboard de Calidad</title>
   <link rel="stylesheet" href="../lib/bootstrap-4.1.1-dist/css/bootstrap.css" />
   <link rel="stylesheet" href="../lib/open-iconic-master/font/css/open-iconic-bootstrap.css" />
   <script src="../lib/JQuery/jquery-3.3.1.js"></script>
   <script src="../lib/bootstrap-4.1.1-dist/js/bootstrap.min.js"></script>
-  <script src="../lib/echarts/echarts.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+  <?php include __DIR__ . '/../gui/navbar.php'; ?>
 
   <style>
     body {
@@ -109,10 +169,6 @@ $stmt->close();
       transform: translateY(-2px);
     }
 
-    h5, h6 {
-      font-weight: 600;
-    }
-
     .chart-container {
       height: 230px;
     }
@@ -121,67 +177,97 @@ $stmt->close();
       color: #495057;
       font-weight: 700;
     }
+
+    .btn-outline-secondary {
+      border-color: #dee2e6;
+      color: #495057;
+      background-color: #fff;
+    }
+
+    .btn-outline-secondary:hover {
+      background-color: #f8f9fa;
+      color: #212529;
+    }
   </style>
 </head>
 
 <body>
-  <?php include_once '../gui/navbar.php'; ?>
 
-  <div class="container-fluid mt-4">
-    <h4 class="mb-4 titulo-seccion">Visualización individual de métricas</h4>
+  <div class="container my-4">
 
-    <div class="row">
-      <?php if (empty($metricas)): ?>
-        <div class="col-12">
-          <div class="card my-4">
-            <div class="card-body text-center text-muted">No se encontraron métricas para este proyecto.</div>
-          </div>
+    <div class="mb-3">
+      <a id="btnVolver" href="proyectos.php" class="btn btn-outline-secondary">
+        <span class="oi oi-arrow-left mr-1"></span> Volver
+      </a>
+    </div>
+ <script>
+      (function() {
+        var btn = document.getElementById('btnVolver');
+        if (!btn) return;
+        btn.addEventListener('click', function(e) {
+          // Intentar volver en el historial del navegador cuando sea seguro
+          e.preventDefault();
+          try {
+            var ref = document.referrer;
+            if (ref && (new URL(ref)).origin === location.origin && history.length > 1) {
+              history.back();
+            } else {
+              // Fallback: navegar a la lista de proyectos
+              location.href = btn.getAttribute('href');
+            }
+          } catch (err) {
+            location.href = btn.getAttribute('href');
+          }
+        });
+      })();
+    </script>
+
+    <?php if (empty($metricas)): ?>
+      <div class="card text-center">
+        <div class="card-body text-muted">
+          No se encontraron métricas registradas para este proyecto.
         </div>
-      <?php else: ?>
+      </div>
+    <?php else: ?>
+      <div class="row">
         <?php foreach ($metricas as $m): ?>
           <div class="col-md-4 mb-4">
             <div class="card shadow-sm">
+              <div class="card-header d-flex justify-content-between align-items-center">
+                <h6 class="mb-0 text-dark" style="font-weight:600"><?= htmlspecialchars($m['nombre'], ENT_QUOTES, 'UTF-8'); ?></h6>
+                <span class="badge" style="background-color: <?= $m['color'] ?>;">&nbsp;</span>
+              </div>
               <div class="card-body text-center">
-                <h6 class="text-muted mb-3"><?= htmlspecialchars($m['nombre'], ENT_QUOTES, 'UTF-8'); ?></h6>
                 <div id="chart-<?= $m['id']; ?>" class="chart-container"></div>
+                <div class="small text-muted mt-2">
+                  Fase: <?= htmlspecialchars($m['fase_iteracion']); ?><br>
+                  Planificado: <?= (int)$m['planificado']; ?> — Ejecutado: <?= (int)$m['ejecutado']; ?><br>
+                  Cumplimiento: <?= $m['porcentaje']; ?>% — Umbral ±<?= $m['umbral']; ?>%
+                </div>
               </div>
             </div>
           </div>
         <?php endforeach; ?>
-      <?php endif; ?>
-    </div>
+      </div>
+    <?php endif; ?>
   </div>
 
   <script>
-    const palette = [
-      "#007bff", "#1b9437", "#dc3545", "#b98b00", "#0d8092",
-      "#6f42c1", "#fd7e14", "#147b5c", "#6610f2", "#e83e8c",
-      "#343a40", "#582349", "#00c2ff", "#b07ef2", "#ff9f40"
-    ];
+    const metricas = <?= json_encode($metricas, JSON_UNESCAPED_UNICODE | JSON_NUMERIC_CHECK); ?>;
 
-    // Métricas cargadas desde el backend (PHP)
-    const metricas = <?= json_encode($metricas, JSON_UNESCAPED_UNICODE | JSON_NUMERIC_CHECK); ?>.map((m, i) => ({
-      id: 'chart-' + m.id,
-      nombre: m.nombre,
-      planificado: Number(m.planificado) || 0,
-      ejecutado: Number(m.ejecutado) || 0,
-      color: palette[i % palette.length]
-    }));
-
-    function generarDonut({ id, planificado, ejecutado, nombre, color }) {
-      const chart = echarts.init(document.getElementById(id));
-  const porcentaje = planificado > 0 ? Math.round((ejecutado / planificado) * 100) : (ejecutado > 0 ? 100 : 0);
-
+    metricas.forEach(m => {
+      const chart = echarts.init(document.getElementById('chart-' + m.id));
+      const restante = Math.max(m.planificado - m.ejecutado, 0);
       chart.setOption({
         title: {
-          text: `${porcentaje}%`,
-          subtext: 'Cumplimiento',
+          text: `${m.porcentaje}%`,
+          subtext: m.fase_iteracion,
           left: 'center',
-          top: '38%',
+          top: '40%',
           textStyle: {
-            fontSize: 20,
-            fontWeight: 'bold',
-            color: color
+            fontSize: 18,
+            color: m.color,
+            fontWeight: 'bold'
           },
           subtextStyle: {
             fontSize: 12,
@@ -190,34 +276,35 @@ $stmt->close();
         },
         tooltip: {
           trigger: 'item',
-          formatter: `<b>${nombre}</b><br>Planificado: ${planificado}<br>Ejecutado: ${ejecutado}<br>Cumplimiento: ${porcentaje}%`
+          formatter: `<b>${m.nombre}</b><br>Planificado: ${m.planificado}<br>Ejecutado: ${m.ejecutado}<br>Umbral: ±${m.umbral}%<br>Cumplimiento: ${m.porcentaje}%`
         },
-        series: [
-          {
-            type: 'pie',
-            radius: ['70%', '90%'],
-            avoidLabelOverlap: false,
-            label: { show: false },
-            data: [
-              {
-                value: ejecutado,
-                name: 'Ejecutado',
-                itemStyle: { color: color }
-              },
-              {
-                value: Math.max(planificado - ejecutado, 0),
-                name: 'Restante',
-                itemStyle: { color: '#dee2e6' }
+        series: [{
+          type: 'pie',
+          radius: ['60%', '85%'],
+          avoidLabelOverlap: false,
+          label: {
+            show: false
+          },
+          data: [{
+              value: m.ejecutado,
+              name: 'Ejecutado',
+              itemStyle: {
+                color: m.color
               }
-            ]
-          }
-        ]
+            },
+            {
+              value: restante,
+              name: 'Restante',
+              itemStyle: {
+                color: '#dee2e6'
+              }
+            }
+          ]
+        }]
       });
-    }
-
-    // Renderizar todos los gráficos
-    metricas.forEach(m => generarDonut(m));
+    });
   </script>
+
 </body>
 
 </html>
