@@ -25,19 +25,25 @@ ControlAcceso::verificaLogin();
 // Conexión centralizada
 $conexion = BDConexion::getConexion();
 
-// Obtiene id de proyecto por GET; si no viene, redirige al primer proyecto asignado
-$idProyecto = isset($_GET['proyecto']) ? (int)$_GET['proyecto'] : 0;
-if ($idProyecto <= 0) {
+// Obtiene id de proyecto por GET; acepta tanto 'proyecto' como 'id_proyecto'
+$idProyecto = 0;
+if (isset($_GET['proyecto'])) {
+  $idProyecto = (int)$_GET['proyecto'];
+} elseif (isset($_GET['id_proyecto'])) {
+  $idProyecto = (int)$_GET['id_proyecto'];
+}
+// si no viene, redirige al primer proyecto asignado
+if (!isset($_GET['proyecto']) && !isset($_GET['id_proyecto'])) {
   $asignados = ControlAcceso::proyectosAsignadosDelUsuario();
   if (!empty($asignados)) {
-    header('Location: ' . '/metricflow/app/dashboard.php?proyecto=' . (int)$asignados[0]);
+    header('Location: /metricflow/app/dashboard.php?proyecto=' . (int)$asignados[0]);
     exit;
   } else {
-    // No tiene proyectos asignados: vuelve al home autenticado (listado de proyectos)
     header('Location: ' . Constantes::HOMEAUTH);
     exit;
   }
 }
+
 
 // Verifica pertenencia al proyecto
 ControlAcceso::requiereProyecto($idProyecto);
@@ -65,67 +71,40 @@ if ($resProyecto && $resProyecto->num_rows > 0) {
 // ------------------------------------------------------------
 // 3️⃣ Cantidad de métricas ejecutadas
 // ------------------------------------------------------------
-// Total de métricas
+// cantidad de métricas con datos ejecutados
 $sqlMetricas = "
 SELECT COUNT(DISTINCT mi.id_metrica) AS total
 FROM fase f
 LEFT JOIN proyecto_fase pf 
-    ON pf.id_fase = f.id_fase AND pf.id_proyecto = $idProyecto
+  ON pf.id_fase = f.id_fase AND pf.id_proyecto = $idProyecto
 LEFT JOIN iteracion i 
-    ON i.id_fase = f.id_fase AND i.id_proyecto = $idProyecto
+  ON i.id_fase = f.id_fase AND i.id_proyecto = $idProyecto
 LEFT JOIN metrica_iteracion mi 
-    ON mi.id_iteracion = i.id_iteracion
-WHERE pf.id_proyecto = $idProyecto;
+  ON mi.id_iteracion = i.id_iteracion
+WHERE pf.id_proyecto = $idProyecto
 ";
-
 $resMetricas = $conexion->query($sqlMetricas);
-$totalMetricas = ($resMetricas && $resMetricas->num_rows > 0)
-  ? (int)$resMetricas->fetch_assoc()['total']
-  : 0;
-// Total de iteraciones
+$totalMetricas = ($resMetricas && $resMetricas->num_rows > 0) ? (int)$resMetricas->fetch_assoc()['total'] : 0;
+
+// total iteraciones
 $sqlIter = "
 SELECT COUNT(i.id_iteracion) AS total
 FROM fase f
 LEFT JOIN proyecto_fase pf 
-    ON pf.id_fase = f.id_fase AND pf.id_proyecto = $idProyecto
+  ON pf.id_fase = f.id_fase AND pf.id_proyecto = $idProyecto
 LEFT JOIN iteracion i 
-    ON i.id_fase = f.id_fase AND i.id_proyecto = $idProyecto
-WHERE pf.id_proyecto = $idProyecto;
+  ON i.id_fase = f.id_fase AND i.id_proyecto = $idProyecto
+WHERE pf.id_proyecto = $idProyecto
 ";
 $resIter = $conexion->query($sqlIter);
-$totalIteraciones = ($resIter && $resIter->num_rows > 0)
-  ? (int)$resIter->fetch_assoc()['total']
-  : 0;
+$totalIteraciones = ($resIter && $resIter->num_rows > 0) ? (int)$resIter->fetch_assoc()['total'] : 0;
 
-// ------------------------------------------------------------
-// 5️⃣ Verificar si el proyecto tiene iteraciones (aunque sin métricas)
-// ------------------------------------------------------------
-$sqlHayIter = "
-  SELECT COUNT(*) AS total
-  FROM iteracion
-  WHERE id_proyecto = $idProyecto
-";
-
+// hay iteraciones?
+$sqlHayIter = "SELECT COUNT(*) AS total FROM iteracion WHERE id_proyecto = $idProyecto";
 $resHayIter = $conexion->query($sqlHayIter);
 $hayIteraciones = ($resHayIter && $resHayIter->num_rows > 0 && (int)$resHayIter->fetch_assoc()['total'] > 0);
-if (!$hayIteraciones) {
-  $DATA = [
-    "proyecto" => [
-      "id"     => $idProyecto,
-      "nombre" => $nombreProyecto,
-      "estado" => $estadoProyecto
-    ],
-    "iteraciones"       => [],
-    "totalMetricas"     => 0,
-    "totalIteraciones"  => 0,
-    "mensaje"           => "Este proyecto aún no tiene iteraciones creadas."
-  ];
 
-  header('Content-Type: application/json; charset=utf-8');  
-  echo json_encode($DATA, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
-  exit;
-}
-
+// datos para los gráficos (MISMA CONSULTA QUE EL DASHBOARD PRINCIPAL) — restringida por proyecto
 $query = "
 SELECT 
     i.id_iteracion,
@@ -138,22 +117,16 @@ SELECT
     mi.valor_planificado AS planificado,
     mi.valor_ejecutado AS ejecutado,
     mi.umbral_desviacion AS umbral
-FROM fase f
-LEFT JOIN proyecto_fase pf 
-    ON pf.id_fase = f.id_fase 
-   AND pf.id_proyecto = $idProyecto
-LEFT JOIN iteracion i 
-    ON i.id_fase = f.id_fase 
-   AND i.id_proyecto = $idProyecto
-LEFT JOIN metrica_iteracion mi 
-    ON mi.id_iteracion = i.id_iteracion
-LEFT JOIN metrica m 
-    ON m.id_metrica = mi.id_metrica
+FROM metrica_iteracion mi
+JOIN metrica m           ON mi.id_metrica = m.id_metrica
+JOIN iteracion i         ON mi.id_iteracion = i.id_iteracion AND i.id_proyecto = $idProyecto
+JOIN fase f              ON i.id_fase = f.id_fase
+JOIN proyecto_fase pf    ON pf.id_fase = f.id_fase AND pf.id_proyecto = $idProyecto
 WHERE pf.id_proyecto = $idProyecto
-ORDER BY f.id_fase, i.numero_iteracion, m.id_metrica;
+ORDER BY f.id_fase, i.numero_iteracion, m.id_metrica
 ";
-
 $result = $conexion->query($query);
+
 
 // ============================
 // Construcción de $DATA
@@ -204,6 +177,10 @@ if ($result) {
   }
 }
 $DATA = array_values($iterMap);
+if (!$hayIteraciones) {
+  // Forzamos estado vacío para renderizar la pantalla con mensajes en lugar de responder JSON
+  $DATA = [];
+}
 
 // ============================
 // Lógica de iteraciones actual y anterior
@@ -216,7 +193,9 @@ $mensajeAnterior = '';
 
 if (count($DATA) === 0) {
   // Caso 1: No hay fases ni iteraciones
-  $mensajeActual = 'No se encontraron fases ni iteraciones registradas en este proyecto.';
+  $mensajeActual = $hayIteraciones
+    ? 'No se encontraron fases ni iteraciones registradas en este proyecto.'
+    : 'Este proyecto aún no tiene iteraciones creadas.';
   $mensajeAnterior = 'Sin datos históricos disponibles.';
 } else {
   // Buscar si hay iteración actual (por fechas)
@@ -231,9 +210,6 @@ if (count($DATA) === 0) {
   if ($actualIndex !== null) {
     // Hay iteración actual (en curso)
     $actualIter = $DATA[$actualIndex];
-  } else {
-    // No hay iteración actual la última registrada pasa a ser la "más reciente anterior"
-    $mensajeActual = 'No hay ninguna iteración activa en la fecha actual o no tiene métricas asociadas.';
   }
 
   // Buscar anterior (todas con fin < inicio actual o, si no hay actual, todas)
@@ -2304,24 +2280,38 @@ if (count($DATA) === 0) {
             try {
               const st = loadStateFromStorage();
               if (st && st.legendAllVisible === false && Array.isArray(localMetricKeys) && localMetricKeys.length) {
-                  const sel = {};
-                  localMetricKeys.forEach(k => sel[k] = false);
-                  chart.setOption({
-                    legend: [{ selected: sel }]
-                  }, { lazyUpdate: true });
-                  try { if (window.__SET_TOGGLE_STATE) window.__SET_TOGGLE_STATE(false); } catch(_) {}
-                } else if (st && st.legend && typeof st.legend === 'object') {
-                  // aplicar selección explícita por series si existe
-                  chart.setOption({ legend: [{ selected: st.legend }] }, { lazyUpdate: true });
-                  try {
-                    const all = Object.values(st.legend).every(v => !!v);
-                    if (window.__SET_TOGGLE_STATE) window.__SET_TOGGLE_STATE(all);
-                  } catch(_) {}
-                }
+                const sel = {};
+                localMetricKeys.forEach(k => sel[k] = false);
+                chart.setOption({
+                  legend: [{
+                    selected: sel
+                  }]
+                }, {
+                  lazyUpdate: true
+                });
+                try {
+                  if (window.__SET_TOGGLE_STATE) window.__SET_TOGGLE_STATE(false);
+                } catch (_) {}
+              } else if (st && st.legend && typeof st.legend === 'object') {
+                // aplicar selección explícita por series si existe
+                chart.setOption({
+                  legend: [{
+                    selected: st.legend
+                  }]
+                }, {
+                  lazyUpdate: true
+                });
+                try {
+                  const all = Object.values(st.legend).every(v => !!v);
+                  if (window.__SET_TOGGLE_STATE) window.__SET_TOGGLE_STATE(all);
+                } catch (_) {}
+              }
             } catch (_) {}
 
             // Asegura que cambios manuales en la leyenda se persistan
-            try { bindLegendPersistence(chart); } catch(_) {}
+            try {
+              bindLegendPersistence(chart);
+            } catch (_) {}
 
             // Re-vincular eventos de hover de etiquetas
             (function() {
@@ -2916,16 +2906,30 @@ if (count($DATA) === 0) {
           if (st2 && st2.legendAllVisible === false && Array.isArray(METRIC_KEYS) && METRIC_KEYS.length) {
             const selMap = {};
             METRIC_KEYS.forEach(k => selMap[k] = false);
-            trendChart.setOption({ legend: [{ selected: selMap }] }, { lazyUpdate: true });
-            try { if (window.__SET_TOGGLE_STATE) window.__SET_TOGGLE_STATE(false); } catch(_) {}
+            trendChart.setOption({
+              legend: [{
+                selected: selMap
+              }]
+            }, {
+              lazyUpdate: true
+            });
+            try {
+              if (window.__SET_TOGGLE_STATE) window.__SET_TOGGLE_STATE(false);
+            } catch (_) {}
           } else if (st2 && st2.legend && typeof st2.legend === 'object') {
             // Si hay una selección explícita por series, aplicarla
-            trendChart.setOption({ legend: [{ selected: st2.legend }] }, { lazyUpdate: true });
+            trendChart.setOption({
+              legend: [{
+                selected: st2.legend
+              }]
+            }, {
+              lazyUpdate: true
+            });
             try {
               // deducir si todas están visibles
               const all = Object.values(st2.legend).every(v => !!v);
               if (window.__SET_TOGGLE_STATE) window.__SET_TOGGLE_STATE(all);
-            } catch(_) {}
+            } catch (_) {}
           }
         } catch (_) {}
 
@@ -3353,11 +3357,15 @@ if (count($DATA) === 0) {
         } catch (_) {}
       }
       // Exponer para llamadas externas (ej. tras aplicar la leyenda desde otro bloque)
-      try { window.__SET_TOGGLE_STATE = setToggleUiState; } catch(_) {}
+      try {
+        window.__SET_TOGGLE_STATE = setToggleUiState;
+      } catch (_) {}
 
       // Ajustar la UI del botón según estado inicial
       if (toggleBtn) {
-        try { setToggleUiState(allVisible); } catch(_) {}
+        try {
+          setToggleUiState(allVisible);
+        } catch (_) {}
 
         toggleBtn.addEventListener("click", function() {
           const instance = echarts.getInstanceByDom(document.getElementById("trendChart"));
@@ -3374,7 +3382,9 @@ if (count($DATA) === 0) {
           allVisible = !allVisible;
 
           // Actualiza texto, icono y estilo
-          try { setToggleUiState(allVisible); } catch(_) {}
+          try {
+            setToggleUiState(allVisible);
+          } catch (_) {}
 
           // Persistir estado de la leyenda y del botón
           try {

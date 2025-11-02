@@ -67,87 +67,70 @@ if ($proyectoExiste) {
 }
 
 // Totales
-$sqlMetricas = $hasIteracionProyecto ?
-  "SELECT COUNT(DISTINCT mi.id_metrica) AS total
+if ($hasIteracionProyecto) {
+  // Estricto: iteraciones del proyecto actual únicamente
+  $sqlMetricas = "
+    SELECT COUNT(DISTINCT mi.id_metrica) AS total
     FROM metrica_iteracion mi
-    JOIN iteracion i ON mi.id_iteracion = i.id_iteracion
+    JOIN iteracion i ON mi.id_iteracion = i.id_iteracion AND i.id_proyecto = $proyectoId
     JOIN fase f ON f.id_fase = i.id_fase
-    JOIN proyecto_fase pf ON pf.id_fase = f.id_fase
-    WHERE pf.id_proyecto = $proyectoId" :
-  "SELECT COUNT(DISTINCT mi.id_metrica) AS total
-    FROM metrica_iteracion mi
-    JOIN iteracion i ON mi.id_iteracion = i.id_iteracion
-    JOIN fase f ON f.id_fase = i.id_fase
-    JOIN proyecto_fase pf ON pf.id_fase = f.id_fase AND pf.id_proyecto = $proyectoId";
-$resMetricas = $conexion->query($sqlMetricas);
-$totalMetricas = ($resMetricas && $resMetricas->num_rows > 0) ? (int)$resMetricas->fetch_assoc()['total'] : 0;
+    JOIN proyecto_fase pf ON pf.id_fase = f.id_fase AND pf.id_proyecto = $proyectoId
+    WHERE pf.id_proyecto = $proyectoId";
+  $resMetricas = $conexion->query($sqlMetricas);
+  $totalMetricas = ($resMetricas && $resMetricas->num_rows > 0) ? (int)$resMetricas->fetch_assoc()['total'] : 0;
 
-$sqlIter = $hasIteracionProyecto ?
-  "SELECT COUNT(*) AS total
+  $sqlIter = "
+    SELECT COUNT(*) AS total
     FROM iteracion i
     JOIN fase f ON f.id_fase = i.id_fase
-    JOIN proyecto_fase pf ON pf.id_fase = f.id_fase
-    WHERE pf.id_proyecto = $proyectoId" :
-  "SELECT COUNT(*) AS total
-    FROM iteracion i
-    JOIN fase f ON f.id_fase = i.id_fase
-    JOIN proyecto_fase pf ON pf.id_fase = f.id_fase AND pf.id_proyecto = $proyectoId";
-$resIter = $conexion->query($sqlIter);
-$totalIteraciones = ($resIter && $resIter->num_rows > 0) ? (int)$resIter->fetch_assoc()['total'] : 0;
+    JOIN proyecto_fase pf ON pf.id_fase = f.id_fase AND pf.id_proyecto = $proyectoId
+    WHERE i.id_proyecto = $proyectoId";
+  $resIter = $conexion->query($sqlIter);
+  $totalIteraciones = ($resIter && $resIter->num_rows > 0) ? (int)$resIter->fetch_assoc()['total'] : 0;
 
-$sqlHayIter = $hasIteracionProyecto ?
-  "SELECT COUNT(*) AS total
+  $sqlHayIter = "
+    SELECT COUNT(*) AS total
     FROM iteracion i
     JOIN fase f ON f.id_fase = i.id_fase
-    JOIN proyecto_fase pf ON pf.id_fase = f.id_fase
-    WHERE pf.id_proyecto = $proyectoId" :
-  "SELECT COUNT(*) AS total
-    FROM iteracion i
-    JOIN fase f ON f.id_fase = i.id_fase
-    JOIN proyecto_fase pf ON pf.id_fase = f.id_fase AND pf.id_proyecto = $proyectoId";
-$resHayIter = $conexion->query($sqlHayIter);
-$hayIteraciones = ($resHayIter && $resHayIter->num_rows > 0 && (int)$resHayIter->fetch_assoc()['total'] > 0);
+    JOIN proyecto_fase pf ON pf.id_fase = f.id_fase AND pf.id_proyecto = $proyectoId
+    WHERE i.id_proyecto = $proyectoId";
+  $resHayIter = $conexion->query($sqlHayIter);
+  $hayIteraciones = ($resHayIter && $resHayIter->num_rows > 0 && (int)$resHayIter->fetch_assoc()['total'] > 0);
+} else {
+  // Modo seguro: si no existe i.id_proyecto no podemos garantizar aislamiento → no retornamos datos
+  $totalMetricas = 0;
+  $totalIteraciones = 0;
+  $hayIteraciones = false;
+}
 
 // Core data query (same as dashboard.php)
-$query = $hasIteracionProyecto ? "
-SELECT 
-  i.id_iteracion,
-  i.numero_iteracion,
-  f.nombre AS fase,
-  i.fecha_inicio AS inicio,
-  i.fecha_fin AS fin,
-  m.id_metrica AS id_metrica,
-  m.nombre AS metrica,
-  mi.valor_planificado AS planificado,
-  mi.valor_ejecutado AS ejecutado,
-  mi.umbral_desviacion AS umbral
-FROM metrica_iteracion mi
-JOIN metrica m ON mi.id_metrica = m.id_metrica
-JOIN iteracion i ON mi.id_iteracion = i.id_iteracion
-JOIN fase f ON i.id_fase = f.id_fase
-JOIN proyecto_fase pf ON pf.id_fase = f.id_fase
-WHERE pf.id_proyecto = $proyectoId
-ORDER BY f.id_fase, i.numero_iteracion, m.id_metrica;
-" : "
-SELECT 
-  i.id_iteracion,
-  i.numero_iteracion,
-  f.nombre AS fase,
-  i.fecha_inicio AS inicio,
-  i.fecha_fin AS fin,
-  m.id_metrica AS id_metrica,
-  m.nombre AS metrica,
-  mi.valor_planificado AS planificado,
-  mi.valor_ejecutado AS ejecutado,
-  mi.umbral_desviacion AS umbral
-FROM metrica_iteracion mi
-JOIN metrica m ON mi.id_metrica = m.id_metrica
-JOIN iteracion i ON mi.id_iteracion = i.id_iteracion
-JOIN fase f ON i.id_fase = f.id_fase
-JOIN proyecto_fase pf ON pf.id_fase = f.id_fase AND pf.id_proyecto = $proyectoId
-ORDER BY f.id_fase, i.numero_iteracion, m.id_metrica;
-";
-$result = $conexion->query($query);
+$result = false;
+if ($hasIteracionProyecto) {
+  $query = "
+  SELECT 
+    i.id_iteracion,
+    i.numero_iteracion,
+    f.nombre AS fase,
+    i.fecha_inicio AS inicio,
+    i.fecha_fin AS fin,
+    m.id_metrica AS id_metrica,
+    m.nombre AS metrica,
+    mi.valor_planificado AS planificado,
+    mi.valor_ejecutado AS ejecutado,
+    mi.umbral_desviacion AS umbral
+  FROM metrica_iteracion mi
+  JOIN metrica m ON mi.id_metrica = m.id_metrica
+  JOIN iteracion i ON mi.id_iteracion = i.id_iteracion AND i.id_proyecto = $proyectoId
+  JOIN fase f ON i.id_fase = f.id_fase
+  JOIN proyecto_fase pf ON pf.id_fase = f.id_fase AND pf.id_proyecto = $proyectoId
+  WHERE pf.id_proyecto = $proyectoId
+  ORDER BY f.id_fase, i.numero_iteracion, m.id_metrica;
+  ";
+  $result = $conexion->query($query);
+} else {
+  // Sin columna i.id_proyecto → no ejecutamos consulta para no mezclar datos entre proyectos
+  $result = false;
+}
 
 $iterMap = [];
 if ($result) {
@@ -191,6 +174,9 @@ if ($result) {
   }
 }
 $DATA = array_values($iterMap);
+if (!$hasIteracionProyecto) {
+  $DATA = [];
+}
 
 // Determine current/previous iteration similar to dashboard.php
 $hoy = date('Y-m-d');

@@ -732,18 +732,26 @@ ALTER TABLE `usuario`
 --
 -- Filtros para la tabla `iteracion`
 --
--- 1️⃣ Agregar la columna id_proyecto
-ALTER TABLE `iteracion`
-ADD COLUMN `id_proyecto` INT NOT NULL AFTER `id_iteracion`;
 
--- 2️⃣ Crear la foreign key que vincula iteracion → proyecto
+-- 1️⃣ Agregar la columna temporalmente como NULL
+ALTER TABLE `iteracion`
+ADD COLUMN `id_proyecto` INT NULL AFTER `id_iteracion`;
+
+-- 2️⃣ Asignar el proyecto existente (id_proyecto = 1)
+UPDATE `iteracion`
+SET `id_proyecto` = 1;
+
+-- 3️⃣ Modificar la columna para que sea NOT NULL
+ALTER TABLE `iteracion`
+MODIFY `id_proyecto` INT NOT NULL;
+
+-- 4️⃣ Crear la clave foránea con cascada
 ALTER TABLE `iteracion`
 ADD CONSTRAINT `fk_iteracion_proyecto`
   FOREIGN KEY (`id_proyecto`)
   REFERENCES `proyecto` (`id_proyecto`)
   ON DELETE CASCADE
   ON UPDATE CASCADE;
-
 --
 -- Filtros para la tabla `iteracion_tarea`
 --

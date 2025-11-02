@@ -25,7 +25,7 @@ class Constantes {
     public const DB_HOST = 'localhost';
     public const DB_PORT = 3306;
     public const DB_USER = 'root';
-    public const DB_PASS = 'root';
+    public const DB_PASS = '';
     public const DB_NAME = 'bd_codevit2';
 
 }
