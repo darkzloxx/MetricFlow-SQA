@@ -1,21 +1,20 @@
+</html>
 <?php
-
 /**
- * Dashboard de Calidad por Iteración/Métrica (versión consistente)
- * - Misma lógica de datos que tu dashboard actual
- * - Agrupación visual por FASE
- * - Tabs de fase coherentes con el diseño del dashboard inicial
- * - Resumen global arriba
+ * Dashboard de Calidad por Iteración/Métrica
+ * - MISMO look&feel del original: donuts con borde, línea de umbral, barras con marco 100% + línea 100% punteada
+ * - Tooltips idénticos (mensajes y colores)
+ * - Filtros por fase, iteración y métrica
+ * - Toggle donuts/barras
  */
 
 require_once __DIR__ . '/../lib/ControlAcceso.Class.php';
 require_once __DIR__ . '/../modelo/BDConexion.Class.php';
 
 ControlAcceso::verificaLogin();
+$cn = BDConexion::getConexion();
 
-$conexion = BDConexion::getConexion();
-
-// Proyecto
+// -------- Proyecto
 $idProyecto = isset($_GET['proyecto']) ? (int)$_GET['proyecto'] : 0;
 if ($idProyecto <= 0) {
   $asignados = ControlAcceso::proyectosAsignadosDelUsuario();
@@ -26,49 +25,44 @@ if ($idProyecto <= 0) {
     exit;
   }
 }
-
 ControlAcceso::requiereProyecto($idProyecto);
 
-// Datos del proyecto
 $sqlProyecto = "SELECT nombre, estado FROM proyecto WHERE id_proyecto = $idProyecto";
-$resProyecto = $conexion->query($sqlProyecto);
-
-if ($resProyecto && $resProyecto->num_rows > 0) {
-  $row = $resProyecto->fetch_assoc();
-  $nombreProyecto = $row['nombre'];
-  $estadoProyecto = $row['estado'];
-  $proyectoExiste = true;
+$rp = $cn->query($sqlProyecto);
+if ($rp && $rp->num_rows) {
+  $rowP          = $rp->fetch_assoc();
+  $nombreProyecto = $rowP['nombre'];
+  $estadoProyecto = $rowP['estado'];
+  $proyectoOk    = true;
 } else {
-  $proyectoExiste = false;
-  $nombreProyecto = "Proyecto no encontrado";
-  $estadoProyecto = "No disponible";
+  $proyectoOk    = false;
+  $nombreProyecto = 'Proyecto no encontrado';
+  $estadoProyecto = 'No disponible';
 }
 
-// cantidad de métricas con datos ejecutados
-$sqlMetricas = "SELECT COUNT(DISTINCT mi.id_metrica) AS total
-                FROM metrica_iteracion mi
-                JOIN iteracion i ON mi.id_iteracion = i.id_iteracion
-                JOIN fase f ON f.id_fase = i.id_fase
-                JOIN proyecto_fase pf ON pf.id_fase = f.id_fase
-                WHERE pf.id_proyecto = $idProyecto";
-$resMetricas = $conexion->query($sqlMetricas);
-$totalMetricas = ($resMetricas && $resMetricas->num_rows > 0) ? (int)$resMetricas->fetch_assoc()['total'] : 0;
+// -------- KPIs
+$qMetricas = "SELECT COUNT(DISTINCT mi.id_metrica) AS total
+              FROM metrica_iteracion mi
+              JOIN iteracion i ON mi.id_iteracion = i.id_iteracion
+              JOIN fase f ON f.id_fase = i.id_fase
+              JOIN proyecto_fase pf ON pf.id_fase = f.id_fase
+              WHERE pf.id_proyecto = $idProyecto";
+$rMetricas = $cn->query($qMetricas);
+$totalMetricas = ($rMetricas && $rMetricas->num_rows) ? (int)$rMetricas->fetch_assoc()['total'] : 0;
 
-// total iteraciones
-$sqlIter = "SELECT COUNT(*) AS total
-            FROM iteracion i
-            JOIN fase f ON f.id_fase = i.id_fase
-            JOIN proyecto_fase pf ON pf.id_fase = f.id_fase
-            WHERE pf.id_proyecto = $idProyecto";
-$resIter = $conexion->query($sqlIter);
-$totalIteraciones = ($resIter && $resIter->num_rows > 0) ? (int)$resIter->fetch_assoc()['total'] : 0;
+$qIters = "SELECT COUNT(*) AS total
+           FROM iteracion i
+           JOIN fase f ON f.id_fase = i.id_fase
+           JOIN proyecto_fase pf ON pf.id_fase = f.id_fase
+           WHERE pf.id_proyecto = $idProyecto";
+$rIters = $cn->query($qIters);
+$totalIteraciones = ($rIters && $rIters->num_rows) ? (int)$rIters->fetch_assoc()['total'] : 0;
 
-// QUERY principal
-$query = "
+// -------- DATA (misma del dashboard principal)
+$q = "
 SELECT 
     i.id_iteracion,
     i.numero_iteracion,
-    f.id_fase,
     f.nombre AS fase,
     i.fecha_inicio AS inicio,
     i.fecha_fin AS fin,
@@ -85,36 +79,22 @@ JOIN proyecto_fase pf ON pf.id_fase = f.id_fase
 WHERE pf.id_proyecto = $idProyecto
 ORDER BY f.id_fase, i.numero_iteracion, m.id_metrica;
 ";
-$result = $conexion->query($query);
+$rs = $cn->query($q);
 
-// armamos DATA por fase → iteración → métricas
-$phases = [];   // ['Inicio' => [...iters...], ...]
-$flatData = []; // lo mismo que tenías (por compatibilidad JS)
-if ($result) {
-  while ($r = $result->fetch_assoc()) {
-    $faseNombre = $r['fase'];
-    $faseId = (int)$r['id_fase'];
-    $iterKey  = trim($r['fase'] . ' ' . $r['numero_iteracion']);
-
-    if (!isset($phases[$faseId])) {
-      $phases[$faseId] = [
-        'id_fase' => $faseId,
-        'nombre'  => $faseNombre,
-        'iters'   => []
+$iterMap = [];
+if ($rs) {
+  while ($r = $rs->fetch_assoc()) {
+    $key = trim($r['fase'] . ' ' . $r['numero_iteracion']);
+    if (!isset($iterMap[$key])) {
+      $iterMap[$key] = [
+        "iteracion" => $key,
+        "fase"      => $r['fase'],
+        "numero"    => $r['numero_iteracion'],
+        "inicio"    => $r['inicio'],
+        "fin"       => $r['fin'],
+        "metricas"  => []
       ];
     }
-
-    if (!isset($phases[$faseId]['iters'][$iterKey])) {
-      $phases[$faseId]['iters'][$iterKey] = [
-        'iteracion' => $iterKey,
-        'fase'      => $faseNombre,
-        'numero'    => $r['numero_iteracion'],
-        'inicio'    => $r['inicio'],
-        'fin'       => $r['fin'],
-        'metricas'  => []
-      ];
-    }
-
     $plan = (float)($r['planificado'] ?? 0);
     $ejec = (float)($r['ejecutado'] ?? 0);
 
@@ -132,34 +112,25 @@ if ($result) {
       $nota = "";
     }
 
-    $phases[$faseId]['iters'][$iterKey]['metricas'][] = [
+    $iterMap[$key]["metricas"][] = [
       "id"           => (int)$r['id_metrica'],
       "nombre"       => $r['metrica'],
       "executed"     => $pct,
       "planned"      => $plan,
       "executedReal" => $ejec,
       "unit"         => "u",
-      "min"          => max(0, 100 - (float)$r['umbral']),
-      "max"          => 100 + (float)$r['umbral'],
+      "min"          => max(0, 100 - (float)$r['umbral']),   // 1 - umbral
+      "max"          => 100 + (float)$r['umbral'],           // 1 + umbral
       "nota"         => $nota,
       "extra"        => ($plan > 0 ? max(0, $ejec - $plan) : $ejec)
     ];
   }
 }
+$DATA = array_values($iterMap);
 
-// normalizamos para el JS
-$DATA = [];
-foreach ($phases as $phase) {
-  $iters = array_values($phase['iters']);
-  foreach ($iters as $it) {
-    $DATA[] = $it;
-  }
-}
-
-// badge estado
+// -------- Estado badge
 $estadoClass = 'badge-secondary';
-$estadoKey = strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)));
-switch ($estadoKey) {
+switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
   case 'REGISTRADO':
     $estadoClass = 'badge-secondary';
     break;
@@ -172,8 +143,6 @@ switch ($estadoKey) {
   case 'CANCELADO':
     $estadoClass = 'badge-danger';
     break;
-  default:
-    $estadoClass = 'badge-secondary';
 }
 ?>
 <!doctype html>
@@ -195,23 +164,48 @@ switch ($estadoKey) {
       background-color: #f8f9fa;
       font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       padding-top: 70px;
+      margin-bottom: 0
     }
 
+    html,
+    body {
+      height: 100%;
+      min-height: 100%;
+    }
+
+
+
     .card {
-      border: 1px solid rgba(0, 0, 0, 0.05);
+      border: 1px solid rgba(0, 0, 0, .08);
       border-radius: .75rem;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.03);
+      box-shadow: 0 2px 4px rgba(0, 0, 0, .05);
+      background: #fff;
+      animation: fadeIn .5s ease-in
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(8px)
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0)
+      }
     }
 
     .card-header {
-      background-color: #f8f9fa;
+      background: #f8f9fa;
+      border-bottom: 1px solid rgba(0, 0, 0, .05);
+      font-weight: 600
     }
 
     .stat-card .card-body {
       display: flex;
       align-items: center;
       gap: 14px;
-      padding: 16px 18px;
+      padding: 16px 18px
     }
 
     .stat-icon {
@@ -223,155 +217,153 @@ switch ($estadoKey) {
       justify-content: center;
       flex: 0 0 48px;
       color: #fff;
-      box-shadow: 0 2px 6px rgba(0, 0, 0, .12);
+      box-shadow: 0 2px 6px rgba(0, 0, 0, .12)
     }
 
     .icon-bg-primary {
-      background: linear-gradient(135deg, #007bff 0%, #5aa7ff 100%);
+      background: linear-gradient(135deg, #007bff 0%, #5aa7ff 100%)
     }
 
     .icon-bg-success {
-      background: linear-gradient(135deg, #28a745 0%, #65d488 100%);
+      background: linear-gradient(135deg, #28a745 0%, #65d488 100%)
     }
 
     .icon-bg-secondary {
-      background: linear-gradient(135deg, #6c757d 0%, #a0a4a8 100%);
+      background: linear-gradient(135deg, #6c757d 0%, #a0a4a8 100%)
+    }
+
+    .btn-outline-secondary {
+      border-color: #dee2e6;
+      color: #495057;
+      background-color: #fff;
+    }
+
+    .btn-outline-secondary:hover {
+      background-color: #f8f9fa;
+      color: #212529;
+    }
+
+    .stat-content {
+      flex: 1 1 auto
     }
 
     .stat-label {
-      font-size: .75rem;
+      display: block;
+      font-size: .8rem;
       font-weight: 600;
       color: #6c757d;
       text-transform: uppercase;
-      margin-bottom: 2px;
+      margin-bottom: 2px
     }
 
     .stat-value {
-      font-size: 1.5rem;
+      font-size: 1.75rem;
       font-weight: 700;
-    }
-
-    /* resumen global (coherente) */
-
-    .summary-mini-title {
-      font-size: .7rem;
-      text-transform: uppercase;
-      color: #6c757d;
-      margin-bottom: 2px;
-    }
-
-    .summary-mini-value {
-      font-size: 1.25rem;
-      font-weight: 700;
-    }
-
-    .summary-dot {
-      width: 14px;
-      height: 14px;
-      border-radius: 4px;
-    }
-
-    /* tabs de fase coherentes con las pills */
-    .phase-pills {
-      display: flex;
-      flex-wrap: wrap;
-      gap: .5rem;
-      margin-bottom: .75rem;
-    }
-
-    .phase-pill {
-      border: 1px solid #dee2e6;
-      background: #fff;
-      border-radius: 999px;
-      padding: .25rem .8rem;
-      font-size: .75rem;
-      color: #495057;
-      cursor: pointer;
-      transition: .15s;
-    }
-
-    .phase-pill.active {
-      background: rgba(13, 110, 253, .1);
-      border-color: #0d6efd;
-      color: #0d6efd;
-      font-weight: 600;
+      line-height: 1.1;
+      color: #212529
     }
 
     .metric-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-      gap: 1.25rem;
-      padding: 0.75rem 0.25rem;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 1rem;
+      padding-bottom: .5rem;
+      align-items: stretch
     }
 
     .metric-card {
       background: #fff;
-      border-radius: 1rem;
-      border: 1px solid rgba(0, 0, 0, 0.04);
-      height: 280px;
+      border: 1px solid rgba(0, 0, 0, .05);
+      border-radius: .75rem;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, .05);
+      height: 300px;
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: space-between;
-      padding: 0.9rem 0.5rem;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
-      transition: all 0.2s ease-in-out;
-    }
-
-    .metric-card:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 3px 8px rgba(0, 0, 0, 0.08);
+      justify-content: flex-start;
+      padding: .75rem
     }
 
     .metric-name {
-      font-size: 0.83rem;
+      font-size: .85rem;
       font-weight: 600;
       color: #212529;
       text-align: center;
-      min-height: 38px;
+      margin-bottom: .5rem;
+      min-height: 38px
+    }
+
+    .metric-body-chart {
+      width: 100%;
+      height: 210px
     }
 
     .metric-foot {
-      font-size: 0.72rem;
-      color: #6c757d;
+      font-size: .75rem;
       text-align: center;
-      margin-top: 0.3rem;
+      color: #495057;
+      margin-top: .35rem
     }
 
-    .card-header {
-      background: #fdfdfd;
-      border-bottom: 1px solid rgba(0, 0, 0, 0.05);
-    }
-
-    .card {
-      margin-bottom: 1.75rem;
-    }
-
-    .summary-mini {
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.03);
-    }
-
-
-    /* leyenda coherente */
     .legend-metricas {
+      background: #f8f9fa;
+      border-radius: .5rem;
+      padding: .5rem .75rem;
       display: flex;
       flex-wrap: wrap;
-      gap: .75rem;
-      font-size: .75rem;
+      justify-content: center;
+      gap: 10px 18px;
+      margin: .35rem 0;
       color: #495057;
+      font-size: .9rem
     }
 
     .legend-item {
       display: inline-flex;
       align-items: center;
-      gap: .35rem;
+      gap: 8px;
+      white-space: nowrap
     }
 
     .legend-dot {
       width: 14px;
       height: 14px;
-      border-radius: 4px;
-      border: 1px solid rgba(0, 0, 0, .15);
+      border-radius: 3px;
+      border: 1px solid rgba(0, 0, 0, .2);
+      display: inline-block
+    }
+
+    .legend-dash {
+      width: 24px;
+      height: 0;
+      border-top: 2px dashed #0d6efd;
+      display: inline-block;
+      vertical-align: middle
+    }
+
+    #faseTabs,
+    #iterFilter {
+      display: flex;
+      gap: .5rem;
+      flex-wrap: wrap;
+      margin: .5rem 0 .75rem
+    }
+
+    .iter-pill {
+      border: 1px solid #dee2e6;
+      background: #fff;
+      border-radius: 999px;
+      padding: .25rem .65rem;
+      font-size: .75rem;
+      cursor: pointer;
+      transition: .15s
+    }
+
+    .iter-pill.active {
+      background: rgba(13, 110, 253, .1);
+      border-color: #0d6efd;
+      color: #0d6efd;
+      font-weight: 600
     }
 
     .btn-toggle {
@@ -385,49 +377,30 @@ switch ($estadoKey) {
       padding: 6px 14px;
       font-size: 13px;
       border-radius: 30px;
-      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-      transition: all 0.25s ease;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, .1)
     }
 
     .btn-toggle.off {
       background: #f8f9fa;
       color: #333;
-      border: 1px solid #ccc;
+      border: 1px solid #ccc
     }
 
-    /* tamaño explícito para los contenedores de gráficos (fix: gráficos invisibles) */
-    .metric-body-chart {
-      width: 100%;
-      height: 165px;
-    }
-
-    /* barra de filtros mejor distribuida */
-    .filter-bar {
+    #iterCards {
       display: grid;
       grid-template-columns: 1fr;
-      gap: .5rem;
+      gap: 1.25rem;
+      margin-bottom: 0 !important;
+      padding-bottom: 0 !important;
     }
-    @media (min-width: 576px) {
-      .filter-bar {
-        grid-template-columns: 1fr auto;
-        align-items: center;
-      }
-    }
-    .filter-controls {
-      display: grid;
-      grid-auto-flow: column;
-      grid-auto-columns: max-content;
-      gap: .5rem;
-      align-items: center;
-    }
-    .filter-controls .form-control {
-      min-width: 220px;
-    }
-    .export-btn { white-space: nowrap; }
 
-    @media (max-width: 575.98px) {
-      .metric-grid {
-        grid-template-columns: 1fr;
+    @media(max-width:575.98px) {
+      #iterCards {
+        display: block
+      }
+
+      .card-iteracion {
+        margin-bottom: 1rem
       }
     }
   </style>
@@ -436,9 +409,8 @@ switch ($estadoKey) {
 <body>
   <?php include __DIR__ . '/../gui/navbar.php'; ?>
 
-  <div class="container my-4">
+  <div id="pageContainer" class="container my-4">
 
-    <!-- Volver -->
     <div class="mb-3">
       <a id="btnVolver" href="proyectos.php" class="btn btn-outline-secondary">
         <span class="oi oi-arrow-left mr-1"></span> Volver
@@ -457,195 +429,282 @@ switch ($estadoKey) {
             } else {
               location.href = btn.getAttribute('href');
             }
-          } catch (err) {
+          } catch (_) {
             location.href = btn.getAttribute('href');
           }
         });
       })();
     </script>
 
-    <?php if (!$proyectoExiste): ?>
-      <div class="card my-5 text-center"
-        style="border:1px dashed rgba(220,53,69,0.25); background:rgba(220,53,69,0.03);">
+    <?php if (!$proyectoOk): ?>
+      <div class="card my-5 text-center" style="border:1px dashed rgba(220,53,69,.25);background:rgba(220,53,69,.03);">
         <div class="card-body p-5">
-          <i class="oi oi-warning mb-3" style="font-size:2rem; color:#dc3545;"></i>
+          <i class="oi oi-warning mb-3" style="font-size:2rem;color:#dc3545;"></i>
           <h5 class="text-danger font-weight-bold mb-2">Proyecto no encontrado</h5>
-          <p class="text-muted mb-0">
-            No existe un proyecto con el identificador <b>ID <?= htmlspecialchars($idProyecto) ?></b>.<br>
-            Verifique el parámetro o cree un nuevo proyecto antes de continuar.
-          </p>
+          <p class="text-muted mb-0">No existe un proyecto con el identificador <b>ID <?= (int)$idProyecto ?></b>.</p>
         </div>
       </div>
       <?php exit; ?>
     <?php endif; ?>
 
-    <!-- TOP CARDS iguales al dashboard inicial -->
+    <!-- TOP CARDS -->
     <div class="row g-3 mb-3">
       <div class="col-12 col-md-4">
         <div class="card stat-card h-100">
           <div class="card-body">
             <div class="stat-icon icon-bg-primary"><span class="oi oi-briefcase"></span></div>
-            <div>
+            <div class="stat-content">
               <span class="stat-label">Proyecto</span>
-              <div class="stat-value"><?= htmlspecialchars($nombreProyecto) ?></div>
-              <span class="status-line">
-                Estado:
+              <div id="projectName" class="stat-value"><?= htmlspecialchars($nombreProyecto) ?></div>
+              <span class="status-line">Estado:
                 <span class="badge badge-pill <?= $estadoClass ?>"><?= htmlspecialchars($estadoProyecto) ?></span>
               </span>
             </div>
           </div>
         </div>
       </div>
-
       <div class="col-6 col-md-4">
         <div class="card stat-card h-100">
           <div class="card-body">
             <div class="stat-icon icon-bg-success"><span class="oi oi-graph"></span></div>
-            <div>
+            <div class="stat-content">
               <span class="stat-label">Métricas utilizadas</span>
-              <div class="stat-value"><?= (int)$totalMetricas ?></div>
+              <div id="totalMetricasValue" class="stat-value"><?= (int)$totalMetricas ?></div>
             </div>
           </div>
         </div>
       </div>
-
       <div class="col-6 col-md-4">
         <div class="card stat-card h-100">
           <div class="card-body">
             <div class="stat-icon icon-bg-secondary"><span class="oi oi-loop-circular"></span></div>
-            <div>
+            <div class="stat-content">
               <span class="stat-label">Iteraciones</span>
-              <div class="stat-value"><?= (int)$totalIteraciones ?></div>
+              <div id="totalIteracionesValue" class="stat-value"><?= (int)$totalIteraciones ?></div>
             </div>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- Resumen Global coherente -->
-    <div class="row mb-3">
-      <div class="col-md-3 col-6 mb-2">
-        <div class="summary-mini">
-          <div class="summary-dot" style="background:rgba(40,167,69,.9)"></div>
-          <div>
-            <div class="summary-mini-title">Cumplimiento promedio</div>
-            <div id="resumenPromedio" class="summary-mini-value text-success">--%</div>
+    <!-- Resumen global (cálculo en JS igual al original) -->
+    <div class="card mb-4 shadow-sm border-0">
+      <div class="card-header bg-white font-weight-bold text-primary">Resumen Global del Proyecto</div>
+      <div class="card-body">
+        <div class="row g-3">
+          <div class="col-6 col-md-3">
+            <div class="card stat-card h-100">
+              <div class="card-body">
+                <div class="stat-icon icon-bg-primary"><span class="oi oi-target"></span></div>
+                <div class="stat-content">
+                  <span class="stat-label">Cumplimiento promedio</span>
+                  <div id="avgComplianceValue" class="stat-value">--%</div>
+                  <span class="status-line">Promedio de todas las métricas</span>
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
-      <div class="col-md-3 col-6 mb-2">
-        <div class="summary-mini">
-          <div class="summary-dot" style="background:rgba(140,220,170,.95)"></div>
-          <div>
-            <div class="summary-mini-title">Superaron el plan</div>
-            <div id="resumenSuperadas" class="summary-mini-value">0</div>
+          <div class="col-6 col-md-3">
+            <div class="card stat-card h-100">
+              <div class="card-body">
+                <div class="stat-icon icon-bg-success"><span class="oi oi-thumb-up"></span></div>
+                <div class="stat-content">
+                  <span class="stat-label">Supera plan</span>
+                  <div id="countOverPlanValue" class="stat-value">0</div>
+                  <span class="status-line">Métricas con cumplimiento &gt; 100%</span>
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
-      <div class="col-md-3 col-6 mb-2">
-        <div class="summary-mini">
-          <div class="summary-dot" style="background:rgba(255,193,7,.85)"></div>
-          <div>
-            <div class="summary-mini-title">Dentro de umbral</div>
-            <div id="resumenUmbral" class="summary-mini-value">0</div>
+          <div class="col-6 col-md-3">
+            <div class="card stat-card h-100">
+              <div class="card-body">
+                <div class="stat-icon icon-bg-secondary"><span class="oi oi-warning"></span></div>
+                <div class="stat-content">
+                  <span class="stat-label">Dentro del umbral</span>
+                  <div id="countInThresholdValue" class="stat-value">0</div>
+                  <span class="status-line">Cumplimiento ≥ (1 − umbral)</span>
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
-      <div class="col-md-3 col-6 mb-2">
-        <div class="summary-mini">
-          <div class="summary-dot" style="background:rgba(220,53,69,.85)"></div>
-          <div>
-            <div class="summary-mini-title">Bajo umbral</div>
-            <div id="resumenBajo" class="summary-mini-value text-danger">0</div>
+          <div class="col-6 col-md-3">
+            <div class="card stat-card h-100">
+              <div class="card-body">
+                <div class="stat-icon icon-bg-secondary"><span class="oi oi-ban"></span></div>
+                <div class="stat-content">
+                  <span class="stat-label">Sin ejecución</span>
+                  <div id="countNoExecValue" class="stat-value">0</div>
+                  <span class="status-line">Plan &gt; 0 y ejecutado = 0</span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- Controles / filtros -->
-    <div class="filter-bar mb-2">
-      <div>
-        <h6 class="mb-1">Métricas por fase e iteración</h6>
-        <small class="text-muted">
-          Usá las fases para agrupar las iteraciones. Podés alternar donuts/barras y filtrar por métrica.
-        </small>
-        <div class="legend-metricas mt-1">
-          <span class="legend-item"><span class="legend-dot" style="background:rgba(40,167,69,.9)"></span>Se cumplió</span>
-          <span class="legend-item"><span class="legend-dot" style="background:rgba(140,220,170,.9)"></span>Se superó</span>
-          <span class="legend-item"><span class="legend-dot" style="background:rgba(255,193,7,.85)"></span>Dentro del umbral</span>
-          <span class="legend-item"><span class="legend-dot" style="background:rgba(100,170,255,.85)"></span>Planificación=0</span>
-          <span class="legend-item"><span class="legend-dot" style="background:rgba(220,53,69,.85)"></span>Debajo del umbral</span>
+    <!-- Toolbar filtros -->
+    <div class="card dashboard-toolbar mb-3 p-3 rounded bg-white border">
+      <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+        <div class="d-flex flex-column">
+          <h6 class="mb-1 font-weight-bold text-primary">Métricas por Fase e Iteración</h6>
+          <small class="text-muted">Filtrá por fase, iteración o métrica; alterná entre <b>dona</b> y <b>barras</b>.</small>
         </div>
-      </div>
-      <div class="filter-controls">
-        <div class="d-inline-flex align-items-center" id="metricFilterControls">
-          <label for="metricFilterSelect" class="mb-0 mr-2 small text-muted">Métrica</label>
-          <select id="metricFilterSelect" class="form-control form-control-sm">
-            <option value="">Todas</option>
-          </select>
-          <button id="clearMetricFilter" type="button" class="btn btn-outline-secondary btn-sm ml-2">Limpiar</button>
-        </div>
-        <button id="modeToggle" class="btn-toggle ml-sm-2" data-mode="donut">
-          <i class="oi oi-pie-chart"></i> Ver como barras
-        </button>
-        <form id="exportForm" class="ml-sm-2" method="GET" action="api/dashboard_export.php" target="_blank">
-          <input type="hidden" name="proyecto" value="<?= (int)$idProyecto ?>" />
-          <input type="hidden" name="fase" id="exportFase" value="" />
-          <input type="hidden" name="metricId" id="exportMetric" value="" />
-          <input type="hidden" name="format" value="xls" />
-          <button type="submit" class="btn btn-success btn-sm export-btn">
-            <span class="oi oi-data-transfer-download mr-1"></span> Exportar CSV
+        <div class="d-flex align-items-center flex-wrap gap-2 mt-2 mt-md-0">
+          <div class="d-flex align-items-center mr-2">
+            <label for="metricFilterSelect" class="small text-muted mb-0 mr-2">Métrica:</label>
+            <select id="metricFilterSelect" class="form-control form-control-sm" style="min-width:190px;">
+              <option value="">Todas</option>
+            </select>
+            <button id="clearMetricFilter" type="button" class="btn btn-light btn-sm ml-2 border">
+              <span class="oi oi-x mr-1"></span> Limpiar
+            </button>
+          </div>
+          <button id="modeToggle" class="btn btn-primary btn-sm" data-mode="donut">
+            <i class="oi oi-pie-chart mr-1"></i> Ver como barras
           </button>
-        </form>
+        </div>
+      </div>
+      <div class="legend-metricas mt-3 pt-2 border-top">
+        <span class="legend-item"><span class="legend-dot" style="background:#28a745"></span>Se cumplió</span>
+        <span class="legend-item"><span class="legend-dot" style="background:#8cdcab"></span>Se superó</span>
+        <span class="legend-item"><span class="legend-dot" style="background:#ffc107"></span>Dentro del umbral</span>
+        <span class="legend-item"><span class="legend-dot" style="background:#64aaff"></span>Planificación = 0</span>
+        <span class="legend-item"><span class="legend-dot" style="background:#dc3545"></span>Debajo del umbral</span>
+        <span class="legend-item"><span class="legend-dash"></span>Progreso de la iteración</span>
       </div>
     </div>
 
-    <!-- Tabs de Fase -->
-    <div id="phaseTabs" class="phase-pills mb-3"></div>
+    <!-- Tabs por fase + filtro iteración -->
+    <div id="faseTabs" class="mb-1"></div>
+    <div id="iterFilter" class="mb-3"></div>
 
-    <!-- contenedor de iteraciones x fase -->
-    <div id="phaseContent"></div>
-
+    <!-- Contenedor de tarjetas por iteración -->
+    <div id="iterCards"></div>
   </div>
 
   <script>
-    const DATA = <?= json_encode($DATA, JSON_UNESCAPED_UNICODE | JSON_NUMERIC_CHECK); ?>;
-    const ID_PROYECTO = <?= (int)$idProyecto ?>;
-    let SELECTED_METRIC_ID = null;
-    let CURRENT_PHASE = null; // se setea al inicial
-
-    const __CHARTS = Object.create(null);
-    let __chartsResizeScheduled = false;
-
-    function __scheduleChartsResize() {
-      if (__chartsResizeScheduled) return;
-      __chartsResizeScheduled = true;
-      requestAnimationFrame(() => {
-        try {
-          Object.values(__CHARTS).forEach(ch => {
-            ch && ch.resize && ch.resize();
-          });
-        } finally {
-          __chartsResizeScheduled = false;
-        }
-      });
-    }
-    window.addEventListener('resize', __scheduleChartsResize);
-
-    function colorSemaforo(valorPct, minPct, maxPct) {
+    // ===== Helpers visuales iguales al original =====
+    function colorSemaforo(valorPct, minPct) {
       valorPct = Number(valorPct) || 0;
       minPct = Number(minPct) || 0;
-      if (valorPct >= 100) return "rgba(40,167,69,0.9)";
-      if (valorPct >= minPct) return "rgba(255,193,7,0.85)";
-      return "rgba(220,53,69,0.85)";
+      if (valorPct >= 100) return "#28a745"; // Verde
+      if (valorPct >= minPct) return "#ffc107"; // Amarillo
+      return "#dc3545"; // Rojo
     }
 
+    function safePct(m) {
+      const v = Number(m?.executed) || 0;
+      return v < 0 ? 0 : v;
+    }
+
+    // Colores especiales (plan=0)
     function resolveColor(metric, pct) {
-      const plan = Number(metric?.planned ?? 0);
-      const ejec = Number(metric?.executedReal ?? 0);
-      if (plan === 0 && ejec > 0) return "rgba(100,170,255,0.85)";
-      if (pct > 100) return "rgba(140,220,170,0.9)";
-      return colorSemaforo(pct, metric.min, metric.max);
+      if ((metric.planned ?? 0) === 0 && (metric.executedReal ?? 0) > 0) return "rgba(100,170,255,0.95)"; // azul translúcido
+      if ((metric.planned ?? 0) === 0 && (metric.executedReal ?? 0) === 0) return "rgba(200,208,227,0.8)"; // gris translúcido
+      if (pct > 100) return "rgba(140,220,170,0.9)"; // sobrecumple translúcido
+      return colorSemaforo(pct, metric.min);
+    }
+
+    function computePctAndNote(metric) {
+      const plan = Number(metric?.planned ?? 0),
+        ejec = Number(metric?.executedReal ?? 0);
+      let pct = 0,
+        nota = '';
+      if (plan === 0 && ejec === 0) {
+        pct = 100;
+        nota = 'Se cumplió';
+      } else if (plan === 0 && ejec > 0) {
+        pct = 100;
+        nota = `Se planificó 0 (${ejec})`;
+      } else if (ejec > plan) {
+        pct = Math.round((ejec / plan) * 100);
+        nota = `Supera planificado (+${(ejec-plan)})`;
+      } else if (plan > 0 && ejec === 0) {
+        pct = 0;
+        nota = `Sin ejecución (0/${plan})`;
+      } else {
+        pct = plan > 0 ? Math.round((ejec / plan) * 100) : 0;
+      }
+      return {
+        pct,
+        plan,
+        ejec,
+        nota
+      };
+    }
+
+    function buildTooltipHtml(metric) {
+      const {
+        pct,
+        plan,
+        ejec
+      } = computePctAndNote(metric);
+      const min = Math.max(0, Number(metric?.min ?? 100));
+      let html = `<b>#${metric?.id??''} - ${metric?.nombre??''}</b><br>`;
+      html += `Planificado: <b>${plan}</b><br>`;
+      html += `Ejecutado: <b>${ejec}</b><br>`;
+      html += `Cumplimiento: <b>${pct}%</b><br>`;
+      switch (true) {
+        case (plan === 0 && ejec > 0):
+          html += `<span style="color:#17a2b8;font-weight:bold;">ℹ️ Se planificó 0 (+${ejec})</span><br>`;
+          break;
+        case (plan === 0 && ejec === 0):
+          html += `<span style="color:#198754;font-weight:bold;">✔️ Cumple lo planificado (0/0)</span><br>`;
+          break;
+        case (plan > 0 && pct > 100):
+          html += `<span style="color:#28a745;font-weight:bold;">▲ Supera lo planificado (+${(ejec-plan).toFixed(0)})</span><br>`;
+          break;
+        case (plan > 0 && Math.round(pct) === 100):
+          html += `<span style="color:#198754;font-weight:bold;">✔️ Cumple lo planificado (=${plan})</span><br>`;
+          break;
+        case (plan > 0 && pct >= min && pct < 100):
+          html += `<span style="color:#ffc107;font-weight:bold;">⚠️ Dentro del umbral (${pct.toFixed(1)}%)</span><br>`;
+          break;
+        case (plan > 0 && pct > 0 && pct < min):
+          html += `<span style="color:#dc3545;font-weight:bold;">▼ Por debajo del plan (-${(plan-ejec).toFixed(0)})</span><br>`;
+          break;
+        case (plan > 0 && ejec === 0):
+          html += `<span style="color:#6c757d;font-weight:bold;">⛔ Sin ejecución (0/${plan})</span><br>`;
+          break;
+        default:
+          html += `<span style="color:#999;">❔ Sin datos disponibles</span><br>`;
+      }
+      html += `Límite de desviación (1 − umbral): <b>${min}%</b>`;
+      return html;
+    }
+
+    // ===== Registro global de charts + ResizeObserver =====
+    const __CHARTS = Object.create(null);
+    const __RO = (typeof ResizeObserver !== 'undefined') ?
+      new ResizeObserver(() => {
+        Object.values(__CHARTS).forEach(ch => {
+          try {
+            ch.resize && ch.resize();
+          } catch (e) {}
+        });
+      }) :
+      null;
+
+    window.addEventListener('resize', () => {
+      Object.values(__CHARTS).forEach(ch => {
+        try {
+          ch.resize && ch.resize();
+        } catch (e) {}
+      });
+    });
+
+    // ===== Datos desde PHP =====
+    const DATA = <?= json_encode($DATA, JSON_UNESCAPED_UNICODE | JSON_NUMERIC_CHECK); ?>;
+    let SELECTED_METRIC_ID = null;
+    let SELECTED_PHASE = null;
+
+    // ===== UI builders =====
+    function uniquePhasesFromData(data) {
+      const s = new Set();
+      (data || []).forEach(it => it?.fase && s.add(String(it.fase)));
+      return [...s];
     }
 
     function uniqueMetricsFromData(data) {
@@ -660,75 +719,210 @@ switch ($estadoKey) {
       })).sort((a, b) => String(a.nombre).localeCompare(String(b.nombre)));
     }
 
+    function buildPhaseTabs() {
+      const cont = document.getElementById('faseTabs');
+      if (!cont) return;
+      cont.innerHTML = '';
+      const bAll = document.createElement('button');
+      bAll.type = 'button';
+      bAll.className = 'iter-pill' + (!SELECTED_PHASE ? ' active' : '');
+      bAll.dataset.fase = 'ALL';
+      bAll.textContent = 'Todas las fases';
+      cont.appendChild(bAll);
+      uniquePhasesFromData(DATA).forEach(f => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'iter-pill' + (SELECTED_PHASE === f ? ' active' : '');
+        b.dataset.fase = f;
+        b.textContent = f;
+        cont.appendChild(b);
+      });
+      cont.addEventListener('click', e => {
+        const btn = e.target.closest('.iter-pill');
+        if (!btn) return;
+        [...cont.querySelectorAll('.iter-pill')].forEach(x => x.classList.remove('active'));
+        btn.classList.add('active');
+        SELECTED_PHASE = btn.dataset.fase === 'ALL' ? null : btn.dataset.fase;
+        buildIterFilter((DATA || []).filter(it => !SELECTED_PHASE || it.fase === SELECTED_PHASE));
+        renderIterCards();
+      });
+    }
+
+    function buildIterFilter(list) {
+      const cont = document.getElementById('iterFilter');
+      cont.innerHTML = '';
+      const allBtn = document.createElement('button');
+      allBtn.type = 'button';
+      allBtn.className = 'iter-pill active';
+      allBtn.dataset.iter = 'ALL';
+      allBtn.textContent = 'Todas las iteraciones';
+      cont.appendChild(allBtn);
+      list.forEach(it => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'iter-pill';
+        b.dataset.iter = it.iteracion;
+        b.textContent = it.iteracion;
+        cont.appendChild(b);
+      });
+      cont.addEventListener('click', e => {
+        const btn = e.target.closest('.iter-pill');
+        if (!btn) return;
+        [...cont.querySelectorAll('.iter-pill')].forEach(x => x.classList.remove('active'));
+        btn.classList.add('active');
+        renderIterCards(btn.dataset.iter === 'ALL' ? null : btn.dataset.iter);
+      });
+    }
+
     function buildMetricFilter() {
-      const sel = document.getElementById('metricFilterSelect');
-      const btnClear = document.getElementById('clearMetricFilter');
+      const sel = document.getElementById('metricFilterSelect'),
+        btn = document.getElementById('clearMetricFilter');
       const uniques = uniqueMetricsFromData(DATA);
-      sel.innerHTML = '<option value=\"\">Todas</option>' + uniques.map(m => `<option value=\"${m.id}\">#${m.id} - ${m.nombre}</option>`).join('');
+      sel.innerHTML = '<option value="">Todas las métricas</option>' + uniques.map(m => `<option value="${m.id}">#${m.id} - ${m.nombre}</option>`).join('');
+      sel.value = SELECTED_METRIC_ID != null ? String(SELECTED_METRIC_ID) : '';
       sel.addEventListener('change', () => {
         const v = sel.value.trim();
         SELECTED_METRIC_ID = v ? Number(v) : null;
-        renderCurrentPhase();
-        updateExportFields();
+        const active = document.querySelector('#iterFilter .iter-pill.active');
+        const iter = active ? active.dataset.iter : null;
+        renderIterCards(iter === 'ALL' ? null : iter);
       });
-      btnClear.addEventListener('click', () => {
+      btn.addEventListener('click', () => {
         SELECTED_METRIC_ID = null;
         sel.value = '';
-        renderCurrentPhase();
-        updateExportFields();
+        const active = document.querySelector('#iterFilter .iter-pill.active');
+        const iter = active ? active.dataset.iter : null;
+        renderIterCards(iter === 'ALL' ? null : iter);
       });
-      // inicial
-      updateExportFields();
     }
 
-    // agrupamos por fase desde DATA
-    function groupByPhase() {
-      const phases = {};
-      (DATA || []).forEach(it => {
-        const faseName = it.fase || 'Sin fase';
-        if (!phases[faseName]) phases[faseName] = [];
-        phases[faseName].push(it);
-      });
-      return phases;
-    }
+    function renderIterCards(filterIter = null) {
+      const wrap = document.getElementById('iterCards');
+      if (!wrap) return;
 
-    function buildPhaseTabs() {
-      const container = document.getElementById('phaseTabs');
-      const phasesMap = groupByPhase();
-      const names = Object.keys(phasesMap);
-      container.innerHTML = '';
-      names.forEach((name, idx) => {
-        const pill = document.createElement('div');
-        pill.className = 'phase-pill' + (idx === 0 ? ' active' : '');
-        pill.dataset.phase = name;
-        pill.textContent = name;
-        container.appendChild(pill);
-        if (idx === 0) CURRENT_PHASE = name;
+      // 🧹 1. Limpiar gráficos previos (evita residuos de altura)
+      Object.values(__CHARTS).forEach(ch => {
+        try {
+          ch.dispose();
+        } catch (e) {}
       });
-      container.addEventListener('click', (e) => {
-        const pill = e.target.closest('.phase-pill');
-        if (!pill) return;
-        [...container.querySelectorAll('.phase-pill')].forEach(p => p.classList.remove('active'));
-        pill.classList.add('active');
-        CURRENT_PHASE = pill.dataset.phase;
-        renderCurrentPhase();
-        updateExportFields();
-      });
-      updateExportFields();
-    }
+      for (const k in __CHARTS) delete __CHARTS[k];
 
-    function buildTooltipHtml(metric) {
-      const plan = Number(metric?.planned ?? 0);
-      const ejec = Number(metric?.executedReal ?? 0);
-      let pct;
-      if (plan === 0 && ejec === 0) pct = 100;
-      else if (plan === 0 && ejec > 0) pct = 100;
-      else pct = plan > 0 ? Math.round((ejec / plan) * 100) : 0;
-      let html = `<b>#${metric.id} - ${metric.nombre}</b><br>`;
-      html += `Planificado: <b>${plan}</b><br>`;
-      html += `Ejecutado: <b>${ejec}</b><br>`;
-      html += `Cumplimiento: <b>${pct}%</b><br>`;
-      return html;
+      // 🧼 2. Vaciar contenedor
+      wrap.innerHTML = '';
+
+      // 🧮 3. Filtros aplicados
+      const mode = document.getElementById('modeToggle')?.dataset?.mode || 'donut';
+      const source = (DATA || [])
+        .filter(it => !SELECTED_PHASE || it.fase === SELECTED_PHASE)
+        .filter(it => !filterIter || it.iteracion === filterIter);
+
+      // 🧩 4. Generar tarjetas dinámicas
+      source.forEach((it, idx) => {
+        const card = document.createElement('div');
+        card.className = 'card card-iteracion mb-4';
+
+        // Header
+        const header = document.createElement('div');
+        header.className = 'card-header d-flex justify-content-between align-items-center';
+        header.innerHTML = `
+      <div>
+        <div class="iter-header-title font-weight-bold">${it.iteracion}</div>
+        <div class="iter-subtitle text-muted">Del ${it.inicio} al ${it.fin}</div>
+      </div>
+      <div class="text-right">
+        <span class="badge badge-light">${(it.metricas || []).length} métricas</span>
+      </div>`;
+        card.appendChild(header);
+
+        // Body
+        const body = document.createElement('div');
+        body.className = 'card-body';
+        const grid = document.createElement('div');
+        grid.className = 'metric-grid';
+
+        let metrics = Array.isArray(it.metricas) ? it.metricas.slice() : [];
+        if (SELECTED_METRIC_ID != null) {
+          const found = metrics.find(mm => Number(mm.id) === Number(SELECTED_METRIC_ID));
+          metrics = found ? [found] : [];
+        }
+
+        metrics.forEach((m, mIdx) => {
+          const mCard = document.createElement('div');
+          mCard.className = 'metric-card';
+          const idChart = `metric-chart-${idx}-${mIdx}`;
+          const umbralPct = Math.round(Math.max(0, 100 - (Number(m.min ?? 100))));
+
+          mCard.innerHTML = `
+        <div class="metric-name">#${m.id} - ${m.nombre}</div>
+        <div id="${idChart}" class="metric-body-chart"></div>
+        <div class="metric-foot">
+          Planificado: <b>${m.planned}</b> | Ejecutado: <b>${m.executedReal}</b><br>
+          <span class="legend-threshold">
+            <span class="legend-dot" style="background:#343a40;width:20px;height:3px;border-radius:0;border:0"></span>
+            Umbral: <b>${100 - umbralPct}%</b>
+          </span>
+        </div>`;
+
+          // Click para filtrar métrica específica
+          mCard.addEventListener('click', () => {
+            SELECTED_METRIC_ID = Number(m.id);
+            const sel = document.getElementById('metricFilterSelect');
+            if (sel) sel.value = String(SELECTED_METRIC_ID);
+            const active = document.querySelector('#iterFilter .iter-pill.active');
+            const iter = active ? active.dataset.iter : null;
+            renderIterCards(iter === 'ALL' ? null : iter);
+          });
+
+          grid.appendChild(mCard);
+
+          // Render diferido del gráfico
+          setTimeout(() => {
+            if (mode === 'donut') renderDonut(idChart, m);
+            else renderMiniBar(idChart, m);
+          }, 0);
+        });
+
+        // Mensaje si no hay métricas
+        if (!metrics.length) {
+          const emp = document.createElement('div');
+          emp.className = 'text-muted';
+          emp.textContent =
+            (SELECTED_METRIC_ID != null) ?
+            'Esta iteración no contiene la métrica seleccionada.' :
+            'No hay métricas planificadas para esta iteración.';
+          body.appendChild(emp);
+        } else {
+          body.appendChild(grid);
+        }
+
+        card.appendChild(body);
+        wrap.appendChild(card);
+      });
+
+      // 🧾 5. Recalcular layout + forzar resize de todos los gráficos
+      requestAnimationFrame(() => {
+        // Ajuste visual global
+        document.body.style.height = 'auto';
+        document.documentElement.style.height = 'auto';
+
+        // Redimensionar todos los ECharts actuales
+        Object.values(__CHARTS).forEach(ch => {
+          try {
+            ch.resize && ch.resize();
+          } catch (e) {}
+        });
+
+        // Si el footer es fijo, compensar su altura
+        const footer = document.querySelector('footer');
+        if (footer) {
+          const footerH = footer.offsetHeight || 0;
+          document.body.style.paddingBottom = footerH + 'px';
+        }
+
+        // Evita márgenes colapsados
+        wrap.style.marginBottom = '0';
+      });
     }
 
     function renderDonut(domId, metric) {
@@ -738,71 +932,163 @@ switch ($estadoKey) {
       if (prev) prev.dispose();
       const chart = echarts.init(dom);
       __CHARTS[domId] = chart;
+      if (__RO) {
+        try {
+          __RO.observe(dom);
+        } catch (_) {}
+      }
 
-      const plan = Number(metric?.planned ?? 0);
-      const ejec = Number(metric?.executedReal ?? 0);
-      let pct;
-      if (plan === 0 && ejec === 0) pct = 100;
-      else if (plan === 0 && ejec > 0) pct = 100;
-      else if (ejec > plan) pct = Math.round((ejec / plan) * 100);
-      else pct = plan > 0 ? Math.round((ejec / plan) * 100) : 0;
-      const color = resolveColor(metric, pct);
+      const pctReal = Math.max(0, safePct(metric));
+      const ringPct = Math.min(100, pctReal);
+      const color = resolveColor(metric, pctReal);
+      const restColor = "#e9ecef";
 
-      const ringData = pct >= 100 ? [{
-        value: 100,
-        name: 'Cumplido',
-        itemStyle: {
-          color
-        }
-      }] : [{
-          value: pct,
-          name: 'Cumplido',
+      let ringData;
+      if (ringPct >= 100) {
+        ringData = [{
+          value: 100,
+          name: "Cumplido",
           itemStyle: {
             color
           }
-        },
-        {
-          value: 100 - pct,
-          name: 'Restante',
+        }];
+      } else if (ringPct <= 0) {
+        ringData = [{
+          value: 100,
+          name: "Restante",
           itemStyle: {
-            color: '#e9ecef'
+            color: restColor
           }
-        }
-      ];
+        }];
+      } else {
+        ringData = [{
+            value: ringPct,
+            name: "Cumplido",
+            itemStyle: {
+              color,
+              borderColor: '#000',
+              borderWidth: 1.5
+            }
+          },
+          {
+            value: 100 - ringPct,
+            name: "Restante",
+            itemStyle: {
+              color: restColor,
+              borderColor: '#000',
+              borderWidth: 1.5
+            }
+          }
+        ];
+      }
 
       chart.setOption({
         tooltip: {
           trigger: 'item',
+          appendToBody: true,
+          backgroundColor: 'rgba(255,255,255,0.95)',
+          borderColor: '#ccc',
+          borderWidth: 1,
+          textStyle: {
+            color: '#222',
+            fontSize: 13
+          },
+          extraCssText: 'box-shadow:0 2px 8px rgba(0,0,0,.2);border-radius:6px;',
           formatter: () => buildTooltipHtml(metric)
         },
-        series: [{
-          type: 'pie',
-          radius: ['55%', '88%'],
-          avoidLabelOverlap: false,
-          label: {
-            show: false
-          },
-          labelLine: {
-            show: false
-          },
-          itemStyle: {
-            borderWidth: 1,
-            borderColor: 'rgba(0,0,0,.08)'
-          },
-          data: ringData
-        }],
+        backgroundColor: 'transparent',
         graphic: [{
-          type: 'text',
+          type: 'group',
           left: 'center',
-          top: 'middle',
-          style: {
-            text: pct + '%',
-            fontSize: 24,
-            fontWeight: 700,
-            fill: '#212529',
-            textAlign: 'center'
+          top: 'center',
+          children: [{
+              type: 'text',
+              z: 100,
+              style: {
+                text: `${Math.round(pctReal)}%`,
+                fontSize: 28,
+                fontWeight: 700,
+                fill: '#212529',
+                textAlign: 'center'
+              }
+            },
+            {
+              type: 'text',
+              top: 26,
+              z: 100,
+              style: {
+                text: 'Cumplimiento',
+                fontSize: 12,
+                fill: '#6c757d',
+                textAlign: 'center'
+              }
+            }
+          ]
+        }],
+        series: [{
+            type: 'pie',
+            radius: ['52%', '90%'],
+            startAngle: 90,
+            avoidLabelOverlap: true,
+            label: {
+              show: false
+            },
+            labelLine: {
+              show: false
+            },
+            itemStyle: {
+              borderWidth: 1.5,
+              borderColor: '#000'
+            },
+            data: ringData
+          },
+          // línea de umbral que "corta" el donut en (1-umbral)
+          {
+            type: 'pie',
+            radius: ['52%', '90%'],
+            startAngle: 90,
+            silent: true,
+            animation: false,
+            label: {
+              show: false
+            },
+            labelLine: {
+              show: false
+            },
+            z: 10,
+            zlevel: 2,
+            data: (function() {
+              const threshold = Math.max(0, Math.min(100, Number(metric?.min ?? 100)));
+              const wedgeWidth = 1,
+                half = wedgeWidth / 2;
+              const before = Math.max(0, threshold - half);
+              const wedge = Math.min(wedgeWidth, 100 - before);
+              const after = Math.max(0, 100 - before - wedge);
+              return [{
+                  value: before,
+                  itemStyle: {
+                    color: 'rgba(0,0,0,0)'
+                  }
+                },
+                {
+                  value: wedge,
+                  itemStyle: {
+                    color: '#343a40',
+                    shadowColor: 'rgba(0,0,0,0.25)',
+                    shadowBlur: 5
+                  }
+                },
+                {
+                  value: after,
+                  itemStyle: {
+                    color: 'rgba(0,0,0,0)'
+                  }
+                }
+              ];
+            })()
           }
-        }]
+        ],
+        animation: true
       });
     }
 
@@ -813,202 +1099,229 @@ switch ($estadoKey) {
       if (prev) prev.dispose();
       const chart = echarts.init(dom);
       __CHARTS[domId] = chart;
+      if (__RO) {
+        try {
+          __RO.observe(dom);
+        } catch (_) {}
+      }
 
-      const plan = Number(metric?.planned ?? 0);
-      const ejec = Number(metric?.executedReal ?? 0);
-      let pct;
-      if (plan === 0 && ejec === 0) pct = 100;
-      else if (plan === 0 && ejec > 0) pct = 100;
-      else if (ejec > plan) pct = Math.round((ejec / plan) * 100);
-      else pct = plan > 0 ? Math.round((ejec / plan) * 100) : 0;
-      const color = resolveColor(metric, pct);
-      const yMax = pct > 120 ? 130 : 120;
+      const pctReal = Math.max(0, safePct(metric));
+      const executedCol = resolveColor(metric, pctReal);
+      const VISIBLE_MAX = 120,
+        OVERFLOW_TOP = 130;
+      const yMax = pctReal > VISIBLE_MAX ? OVERFLOW_TOP : VISIBLE_MAX;
+      const baseVal = Math.min(100, pctReal);
+      const overflowVal = pctReal > 100 ? Math.max(0, Math.min(OVERFLOW_TOP, pctReal) - 100) : 0;
+      const minLine = Math.max(0, Math.min(yMax, Number(metric?.min ?? 100)));
 
       chart.setOption({
         tooltip: {
           trigger: 'axis',
+          axisPointer: {
+            type: 'shadow'
+          },
+          appendToBody: true,
+          backgroundColor: 'rgba(255,255,255,0.95)',
+          borderColor: '#ccc',
+          borderWidth: 1,
+          textStyle: {
+            color: '#222',
+            fontSize: 13
+          },
+          extraCssText: 'box-shadow:0 2px 8px rgba(0,0,0,.2);border-radius:6px;',
           formatter: () => buildTooltipHtml(metric)
         },
         grid: {
           left: 40,
-          right: 10,
-          top: 10,
-          bottom: 30
+          right: 60,
+          top: 20,
+          bottom: 28,
+          containLabel: true
         },
         xAxis: {
           type: 'category',
-          data: ['Plan', 'Ejec.'],
-          axisLabel: {
-            color: '#6c757d'
+          data: ['Planificado', 'Ejecutado'],
+          axisLine: {
+            lineStyle: {
+              color: '#d7dbe8'
+            }
           },
           axisTick: {
             show: false
+          },
+          axisLabel: {
+            color: '#6c7a92',
+            fontWeight: 600
           }
         },
         yAxis: {
           type: 'value',
           min: 0,
           max: yMax,
-          axisLabel: {
-            formatter: '{value}%',
-            color: '#6c757d'
-          },
           splitLine: {
             lineStyle: {
               type: 'dashed',
-              color: '#e9ecef'
-            }
-          }
-        },
-        series: [{
-            name: 'Plan',
-            type: 'bar',
-            data: [100, null],
-            barWidth: 28,
-            itemStyle: {
-              color: '#cdd4e6',
-              borderColor: 'rgba(0,0,0,.05)',
-              borderWidth: 1
-            },
-            label: {
-              show: true,
-              position: 'top',
-              formatter: '100%',
-              color: '#495057',
-              fontWeight: 600
+              color: '#e5e9f2'
             }
           },
-          {
-            name: 'Ejec.',
+          axisLabel: {
+            color: '#6c7a92',
+            formatter: '{value}%'
+          }
+        },
+        series: [{ // plan=100% con borde negro
+            name: 'Planificado',
             type: 'bar',
-            data: [null, pct],
-            barWidth: 28,
+            barWidth: 34,
             itemStyle: {
-              color,
-              borderColor: 'rgba(0,0,0,.05)',
-              borderWidth: 1
+              borderRadius: 0,
+              color: '#a8b5d7',
+              borderColor: '#000',
+              borderWidth: 1.5
             },
             label: {
               show: true,
               position: 'top',
-              formatter: pct + '%',
-              color: '#495057',
-              fontWeight: 600
+              fontWeight: 700,
+              color: '#1b2533',
+              formatter: (p) => p.dataIndex === 0 ? '100%' : ''
+            },
+            data: [100, null]
+          },
+          { // marco para 100% de ejecutado
+            name: 'Marco 100',
+            type: 'bar',
+            barWidth: 34,
+            barGap: '30%',
+            itemStyle: {
+              color: 'rgba(0,0,0,0)',
+              borderColor: '#000',
+              borderWidth: 1.5,
+              borderRadius: 0
+            },
+            emphasis: {
+              disabled: true
+            },
+            silent: true,
+            data: [null, 100]
+          },
+          { // ejecutado base (0..100)
+            name: 'Ejecutado',
+            type: 'bar',
+            barWidth: 34,
+            barGap: '-100%',
+            stack: 'exec',
+            itemStyle: {
+              borderRadius: 0,
+              color: executedCol,
+              borderColor: '#000',
+              borderWidth: 1.5
+            },
+            label: {
+              show: true,
+              position: 'top',
+              fontWeight: 700,
+              color: '#1b2533',
+              formatter: (p) => p.dataIndex === 1 ? `${pctReal}%` : ''
             },
             markLine: {
               symbol: 'none',
               lineStyle: {
                 type: 'dashed',
-                color: '#0d6efd'
+                color: '#0d6efd',
+                width: 2
               },
               data: [{
-                yAxis: 100
-              }]
-            }
+                  yAxis: 100,
+                  lineStyle: {
+                    type: 'dashed',
+                    color: '#0d6efd',
+                    width: 2
+                  },
+                  label: {
+                    show: true,
+                    formatter: '100%',
+                    position: 'end',
+                    distance: 6,
+                    color: '#0d6efd',
+                    backgroundColor: '#fff',
+                    padding: [1, 4],
+                    borderRadius: 3
+                  }
+                },
+                {
+                  yAxis: minLine,
+                  lineStyle: {
+                    type: 'solid',
+                    color: '#343a40',
+                    width: 1.5
+                  },
+                  label: {
+                    show: false
+                  }
+                }
+              ]
+            },
+            data: [null, baseVal]
+          },
+          { // overflow >100%
+            name: 'Overflow',
+            type: 'bar',
+            barWidth: 34,
+            barGap: '-100%',
+            stack: 'exec',
+            itemStyle: {
+              color: executedCol,
+              opacity: .35,
+              borderRadius: 0,
+              borderColor: '#000',
+              borderWidth: 1.5
+            },
+            emphasis: {
+              disabled: true
+            },
+            data: [null, overflowVal]
           }
-        ]
+        ],
+        animation: true
       });
     }
 
-    function renderCurrentPhase() {
-      const container = document.getElementById('phaseContent');
-      container.innerHTML = '';
-      if (typeof echarts === 'undefined') {
-        container.innerHTML = '<div class="alert alert-warning mb-3">No se pudo cargar la librería de gráficos (ECharts). Verifique su conexión o el acceso al CDN.</div>';
+    // ===== Resumen global igual al original =====
+    function computeAndRenderGlobalSummary() {
+      const all = [];
+      (DATA || []).forEach(it => (it.metricas || []).forEach(m => all.push(m)));
+      const setText = (id, v) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = v;
+      }
+      if (!all.length) {
+        setText('avgComplianceValue', '--%');
+        setText('countOverPlanValue', '0');
+        setText('countInThresholdValue', '0');
+        setText('countNoExecValue', '0');
         return;
       }
-      const mode = document.getElementById('modeToggle')?.dataset?.mode || 'donut';
-      const phases = groupByPhase();
-      const iters = phases[CURRENT_PHASE] || [];
-
-      iters.forEach((it, idx) => {
-        const card = document.createElement('div');
-        card.className = 'card mb-3';
-        card.innerHTML = `
-        <div class="card-header d-flex justify-content-between align-items-center">
-          <div>
-            <div class="font-weight-bold">${it.iteracion}</div>
-            <div class="text-muted" style="font-size:.75rem;">Del ${it.inicio} al ${it.fin}</div>
-          </div>
-          <span class="badge badge-light">${(it.metricas||[]).length} métricas</span>
-        </div>
-        <div class="card-body">
-          <div class="metric-grid" id="metric-grid-${idx}"></div>
-        </div>
-      `;
-        container.appendChild(card);
-
-        const grid = card.querySelector('.metric-grid');
-        let metrics = Array.isArray(it.metricas) ? it.metricas.slice() : [];
-        if (SELECTED_METRIC_ID != null) {
-          const found = metrics.find(mm => Number(mm.id) === Number(SELECTED_METRIC_ID));
-          metrics = found ? [found] : [];
-        }
-        if (metrics.length === 0) {
-          grid.innerHTML = '<div class="text-muted">No hay métricas para esta iteración o no coincide con el filtro.</div>';
-        } else {
-          metrics.forEach((m, mIdx) => {
-            const mCard = document.createElement('div');
-            mCard.className = 'metric-card';
-            const chartId = `metric-chart-${idx}-${mIdx}`;
-            mCard.innerHTML = `
-            <div class="metric-name">#${m.id} - ${m.nombre}</div>
-            <div id="${chartId}" class="metric-body-chart"></div>
-            <div class="metric-foot">
-              Planificado: <b>${m.planned}</b> | Ejecutado: <b>${m.executedReal}</b>
-            </div>
-          `;
-            mCard.addEventListener('click', () => {
-              SELECTED_METRIC_ID = Number(m.id);
-              const sel = document.getElementById('metricFilterSelect');
-              if (sel) sel.value = String(SELECTED_METRIC_ID);
-              renderCurrentPhase();
-            });
-            grid.appendChild(mCard);
-            setTimeout(() => {
-              if (mode === 'donut') renderDonut(chartId, m);
-              else renderMiniBar(chartId, m);
-            }, 0);
-          });
-        }
+      const avg = Math.round(all.reduce((a, m) => a + (Number(m.executed) || 0), 0) / all.length);
+      let over = 0,
+        inT = 0,
+        noE = 0;
+      all.forEach(m => {
+        const plan = Number(m.planned || 0),
+          ejec = Number(m.executedReal || 0),
+          pct = Number(m.executed || 0),
+          minLine = Math.max(0, Number(m.min || 0));
+        if (pct > 100) over++;
+        if (pct >= minLine) inT++;
+        if (plan > 0 && ejec === 0) noE++;
       });
-
-      calcularResumenGlobal();
-      __scheduleChartsResize();
+      setText('avgComplianceValue', `${isFinite(avg)?avg:'--'}%`);
+      setText('countOverPlanValue', String(over));
+      setText('countInThresholdValue', String(inT));
+      setText('countNoExecValue', String(noE));
     }
 
-    function calcularResumenGlobal() {
-      const all = DATA || [];
-      let totalPct = 0,
-        count = 0,
-        superadas = 0,
-        umbral = 0,
-        bajo = 0;
-      all.forEach(it => {
-        (it.metricas || []).forEach(m => {
-          const plan = Number(m.planned ?? 0);
-          const ejec = Number(m.executedReal ?? 0);
-          let pct;
-          if (plan === 0 && ejec === 0) pct = 100;
-          else if (plan === 0 && ejec > 0) pct = 100;
-          else if (ejec > plan) pct = Math.round((ejec / plan) * 100);
-          else pct = plan > 0 ? Math.round((ejec / plan) * 100) : 0;
-          totalPct += pct;
-          count++;
-          const min = Number(m.min ?? 0);
-          if (pct > 100) superadas++;
-          else if (pct >= min) umbral++;
-          else bajo++;
-        });
-      });
-      const promedio = count > 0 ? Math.round(totalPct / count) : 0;
-      document.getElementById('resumenPromedio').textContent = promedio + '%';
-      document.getElementById('resumenSuperadas').textContent = superadas;
-      document.getElementById('resumenUmbral').textContent = umbral;
-      document.getElementById('resumenBajo').textContent = bajo;
-    }
-
-    // toggle modo
+    // ===== Toggle modo =====
     (function() {
       const btn = document.getElementById('modeToggle');
       if (!btn) return;
@@ -1017,30 +1330,24 @@ switch ($estadoKey) {
         const next = current === 'donut' ? 'bar' : 'donut';
         btn.dataset.mode = next;
         btn.classList.toggle('off', next === 'donut');
-        if (next === 'donut') {
-          btn.innerHTML = '<i class="oi oi-pie-chart"></i> Ver como barras';
-        } else {
-          btn.innerHTML = '<i class="oi oi-bar-chart"></i> Ver como donuts';
-        }
-        renderCurrentPhase();
+        btn.innerHTML = next === 'donut' ?
+          '<i class="oi oi-pie-chart"></i> Ver como barras' :
+          '<i class="oi oi-bar-chart"></i> Ver como donuts';
+        const active = document.querySelector('#iterFilter .iter-pill.active');
+        const iter = active ? active.dataset.iter : null;
+        renderIterCards(iter === 'ALL' ? null : iter);
       });
     })();
 
+    // ===== Init =====
     document.addEventListener('DOMContentLoaded', () => {
       buildMetricFilter();
       buildPhaseTabs();
-      renderCurrentPhase();
+      const scoped = (DATA || []).filter(it => !SELECTED_PHASE || it.fase === SELECTED_PHASE);
+      buildIterFilter(scoped);
+      renderIterCards(null);
+      computeAndRenderGlobalSummary();
     });
-    
-    // sincroniza filtros -> formulario de exportación
-    function updateExportFields() {
-      const fase = CURRENT_PHASE || '';
-      const metric = SELECTED_METRIC_ID != null ? String(SELECTED_METRIC_ID) : '';
-      const faseInput = document.getElementById('exportFase');
-      const metricInput = document.getElementById('exportMetric');
-      if (faseInput) faseInput.value = fase;
-      if (metricInput) metricInput.value = metric;
-    }
   </script>
 
   <?php include_once '../gui/footer.php'; ?>
