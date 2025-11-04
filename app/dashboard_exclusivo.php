@@ -7,7 +7,6 @@
  * - Filtros por fase, iteración y métrica
  * - Toggle donuts/barras
  */
-
 require_once __DIR__ . '/../lib/ControlAcceso.Class.php';
 require_once __DIR__ . '/../modelo/BDConexion.Class.php';
 
@@ -633,7 +632,7 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
 
       <div class="card-body p-2">
         <!-- Gráfico de distribución global de métricas -->
-        <div id="chartDistribucionGlobal" style="height:300px; margin-top:-10px;"></div>
+        <div id="chartDistribucionGlobal" data-title="Visión General del Proyecto" style="height:300px; margin-top:-10px;"></div>
       </div>
     </div>
 
@@ -649,6 +648,9 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
           </select>
           <button id="clearMetricFilter" type="button" class="btn btn-outline-secondary btn-sm ml-2 btn-clear" title="Limpiar filtro">
             <span class="oi oi-x mr-1"></span> Limpiar Filtros
+          </button>
+          <button id="exportBtn" type="button" class="btn btn-outline-primary btn-sm ml-2" title="Exportar">
+            <span class="oi oi-data-transfer-download mr-1"></span> Exportar
           </button>
         </div>
         <div class="d-flex align-items-center mt-2 mt-md-0">
@@ -678,6 +680,65 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
 
     <!-- Contenedor de tarjetas por iteración -->
     <div id="iterCards"></div>
+
+    <!-- Modal de Exportación -->
+    <div class="modal fade" id="exportModal" tabindex="-1" role="dialog" aria-labelledby="exportModalLabel" aria-hidden="true">
+      <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="exportModalLabel">Exportar tablero</h5>
+            <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+              <span aria-hidden="true">&times;</span>
+            </button>
+          </div>
+          <div class="modal-body">
+            <div class="form-row">
+              <div class="form-group col-md-4">
+                <label class="mb-1">Formato</label>
+                <div>
+                  <div class="custom-control custom-radio">
+                    <input type="radio" id="fmtPng" name="exportFmt" class="custom-control-input" value="png" checked>
+                    <label class="custom-control-label" for="fmtPng">PNG (imagen)</label>
+                  </div>
+                  <div class="custom-control custom-radio">
+                    <input type="radio" id="fmtPdf" name="exportFmt" class="custom-control-input" value="pdf">
+                    <label class="custom-control-label" for="fmtPdf">PDF</label>
+                  </div>
+                </div>
+              </div>
+              <div class="form-group col-md-8">
+                <label class="mb-1 d-flex align-items-center">Alcance <small class="text-muted ml-2">(opcional, por defecto usa los filtros actuales)</small></label>
+                <div class="form-row">
+                  <div class="form-group col-12 col-md-4">
+                    <label for="exportFases" class="small text-muted">Fases</label>
+                    <select id="exportFases" class="form-control form-control-sm" multiple></select>
+                  </div>
+                  <div class="form-group col-12 col-md-4">
+                    <label for="exportIters" class="small text-muted">Iteraciones</label>
+                    <select id="exportIters" class="form-control form-control-sm" multiple></select>
+                  </div>
+                  <div class="form-group col-12 col-md-4">
+                    <label for="exportMetricas" class="small text-muted">Métricas</label>
+                    <select id="exportMetricas" class="form-control form-control-sm" multiple></select>
+                  </div>
+                </div>
+                <div class="custom-control custom-checkbox mt-2">
+                  <input type="checkbox" class="custom-control-input" id="exportIncluirGlobal" checked>
+                  <label class="custom-control-label" for="exportIncluirGlobal">Incluir "Visión General del Proyecto"</label>
+                </div>
+              </div>
+            </div>
+            
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+            <button type="button" class="btn btn-primary" id="exportConfirmBtn">
+              <span class="oi oi-data-transfer-download mr-1"></span> Exportar
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script>
@@ -895,6 +956,7 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
     // ===== Datos desde PHP =====
   const DATA = <?= json_encode($DATA, JSON_UNESCAPED_UNICODE | JSON_NUMERIC_CHECK); ?>;
   const HAY_ITERACIONES = <?= ($totalIteracionesCreadas > 0 ? 'true' : 'false'); ?>;
+  const PROYECTO_ID = <?= (int)$idProyecto ?>;
     let SELECTED_METRIC_ID = null;
     let SELECTED_PHASE = null;
 
@@ -1093,7 +1155,7 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
 
           mCard.innerHTML = `
         <div class="metric-name">#${m.id} - ${m.nombre}</div>
-        <div id="${idChart}" class="metric-body-chart"></div>
+        <div id="${idChart}" class="metric-body-chart" data-fase="${String(it.fase)}" data-iter="${it.iteracion}" data-metric-id="${String(m.id)}" data-title="#${m.id} - ${m.nombre} | ${it.iteracion}"></div>
         <div class="metric-foot">
           Planificado: <b>${m.planned}</b> | Ejecutado: <b>${m.executedReal}</b><br>
           <span class="legend-threshold">
@@ -1457,8 +1519,12 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
               show: false
             },
             axisLabel: {
-              color: '#000000ff',
-              fontWeight: 300
+              // Colorea cada etiqueta para que coincida con Planificado (azul suave) y Ejecutado (color semáforo)
+              formatter: function(value, idx) { return idx === 0 ? '{plan|Planificado}' : '{exec|Ejecutado}'; },
+              rich: {
+                plan: { color: '#a8b5d7', fontWeight: 700 },
+                exec: { color: executedCol, fontWeight: 700 }
+              }
             }
           },
           yAxis: {
@@ -1857,6 +1923,383 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
       const scoped = (DATA || []).filter(it => !SELECTED_PHASE || it.fase === SELECTED_PHASE);
       buildIterFilter(scoped);
       renderIterCards(null);
+      // Exportar: abre modal y maneja envío
+      (function setupExportModal() {
+        const btn = document.getElementById('exportBtn');
+        if (!btn) return;
+
+        // Construye opciones
+        function unique(arr) { return Array.from(new Set(arr)); }
+        function buildExportOptions() {
+          try {
+            const faseSel = document.getElementById('exportFases');
+            const iterSel = document.getElementById('exportIters');
+            const metSel  = document.getElementById('exportMetricas');
+
+            const fases = unique((DATA || []).map(d => d.fase).filter(v => v != null));
+            faseSel.innerHTML = fases.map(f => `<option value="${String(f)}">Fase ${String(f)}</option>`).join('');
+            if (SELECTED_PHASE != null) {
+              Array.from(faseSel.options).forEach(op => { if (String(op.value) === String(SELECTED_PHASE)) op.selected = true; });
+            }
+            rebuildItersAndMetrics();
+          } catch(err) { console.warn('No se pudieron construir opciones de exportación', err); }
+        }
+
+        function rebuildItersAndMetrics() {
+          const faseSel = document.getElementById('exportFases');
+          const iterSel = document.getElementById('exportIters');
+          const metSel  = document.getElementById('exportMetricas');
+          const selFases = Array.from(faseSel?.selectedOptions || []).map(o => String(o.value));
+          const scoped = (DATA || []).filter(d => !selFases.length || selFases.includes(String(d.fase)));
+          const iters = unique(scoped.map(d => d.iteracion).filter(Boolean));
+          iterSel.innerHTML = iters.map(i => `<option value="${i}">${i}</option>`).join('');
+
+          rebuildMetrics();
+        }
+
+        function rebuildMetrics() {
+          const faseSel = document.getElementById('exportFases');
+          const iterSel = document.getElementById('exportIters');
+          const metSel  = document.getElementById('exportMetricas');
+          const selFases = Array.from(faseSel?.selectedOptions || []).map(o => String(o.value));
+          const selIters = Array.from(iterSel?.selectedOptions || []).map(o => String(o.value));
+          const scoped = (DATA || [])
+            .filter(d => !selFases.length || selFases.includes(String(d.fase)))
+            .filter(d => !selIters.length || selIters.includes(String(d.iteracion)));
+          const metPairs = unique([].concat(...scoped.map(d => (d.metricas || []).map(m => `${m.id}:::${m.nombre}`))));
+          metSel.innerHTML = metPairs.map(p => { const [id,n] = p.split(':::'); return `<option value="${id}">#${id} - ${n}</option>`; }).join('');
+          if (SELECTED_METRIC_ID != null) {
+            Array.from(metSel.options).forEach(op => { if (String(op.value) === String(SELECTED_METRIC_ID)) op.selected = true; });
+          }
+        }
+
+        btn.addEventListener('click', () => {
+          buildExportOptions();
+          $('#exportModal').modal('show');
+        });
+
+        // No hay campos adicionales para PDF: se toma todo de BD con los filtros
+
+        // Dependencias: fases -> iteraciones -> métricas
+        document.getElementById('exportFases').addEventListener('change', rebuildItersAndMetrics);
+        document.getElementById('exportIters').addEventListener('change', rebuildMetrics);
+
+        // Confirmar exportación
+        const confirmBtn = document.getElementById('exportConfirmBtn');
+        if (confirmBtn) confirmBtn.addEventListener('click', async () => {
+          const fmt = (document.querySelector('input[name="exportFmt"]:checked')?.value || 'png').toLowerCase();
+          if (fmt === 'png') {
+            try {
+              await exportChartsToServerPNG();
+              $('#exportModal').modal('hide');
+            } catch(err) {
+              alert('No se pudo exportar a PNG. ' + (err?.message || err));
+            }
+          } else {
+            // Exportar PDF desde servidor (sin gráficos), con misma data que CSV/XLS
+            try {
+              const { faseSel, metSel } = getSelection();
+              const p = new URLSearchParams();
+              p.set('proyecto', String(PROYECTO_ID));
+              // fase: si seleccionó solo 1, usar esa; si no, usar la fase activa si existe
+              if (Array.isArray(faseSel) && faseSel.length === 1) {
+                p.set('fase', String(faseSel[0]));
+              } else if (SELECTED_PHASE) {
+                p.set('fase', String(SELECTED_PHASE));
+              }
+              // metrica: si seleccionó solo 1, usarla; sino si hay una activa, usarla
+              if (Array.isArray(metSel) && metSel.length === 1) {
+                p.set('metricId', String(metSel[0]));
+              } else if (SELECTED_METRIC_ID != null) {
+                p.set('metricId', String(SELECTED_METRIC_ID));
+              }
+              const url = 'api/exportar_pdf.php?' + p.toString();
+              const a = document.createElement('a');
+              a.href = url;
+              a.target = '_blank';
+              a.rel = 'noopener';
+              document.body.appendChild(a);
+              a.click();
+              setTimeout(()=>{ try{ document.body.removeChild(a);}catch(_){} },0);
+              $('#exportModal').modal('hide');
+            } catch(err) {
+              alert('No se pudo exportar a PDF. ' + (err?.message || err));
+            }
+          }
+        });
+
+        function getSelection() {
+          const faseSel = Array.from(document.getElementById('exportFases')?.selectedOptions || []).map(o => String(o.value));
+          const iterSel = Array.from(document.getElementById('exportIters')?.selectedOptions || []).map(o => String(o.value));
+          const metSel  = Array.from(document.getElementById('exportMetricas')?.selectedOptions || []).map(o => String(o.value));
+          const incluirGlobal = !!document.getElementById('exportIncluirGlobal')?.checked;
+          return { faseSel, iterSel, metSel, incluirGlobal };
+        }
+
+        async function exportChartsToServerPNG() {
+          // Lee selección opcional
+          const { faseSel, iterSel, metSel, incluirGlobal } = getSelection();
+
+          // Toma charts visibles y filtra por selección si corresponde
+          const canvas = await composeChartsCanvasGrid({ faseSel, iterSel, metSel, incluirGlobal });
+          const pngDataUrl = canvas.toDataURL('image/png');
+          // Envía al servidor para descarga
+          await postDataUrlForDownload('api/exportar_png.php', pngDataUrl, suggestedFileName('png'));
+        }
+
+        // (El exportar a PDF se hace en el servidor con FPDF; no generamos gráficos en el PDF)
+
+        function loadImage(dataUrl) {
+          return new Promise((resolve, reject) => {
+            const img = new Image();
+            img.onload = () => resolve(img);
+            img.onerror = reject;
+            img.src = dataUrl;
+          });
+        }
+
+        function suggestedFileName(ext) {
+          const name = (document.getElementById('projectName')?.textContent || 'proyecto').replace(/\s+/g,'_');
+          const ts = new Date().toISOString().replace(/[:T]/g,'-').slice(0,16);
+          return `${name}_tablero_${ts}.${ext}`;
+        }
+
+        async function postDataUrlForDownload(url, dataUrl, filename) {
+          return new Promise(resolve => {
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = url;
+            form.style.display = 'none';
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'image';
+            input.value = dataUrl;
+            const name = document.createElement('input');
+            name.type = 'hidden';
+            name.name = 'filename';
+            name.value = filename;
+            const proj = document.createElement('input');
+            proj.type = 'hidden';
+            proj.name = 'proyecto';
+            proj.value = String(PROYECTO_ID);
+            form.appendChild(input);
+            form.appendChild(name);
+            form.appendChild(proj);
+            document.body.appendChild(form);
+            form.submit();
+            setTimeout(() => { try { document.body.removeChild(form); } catch(_){} resolve(); }, 250);
+          });
+        }
+
+        async function composeChartsCanvasGrid({ faseSel, iterSel, metSel, incluirGlobal }) {
+          // Recopilar DOMs
+          const chartDoms = [];
+          if (incluirGlobal) {
+            const globalEl = document.getElementById('chartDistribucionGlobal');
+            if (globalEl && globalEl.offsetWidth && globalEl.offsetHeight) chartDoms.push(globalEl);
+          }
+          const metricEls = Array.from(document.querySelectorAll('.metric-body-chart'));
+          metricEls.forEach(el => {
+            const fase = el.getAttribute('data-fase');
+            const iter = el.getAttribute('data-iter');
+            const mid  = el.getAttribute('data-metric-id');
+            const faseOk = !faseSel.length || faseSel.includes(String(fase));
+            const iterOk = !iterSel.length || iterSel.includes(String(iter));
+            const metOk  = !metSel.length  || metSel.includes(String(mid));
+            if (faseOk && iterOk && metOk) chartDoms.push(el);
+          });
+
+          if (!chartDoms.length) throw new Error('No hay gráficos coincidentes con la selección.');
+
+          const images = [];
+          for (const el of chartDoms) {
+            const inst = (window.echarts && window.echarts.getInstanceByDom) ? window.echarts.getInstanceByDom(el) : null;
+            if (!inst) continue;
+            let tweaked = false, originalOpt = null, originalHStyle = null;
+            if (el.id === 'chartDistribucionGlobal') {
+              try {
+                originalOpt = inst.getOption();
+                const cloned = JSON.parse(JSON.stringify(originalOpt));
+                // Ocultar leyenda y centrar, igualar tamaño de donut con las demás
+                if (cloned.legend) {
+                  if (Array.isArray(cloned.legend)) cloned.legend.forEach(l => l.show = false);
+                  else cloned.legend.show = false;
+                }
+                if (cloned.series && cloned.series[0] && cloned.series[0].type === 'pie') {
+                  cloned.series[0].radius = ['52%','90%'];
+                  cloned.series[0].center = ['50%','50%'];
+                  // ocultar etiquetas externas para que no reduzca el donut
+                  cloned.series[0].label = Object.assign({}, cloned.series[0].label, { show: false });
+                  cloned.series[0].labelLine = Object.assign({}, cloned.series[0].labelLine, { show: false });
+                  cloned.series[0].itemStyle = Object.assign({}, cloned.series[0].itemStyle, { borderWidth: 1.5 });
+                }
+                // igualar alto del canvas al de una métrica
+                const sampleMetricEl = document.querySelector('.metric-body-chart');
+                if (sampleMetricEl && sampleMetricEl.clientHeight) {
+                  originalHStyle = el.style.height;
+                  el.style.height = sampleMetricEl.clientHeight + 'px';
+                  inst.resize();
+                }
+                inst.setOption(cloned, true);
+                tweaked = true;
+              } catch(_) {}
+            }
+
+            const url = inst.getDataURL({ pixelRatio: 2, backgroundColor: '#ffffff' });
+            images.push({ url, w: el.clientWidth, h: el.clientHeight, title: el.getAttribute('data-title') || '' });
+
+            if (tweaked && originalOpt) {
+              try { inst.setOption(originalOpt, true); } catch(_) {}
+              try { if (originalHStyle !== null) { el.style.height = originalHStyle; inst.resize(); } } catch(_) {}
+            }
+          }
+          if (!images.length) throw new Error('No se pudieron generar imágenes de los gráficos.');
+
+          // Separar global (si existe) y resto
+          const globalIdx = images.findIndex(im => (im.title||'').includes('Visión General'));
+          const globalImg = globalIdx >= 0 ? images[globalIdx] : null;
+          const others = images.filter((_,i) => i !== globalIdx).sort((a,b) => (a.title||'').localeCompare(b.title||''));
+
+          // Composición en grilla para el resto: 2 o 3 columnas según cantidad
+          const othersCount = others.length;
+          const cols = othersCount >= 6 ? 3 : (othersCount >= 2 ? 2 : 1);
+          const PADDING = 18, GAP = 12, TITLE_H = 22;
+          const cellW = Math.max(320, Math.min(520, Math.max(...images.map(i => i.w))));
+          const totalW = PADDING + Math.max(1, cols) * (cellW + PADDING);
+
+          // Calcular alto total: fila global (si hay) + filas del resto
+          let globalRowHeight = 0;
+          if (globalImg) {
+            const scaledHG = Math.round(globalImg.h * (cellW / globalImg.w));
+            globalRowHeight = TITLE_H + scaledHG + GAP;
+          }
+          const rows = cols > 0 ? Math.ceil(othersCount / cols) : 0;
+          const rowHeights = new Array(rows).fill(0);
+          for (let r = 0; r < rows; r++) {
+            let maxH = 0;
+            for (let c = 0; c < cols; c++) {
+              const idx = r * cols + c;
+              if (idx >= othersCount) break;
+              const img = others[idx];
+              const scaledH = Math.round(img.h * (cellW / img.w));
+              maxH = Math.max(maxH, TITLE_H + scaledH + GAP);
+            }
+            rowHeights[r] = maxH;
+          }
+          const totalH = PADDING + globalRowHeight + rowHeights.reduce((a,b)=>a+b,0) + PADDING;
+
+          const canvas = document.createElement('canvas');
+          canvas.width = totalW;
+          canvas.height = totalH;
+          const ctx = canvas.getContext('2d');
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0,0,totalW,totalH);
+          // header
+          ctx.fillStyle = '#222';
+          ctx.font = 'bold 16px Arial, sans-serif';
+          const headerText = (document.getElementById('projectName')?.textContent || 'Proyecto') + ' - Exportación ' + (new Date()).toLocaleString();
+          ctx.fillText(headerText, PADDING, PADDING + 6);
+
+          let y = PADDING + GAP;
+          // Dibujar fila global centrada si existe
+          if (globalImg) {
+            const contentW = Math.max(1, cols) * (cellW + PADDING) - PADDING;
+            const x = PADDING + Math.floor((contentW - cellW) / 2);
+            // título
+            if (globalImg.title) {
+              ctx.font = 'bold 12px Arial, sans-serif';
+              ctx.fillStyle = '#333';
+              let title = globalImg.title;
+              while (ctx.measureText(title).width > cellW) { title = title.slice(0, -1); }
+              ctx.fillText(title, x, y + 14);
+            }
+            const imgG = await loadImage(globalImg.url);
+            const scaledHG = Math.round(globalImg.h * (cellW / globalImg.w));
+            ctx.drawImage(imgG, x, y + TITLE_H, cellW, scaledHG);
+            y += globalRowHeight;
+          }
+
+          // Dibujar resto en grilla
+          for (let r = 0; r < rows; r++) {
+            for (let c = 0; c < cols; c++) {
+              const idx = r * cols + c;
+              if (idx >= othersCount) break;
+              const img = others[idx];
+              const image = await loadImage(img.url);
+              const x = PADDING + c * (cellW + PADDING);
+              // título
+              if (img.title) {
+                ctx.font = 'bold 12px Arial, sans-serif';
+                ctx.fillStyle = '#333';
+                const maxTitleWidth = cellW;
+                let title = img.title;
+                // recortar si es demasiado largo
+                while (ctx.measureText(title).width > maxTitleWidth) {
+                  title = title.slice(0, -1);
+                }
+                ctx.fillText(title, x, y + 14);
+              }
+              const scaledH = Math.round(img.h * (cellW / img.w));
+              ctx.drawImage(image, x, y + TITLE_H, cellW, scaledH);
+            }
+            y += rowHeights[r];
+          }
+          return canvas;
+        }
+
+        function buildPdfReportHtml() {
+          const project = (document.getElementById('projectName')?.textContent || 'Proyecto');
+          const siglas = document.getElementById('pdfSiglas')?.value || '';
+          const codigo = document.getElementById('pdfCodigo')?.value || '';
+          const fecha  = document.getElementById('pdfFecha')?.value || new Date().toISOString().slice(0,10);
+          const lider  = document.getElementById('pdfLider')?.value || '';
+          const equipo = document.getElementById('pdfEquipo')?.value || '';
+          const objetivos = document.getElementById('pdfObjetivos')?.value || '';
+          const evalGral  = document.getElementById('pdfEvaluacion')?.value || '';
+          const acciones  = document.getElementById('pdfAcciones')?.value || '';
+          const comentarios = document.getElementById('pdfComentarios')?.value || '';
+          const estado = (document.querySelector('.status-line .badge')?.textContent || '').trim();
+          const totalMet = document.getElementById('totalMetricasValue')?.textContent || '';
+          const totalIter = document.getElementById('totalIteracionesValue')?.textContent || '';
+
+          return `
+  <style>
+    .hdr {text-align:center; font-weight:700; font-size:18px; margin-bottom:6px;}
+    .sub {text-align:center; color:#444; font-size:12px; margin-bottom:14px;}
+    table {width:100%; border-collapse:collapse;}
+    th, td {border:1px solid #666; padding:6px 8px; font-size:12px;}
+    th {background:#e9ecef; text-align:left;}
+    .row2 td {height:24px;}
+  </style>
+  <div class="hdr">INFORME DE AUDITORÍA DE CALIDAD</div>
+  <div class="sub">Proyecto: <b>${project}</b> &nbsp; • &nbsp; Estado: <b>${estado}</b> &nbsp; • &nbsp; Fecha: <b>${fecha}</b></div>
+  <table>
+    <tr>
+      <th>Nombre del Proyecto</th><th>Siglas del Proyecto</th>
+    </tr>
+    <tr class="row2"><td>${project}</td><td>${siglas}</td></tr>
+    <tr>
+      <th>Código de la auditoría</th><th>Líder de la auditoría</th>
+    </tr>
+    <tr class="row2"><td>${codigo}</td><td>${lider}</td></tr>
+    <tr>
+      <th>Equipo de auditoría</th><th>Objetivos de la auditoría</th>
+    </tr>
+    <tr><td>${equipo}</td><td>${objetivos}</td></tr>
+  </table>
+  <br/>
+  <table>
+    <tr><th>Evaluación general de lo auditado</th></tr>
+    <tr><td>${evalGral}</td></tr>
+  </table>
+  <br/>
+  <table>
+    <tr><th>Métricas planificadas</th><th>Iteraciones con métricas</th></tr>
+    <tr class="row2"><td>${totalMet}</td><td>${totalIter}</td></tr>
+  </table>
+          `;
+        }
+      })();
       // Ocultar "Visión General del Proyecto" si no hay datos o no hay iteraciones
       const globalCard = document.querySelector('.card-global-vision');
       if (!DATA || !DATA.length || !HAY_ITERACIONES) {

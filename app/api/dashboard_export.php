@@ -10,8 +10,8 @@ require_once __DIR__ . '/../../modelo/BDConexion.Class.php';
 $proyectoId = isset($_GET['proyecto']) ? (int)$_GET['proyecto'] : 0;
 $faseName   = isset($_GET['fase']) ? trim((string)$_GET['fase']) : '';
 $metricId   = isset($_GET['metricId']) && $_GET['metricId'] !== '' ? (int)$_GET['metricId'] : null;
-$format     = isset($_GET['format']) ? strtolower(trim((string)$_GET['format'])) : 'csv';
-if ($format !== 'xls') { $format = 'csv'; }
+$format     = isset($_GET['format']) ? strtolower(trim((string)$_GET['format'])) : 'xls';
+if (!in_array($format, ['csv','xls'], true)) { $format = 'xls'; }
 
 $usr = ControlAcceso::usuarioActual();
 if (!$usr) {
