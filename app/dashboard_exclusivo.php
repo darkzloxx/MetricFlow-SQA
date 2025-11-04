@@ -41,14 +41,27 @@ if ($rp && $rp->num_rows) {
 }
 
 // -------- KPIs
-$qMetricas = "SELECT COUNT(DISTINCT mi.id_metrica) AS total
+// Total de métricas planificadas (todas las filas de metrica_iteracion del proyecto)
+$qMetricasPlanificadas = "
+SELECT COUNT(*) AS total
+FROM metrica_iteracion mi
+JOIN iteracion i ON mi.id_iteracion = i.id_iteracion
+JOIN fase f ON f.id_fase = i.id_fase
+JOIN proyecto_fase pf ON pf.id_fase = f.id_fase
+WHERE pf.id_proyecto = $idProyecto
+";
+$rMetricasPlanificadas = $cn->query($qMetricasPlanificadas);
+$totalMetricasPlanificadas = ($rMetricasPlanificadas && $rMetricasPlanificadas->num_rows) ? (int)$rMetricasPlanificadas->fetch_assoc()['total'] : 0;
+
+// Cantidad de tipos de métricas distintas utilizadas en el proyecto
+$qMetricasDistintas = "SELECT COUNT(DISTINCT mi.id_metrica) AS total
               FROM metrica_iteracion mi
               JOIN iteracion i ON mi.id_iteracion = i.id_iteracion
               JOIN fase f ON f.id_fase = i.id_fase
               JOIN proyecto_fase pf ON pf.id_fase = f.id_fase
               WHERE pf.id_proyecto = $idProyecto";
-$rMetricas = $cn->query($qMetricas);
-$totalMetricas = ($rMetricas && $rMetricas->num_rows) ? (int)$rMetricas->fetch_assoc()['total'] : 0;
+$rMetricasDistintas = $cn->query($qMetricasDistintas);
+$totalMetricasDistintas = ($rMetricasDistintas && $rMetricasDistintas->num_rows) ? (int)$rMetricasDistintas->fetch_assoc()['total'] : 0;
 
 $qIters = "SELECT COUNT(*) AS total
            FROM iteracion i
@@ -263,6 +276,55 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
       color: #212529
     }
 
+    ¿ .chip-dot {
+      width: 14px;
+      height: 14px;
+      border-radius: 4px;
+      border: 1px solid rgba(0, 0, 0, .15);
+      flex: 0 0 14px;
+    }
+
+    .chip-text {
+      line-height: 1;
+    }
+
+    .chip-label {
+      display: block;
+      font-size: .72rem;
+      font-weight: 600;
+      color: #6c757d;
+    }
+
+    .chip-value {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: #212529;
+    }
+
+    .dot-green {
+      background: #28a745;
+    }
+
+    .dot-lightgreen {
+      background: #8cdcab;
+    }
+
+    .dot-yellow {
+      background: #ffc107;
+    }
+
+    .dot-red {
+      background: #dc3545;
+    }
+
+    .dot-blue {
+      background: #64aaff;
+    }
+
+    .dot-gray {
+      background: #6c757d;
+    }
+
     .metric-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
@@ -468,8 +530,9 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
           <div class="card-body">
             <div class="stat-icon icon-bg-success"><span class="oi oi-graph"></span></div>
             <div class="stat-content">
-              <span class="stat-label">Métricas utilizadas</span>
-              <div id="totalMetricasValue" class="stat-value"><?= (int)$totalMetricas ?></div>
+              <span class="stat-label">Métricas planificadas</span>
+              <div id="totalMetricasValue" class="stat-value"><?= (int)$totalMetricasPlanificadas ?></div>
+              <small class="text-muted"><?= (int)$totalMetricasDistintas ?> tipos distintas</small>
             </div>
           </div>
         </div>
@@ -491,56 +554,11 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
     <div class="card mb-4 shadow-sm border-0">
       <div class="card-header bg-white font-weight-bold text-primary">Resumen Global del Proyecto</div>
       <div class="card-body">
-        <div class="row g-3">
-          <div class="col-6 col-md-3">
-            <div class="card stat-card h-100">
-              <div class="card-body">
-                <div class="stat-icon icon-bg-primary"><span class="oi oi-target"></span></div>
-                <div class="stat-content">
-                  <span class="stat-label">Cumplimiento promedio</span>
-                  <div id="avgComplianceValue" class="stat-value">--%</div>
-                  <span class="status-line">Promedio de todas las métricas</span>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div class="col-6 col-md-3">
-            <div class="card stat-card h-100">
-              <div class="card-body">
-                <div class="stat-icon icon-bg-success"><span class="oi oi-thumb-up"></span></div>
-                <div class="stat-content">
-                  <span class="stat-label">Supera plan</span>
-                  <div id="countOverPlanValue" class="stat-value">0</div>
-                  <span class="status-line">Métricas con cumplimiento &gt; 100%</span>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div class="col-6 col-md-3">
-            <div class="card stat-card h-100">
-              <div class="card-body">
-                <div class="stat-icon icon-bg-secondary"><span class="oi oi-warning"></span></div>
-                <div class="stat-content">
-                  <span class="stat-label">Dentro del umbral</span>
-                  <div id="countInThresholdValue" class="stat-value">0</div>
-                  <span class="status-line">Cumplimiento ≥ (1 − umbral)</span>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div class="col-6 col-md-3">
-            <div class="card stat-card h-100">
-              <div class="card-body">
-                <div class="stat-icon icon-bg-secondary"><span class="oi oi-ban"></span></div>
-                <div class="stat-content">
-                  <span class="stat-label">Sin ejecución</span>
-                  <div id="countNoExecValue" class="stat-value">0</div>
-                  <span class="status-line">Plan &gt; 0 y ejecutado = 0</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+
+        <!-- Gráfico de distribución global de métricas -->
+        <div id="chartDistribucionGlobal" style="height:300px; margin-top:1rem;"></div>
+
+
       </div>
     </div>
 
@@ -602,7 +620,6 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
     // Colores especiales (plan=0)
     function resolveColor(metric, pct) {
       if ((metric.planned ?? 0) === 0 && (metric.executedReal ?? 0) > 0) return "rgba(100,170,255,0.95)"; // azul translúcido
-      if ((metric.planned ?? 0) === 0 && (metric.executedReal ?? 0) === 0) return "rgba(200,208,227,0.8)"; // gris translúcido
       if (pct > 100) return "rgba(140,220,170,0.9)"; // sobrecumple translúcido
       return colorSemaforo(pct, metric.min);
     }
@@ -942,14 +959,21 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
       const ringPct = Math.min(100, pctReal);
       const color = resolveColor(metric, pctReal);
       const restColor = "#e9ecef";
-
       let ringData;
       if (ringPct >= 100) {
         ringData = [{
           value: 100,
           name: "Cumplido",
           itemStyle: {
-            color
+            color: new echarts.graphic.RadialGradient(0.5, 0.5, 0.9, [{
+                offset: 0,
+                color: echarts.color.lift(color, 0.25)
+              },
+              {
+                offset: 1,
+                color: color
+              }
+            ])
           }
         }];
       } else if (ringPct <= 0) {
@@ -957,7 +981,15 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
           value: 100,
           name: "Restante",
           itemStyle: {
-            color: restColor
+            color: new echarts.graphic.RadialGradient(0.5, 0.5, 0.9, [{
+                offset: 0,
+                color: echarts.color.lift(restColor, 0.25)
+              },
+              {
+                offset: 1,
+                color: restColor
+              }
+            ])
           }
         }];
       } else {
@@ -965,7 +997,15 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
             value: ringPct,
             name: "Cumplido",
             itemStyle: {
-              color,
+              color: new echarts.graphic.RadialGradient(0.5, 0.5, 0.9, [{
+                  offset: 0,
+                  color: echarts.color.lift(color, 0.25)
+                },
+                {
+                  offset: 1,
+                  color: color
+                }
+              ]),
               borderColor: '#000',
               borderWidth: 1.5
             }
@@ -974,13 +1014,22 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
             value: 100 - ringPct,
             name: "Restante",
             itemStyle: {
-              color: restColor,
+              color: new echarts.graphic.RadialGradient(0.5, 0.5, 0.9, [{
+                  offset: 0,
+                  color: echarts.color.lift(restColor, 0.25)
+                },
+                {
+                  offset: 1,
+                  color: restColor
+                }
+              ]),
               borderColor: '#000',
               borderWidth: 1.5
             }
           }
         ];
       }
+
 
       chart.setOption({
         tooltip: {
@@ -1088,9 +1137,13 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
             })()
           }
         ],
-        animation: true
+        animation: true,
+        animationDuration: 800,
+        animationEasing: 'cubicOut' // igual que las iteraciones
       });
     }
+
+
 
     function renderMiniBar(domId, metric) {
       const dom = document.getElementById(domId);
@@ -1289,37 +1342,199 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
 
     // ===== Resumen global igual al original =====
     function computeAndRenderGlobalSummary() {
+      // Evitar duplicados: métrica+iteración
+      const seen = new Set();
       const all = [];
-      (DATA || []).forEach(it => (it.metricas || []).forEach(m => all.push(m)));
+      (DATA || []).forEach(it => {
+        (it.metricas || []).forEach(m => {
+          const key = `${it.iteracion}-${m.id}`;
+          if (!seen.has(key)) {
+            seen.add(key);
+            all.push(m);
+          }
+        });
+      });
+
       const setText = (id, v) => {
         const el = document.getElementById(id);
         if (el) el.textContent = v;
-      }
+      };
+
       if (!all.length) {
         setText('avgComplianceValue', '--%');
-        setText('countOverPlanValue', '0');
-        setText('countInThresholdValue', '0');
-        setText('countNoExecValue', '0');
+        ['countOverPlanValue', 'countInThresholdValue', 'countNoExecValue', 'countExact100Value', 'countBelowThresholdValue']
+        .forEach(id => setText(id, '0'));
         return;
       }
-      const avg = Math.round(all.reduce((a, m) => a + (Number(m.executed) || 0), 0) / all.length);
-      let over = 0,
-        inT = 0,
-        noE = 0;
+
+      let totalPct = 0,
+        over = 0,
+        exact = 0,
+        inRange = 0,
+        below = 0,
+        noExec = 0;
+
       all.forEach(m => {
-        const plan = Number(m.planned || 0),
-          ejec = Number(m.executedReal || 0),
-          pct = Number(m.executed || 0),
-          minLine = Math.max(0, Number(m.min || 0));
-        if (pct > 100) over++;
-        if (pct >= minLine) inT++;
-        if (plan > 0 && ejec === 0) noE++;
+        const plan = Number(m.planned) || 0;
+        const ejec = Number(m.executedReal) || 0;
+        const pct = Number(m.executed) || 0;
+        const minLine = 100 - (Number(m.umbral_desviacion) || 0); // si preferís derivarlo directo
+
+        totalPct += pct;
+        if (plan > 0 && ejec === 0) noExec++;
+        else if (pct === 100) exact++;
+        else if (pct > 100) over++;
+        else if (pct >= minLine) inRange++;
+        else below++;
       });
-      setText('avgComplianceValue', `${isFinite(avg)?avg:'--'}%`);
-      setText('countOverPlanValue', String(over));
-      setText('countInThresholdValue', String(inT));
-      setText('countNoExecValue', String(noE));
+
+      const avg = Math.round(totalPct / all.length);
+
+      setText('avgComplianceValue', `${avg}%`);
+      setText('countOverPlanValue', over);
+      setText('countExact100Value', exact);
+      setText('countInThresholdValue', inRange);
+      setText('countBelowThresholdValue', below);
+      setText('countNoExecValue', noExec);
+
+      renderGlobalPieChart({
+          over,
+          exact,
+          inRange,
+          below,
+          noExec
+        },
+        avg,
+        <?= (int)$totalMetricasPlanificadas ?>
+      );
+
     }
+
+    function renderGlobalPieChart(stats, avg, totalMetricas) {
+      const dom = document.getElementById('chartDistribucionGlobal');
+      if (!dom) return;
+
+      const chart = echarts.init(dom);
+
+      const total = Object.values(stats).reduce((a, b) => a + b, 0);
+
+      chart.setOption({
+          tooltip: {
+            trigger: 'item',
+            backgroundColor: 'rgba(255,255,255,0.95)',
+            borderColor: '#ccc',
+            borderWidth: 1,
+            textStyle: {
+              color: '#222',
+              fontSize: 13
+            },
+            extraCssText: 'box-shadow:0 2px 8px rgba(0,0,0,.2);border-radius:6px;',
+            formatter: (p) => `
+        <b>${p.name}</b><br>
+        Métricas: <b>${p.value}</b><br>
+        Porcentaje: <b>${p.percent.toFixed(1)}%</b>
+      `
+          },
+          legend: {
+            bottom: 0,
+            textStyle: {
+              color: '#555',
+              fontSize: 12
+            }
+          },
+          graphic: [{
+            type: 'group',
+            left: 'center',
+            top: 'middle',
+            children: [{
+                type: 'text',
+                top: -18, // más arriba del centro
+                style: {
+                  text: `${avg}%`,
+                  fontSize: 30,
+                  fontWeight: 700,
+                  fill: '#212529',
+                  textAlign: 'center',
+                  textVerticalAlign: 'middle',
+                  textShadowColor: 'rgba(0,0,0,0.1)',
+                  textShadowBlur: 2
+                }
+              },
+              {
+                type: 'text',
+                top: 8,
+                style: {
+                  text: 'Cumplimiento',
+                  fontSize: 14,
+                  fill: '#6c757d',
+                  textAlign: 'center',
+                  textVerticalAlign: 'middle'
+                }
+              },
+              {
+                type: 'text',
+                top: 26,
+                style: {
+                  text: `(${totalMetricas} métricas)`,
+                  fontSize: 12,
+                  fill: '#adb5bd',
+                  textAlign: 'center',
+                  textVerticalAlign: 'middle'
+                }
+              }
+            ]
+          }],
+
+          series: [{
+              type: 'pie',
+              radius: ['45%', '70%'],
+              label: {
+                formatter: '{b}\n{d}%',
+                fontSize: 12
+              },
+              animationDuration: 900,
+              animationEasing: 'cubicOut',
+              data: [{
+                  value: stats.over,
+                  name: 'Supera plan',
+                  itemStyle: {
+                    color: 'rgba(140,220,170,0.9)'
+                  }
+                },
+                {
+                  value: stats.exact,
+                  name: 'Cumple (=100%)',
+                  itemStyle: {
+                    color: 'rgba(40,167,69,0.95)'
+                  }
+                },
+                {
+                  value: stats.inRange,
+                  name: 'Dentro del umbral',
+                  itemStyle: {
+                    color: 'rgba(255,193,7,0.9)'
+                  }
+                },
+                {
+                  value: stats.below,
+                  name: 'Fuera del umbral',
+                  itemStyle: {
+                    color: 'rgba(220,53,69,0.9)'
+                  }
+                },
+                {
+                  value: stats.noExec,
+                  name: 'Sin ejecución',
+                  itemStyle: {
+                    color: '#6c757d'
+                  
+                }
+              }
+            ]
+          }]
+      });
+    }
+
 
     // ===== Toggle modo =====
     (function() {
