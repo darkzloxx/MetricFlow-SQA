@@ -63,10 +63,11 @@ $qMetricasDistintas = "SELECT COUNT(DISTINCT mi.id_metrica) AS total
 $rMetricasDistintas = $cn->query($qMetricasDistintas);
 $totalMetricasDistintas = ($rMetricasDistintas && $rMetricasDistintas->num_rows) ? (int)$rMetricasDistintas->fetch_assoc()['total'] : 0;
 
-$qIters = "SELECT COUNT(*) AS total
+$qIters = "SELECT COUNT(DISTINCT i.id_iteracion) AS total
            FROM iteracion i
            JOIN fase f ON f.id_fase = i.id_fase
            JOIN proyecto_fase pf ON pf.id_fase = f.id_fase
+           JOIN metrica_iteracion mi ON mi.id_iteracion = i.id_iteracion
            WHERE pf.id_proyecto = $idProyecto";
 $rIters = $cn->query($qIters);
 $totalIteraciones = ($rIters && $rIters->num_rows) ? (int)$rIters->fetch_assoc()['total'] : 0;
@@ -196,6 +197,19 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
       background: #fff;
       animation: fadeIn .5s ease-in
     }
+
+    #filterBar {
+      position: sticky;
+      top: 90px;
+      /* 🔹 deja espacio debajo del navbar */
+      z-index: 1025;
+      /* un poco menos que la navbar */
+      background: #fff;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+      border-bottom: 1px solid #eee;
+      transition: box-shadow 0.3s ease;
+    }
+
 
     @keyframes fadeIn {
       from {
@@ -427,6 +441,22 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
       transition: .15s
     }
 
+    .card-global-vision {
+      margin-top: -10px;
+      /* sube la card un poco */
+    }
+
+    .card-global-vision .card-body {
+      padding-top: 0.5rem !important;
+      padding-bottom: 0.25rem !important;
+    }
+
+    #chartDistribucionGlobal {
+      height: 300px !important;
+      /* mantiene proporción visual */
+      margin-top: -5px !important;
+    }
+
     .iter-pill.active {
       background: rgba(13, 110, 253, .1);
       border-color: #0d6efd;
@@ -452,6 +482,29 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
       background: #f8f9fa;
       color: #333;
       border: 1px solid #ccc
+    }
+
+    /* Sticky toolbar for filters */
+    .toolbar-sentinel {
+      height: 1px;
+    }
+
+    .dashboard-toolbar {
+      position: sticky;
+      top: var(--toolbar-top, 72px); /* keep below fixed navbar (dinámico) */
+      z-index: 1030; /* above charts */
+      background: #fff;
+      transition: box-shadow .2s ease, border-color .2s ease, background-color .2s ease, padding .2s ease;
+      padding: .5rem .75rem; /* compacto */
+    }
+
+    .dashboard-toolbar.stuck {
+      box-shadow: 0 6px 18px rgba(0, 0, 0, .08);
+      border-color: rgba(0, 0, 0, .08) !important;
+    }
+
+    @media (max-width: 575.98px) {
+      .dashboard-toolbar { top: var(--toolbar-top, 56px); }
     }
 
     #iterCards {
@@ -548,7 +601,7 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
           <div class="card-body">
             <div class="stat-icon icon-bg-secondary"><span class="oi oi-loop-circular"></span></div>
             <div class="stat-content">
-              <span class="stat-label">Iteraciones</span>
+              <span class="stat-label">Iteraciones con métricas planificadas</span>
               <div id="totalIteracionesValue" class="stat-value"><?= (int)$totalIteraciones ?></div>
             </div>
           </div>
@@ -557,55 +610,56 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
     </div>
 
     <!-- Resumen global (cálculo en JS igual al original) -->
-    <div class="card mb-4 shadow-sm border-0">
-      <h6 class="text-primary font-weight-bold mb-3 text-center">
+    <div class="card mb-3 shadow-sm border-0 card-global-vision">
+      <h6 class="text-primary font-weight-bold mb-2 text-center">
         Visión General del Proyecto
       </h6>
-      <div class="card-body">
 
+      <div class="card-body p-2">
         <!-- Gráfico de distribución global de métricas -->
-        <div id="chartDistribucionGlobal" style="height:340px; margin-top:1rem;"></div>
-
-
+        <div id="chartDistribucionGlobal" style="height:300px; margin-top:-10px;"></div>
       </div>
     </div>
 
-    <!-- Toolbar filtros -->
-    <div class="card dashboard-toolbar mb-3 p-3 rounded bg-white border">
-      <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
-        <div class="d-flex flex-column">
-          <h6 class="mb-1 font-weight-bold text-primary">Métricas por Fase e Iteración</h6>
-          <small class="text-muted">Filtrá por fase, iteración o métrica; alterná entre <b>dona</b> y <b>barras</b>.</small>
+
+    <!-- Toolbar filtros compacta (sticky) con expandible dentro -->
+    <div id="toolbarSentinel" class="toolbar-sentinel"></div>
+    <div class="card dashboard-toolbar mb-2 rounded bg-white border">
+      <div class="d-flex align-items-center justify-content-between flex-wrap">
+        <div class="d-flex align-items-center">
+          <label for="metricFilterSelect" class="small text-muted mb-0 mr-2">Métrica:</label>
+          <select id="metricFilterSelect" class="form-control form-control-sm" style="min-width:190px;">
+            <option value="">Todas las métricas</option>
+          </select>
+          <button id="clearMetricFilter" type="button" class="btn btn-outline-secondary btn-sm ml-2 btn-clear" title="Limpiar filtro">
+            <span class="oi oi-x mr-1"></span> Limpiar
+          </button>
         </div>
-        <div class="d-flex align-items-center flex-wrap gap-2 mt-2 mt-md-0">
-          <div class="d-flex align-items-center mr-2">
-            <label for="metricFilterSelect" class="small text-muted mb-0 mr-2">Métrica:</label>
-            <select id="metricFilterSelect" class="form-control form-control-sm" style="min-width:190px;">
-              <option value="">Todas</option>
-            </select>
-            <button id="clearMetricFilter" type="button" class="btn btn-light btn-sm ml-2 border">
-              <span class="oi oi-x mr-1"></span> Limpiar
-            </button>
-          </div>
-          <button id="modeToggle" class="btn btn-primary btn-sm" data-mode="donut">
-            <i class="oi oi-pie-chart mr-1"></i> Ver como barras
+        <div class="d-flex align-items-center mt-2 mt-md-0">
+          <button id="modeToggle" class="btn btn-primary btn-sm mr-2" data-mode="donut">
+            <i class="oi oi-bar-chart mr-1"></i> Ver como barras
+          </button>
+          <button id="toggleToolbar" class="btn btn-outline-secondary btn-sm" data-toggle="collapse" data-target="#toolbarExpanded" aria-expanded="true" aria-controls="toolbarExpanded" title="Mostrar/ocultar filtros avanzados">
+            <i class="oi oi-chevron-top"></i>
           </button>
         </div>
       </div>
-      <div class="legend-metricas mt-3 pt-2 border-top">
-        <span class="legend-item"><span class="legend-dot" style="background:#28a745"></span>Se cumplió</span>
-        <span class="legend-item"><span class="legend-dot" style="background:#8cdcab"></span>Se superó</span>
-        <span class="legend-item"><span class="legend-dot" style="background:#ffc107"></span>Dentro del umbral</span>
-        <span class="legend-item"><span class="legend-dot" style="background:#64aaff"></span>Planificación = 0</span>
-        <span class="legend-item"><span class="legend-dot" style="background:#dc3545"></span>Debajo del umbral</span>
-        <span class="legend-item"><span class="legend-dash"></span>Progreso de la iteración</span>
+      <div id="toolbarExpanded" class="toolbar-expanded collapse show w-100 mt-2">
+        <div class="legend-metricas pt-2 border-top">
+          <span class="legend-item"><span class="legend-dot" style="background:#28a745"></span>Se cumplió</span>
+          <span class="legend-item"><span class="legend-dot" style="background:#8cdcab"></span>Se superó</span>
+          <span class="legend-item"><span class="legend-dot" style="background:#ffc107"></span>Dentro del umbral</span>
+          <span class="legend-item"><span class="legend-dot" style="background:#64aaff"></span>Planificación = 0</span>
+          <span class="legend-item"><span class="legend-dot" style="background:#dc3545"></span>Debajo del umbral</span>
+          <span class="legend-item"><span class="legend-dash"></span>Progreso de la iteración</span>
+        </div>
+        <!-- Tabs por fase + filtro iteración -->
+        <div id="faseTabs" class="mb-1"></div>
+        <div id="iterFilter" class="mb-3"></div>
       </div>
     </div>
 
-    <!-- Tabs por fase + filtro iteración -->
-    <div id="faseTabs" class="mb-1"></div>
-    <div id="iterFilter" class="mb-3"></div>
-
+   
     <!-- Contenedor de tarjetas por iteración -->
     <div id="iterCards"></div>
   </div>
@@ -1574,6 +1628,10 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
       const dom = document.getElementById('chartDistribucionGlobal');
       if (!dom) return;
 
+      // 🔹 Ajustes de tamaño del canvas (acá va el cambio)
+      dom.style.height = '290px'; // altura ideal
+      dom.style.marginTop = '-30px'; // 🔼 sube el gráfico para eliminar el espacio superior
+
       const prev = echarts.getInstanceByDom(dom);
       if (prev) prev.dispose();
       const chart = echarts.init(dom);
@@ -1605,7 +1663,7 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
 
         },
         legend: {
-          bottom: 0,
+          bottom: 14,
           textStyle: {
             color: '#555',
             fontSize: 12
@@ -1723,8 +1781,8 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
         btn.dataset.mode = next;
         btn.classList.toggle('off', next === 'donut');
         btn.innerHTML = next === 'donut' ?
-          '<i class="oi oi-pie-chart"></i> Ver como barras' :
-          '<i class="oi oi-bar-chart"></i> Ver como donuts';
+          '<i class="oi oi-bar-chart"></i> Ver como barras' :
+          '<i class="oi oi-pie-chart"></i> Ver como donuts';
         const active = document.querySelector('#iterFilter .iter-pill.active');
         const iter = active ? active.dataset.iter : null;
         renderIterCards(iter === 'ALL' ? null : iter);
@@ -1742,11 +1800,89 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
       renderIterCards(null);
       computeAndRenderGlobalSummary();
 
-      // Opcional: ocultar toolbar y tabs si no hay datos
+      // Sticky toolbar + offset dinámico + autocollapse en scroll
+      (function setupStickyToolbar() {
+        const toolbar = document.querySelector('.dashboard-toolbar');
+        const expanded = document.getElementById('toolbarExpanded');
+        const toggleBtn = document.getElementById('toggleToolbar');
+        if (!toolbar) return;
+
+        const setTopOffset = () => {
+          const nav = document.querySelector('.navbar');
+          const navH = nav ? Math.ceil(nav.getBoundingClientRect().height) : 56;
+          const extra = 8; // pequeño margen
+          document.documentElement.style.setProperty('--toolbar-top', (navH + extra) + 'px');
+        };
+
+        let threshold = 0;
+        const computeThreshold = () => {
+          setTopOffset();
+          const topVar = parseInt(getComputedStyle(toolbar).top) || 70;
+          const rect = toolbar.getBoundingClientRect();
+          threshold = (window.pageYOffset || document.documentElement.scrollTop) + rect.top - topVar;
+        };
+
+        const onScroll = () => {
+          const y = (window.pageYOffset || document.documentElement.scrollTop);
+          const stuck = y >= threshold - 1;
+          toolbar.classList.toggle('stuck', stuck);
+        };
+
+        const onResize = () => { computeThreshold(); onScroll(); };
+
+        // Chevron: alterna icono segun estado y recomputa threshold (por cambio de altura)
+        if (expanded && toggleBtn) {
+          $('#toolbarExpanded').on('shown.bs.collapse', function(){
+            toggleBtn.setAttribute('aria-expanded','true');
+            const i = toggleBtn.querySelector('i');
+            if (i) i.className = 'oi oi-chevron-top';
+            computeThreshold();
+            onScroll();
+          });
+          $('#toolbarExpanded').on('hidden.bs.collapse', function(){
+            toggleBtn.setAttribute('aria-expanded','false');
+            const i = toggleBtn.querySelector('i');
+            if (i) i.className = 'oi oi-chevron-bottom';
+            computeThreshold();
+            onScroll();
+          });
+        }
+
+        computeThreshold();
+        onScroll();
+        window.addEventListener('scroll', onScroll, { passive: true });
+        window.addEventListener('resize', onResize);
+      })();
+
+      // Botón chevron: aseguro el toggle del collapse por JS (evito doble manejo del data-api)
+      (function wireToolbarToggle(){
+        const btn = document.getElementById('toggleToolbar');
+        if (!btn || typeof $ === 'undefined') return;
+        btn.addEventListener('click', function(e){
+          e.preventDefault();
+          if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+          try { $('#toolbarExpanded').collapse('toggle'); } catch(_) {}
+        });
+      })();
+
+      // Asegurar que inicia expandido
+      (function ensureExpandedOnLoad(){
+        if (typeof $ === 'undefined') return;
+        try {
+          $('#toolbarExpanded').collapse('show');
+          const btn = document.getElementById('toggleToolbar');
+          if (btn) {
+            btn.setAttribute('aria-expanded','true');
+            const i = btn.querySelector('i');
+            if (i) i.className = 'oi oi-chevron-top';
+          }
+        } catch(_) {}
+      })();
+
+      // Ocultar toolbar expandida si no hay datos
       if (!DATA || !DATA.length) {
         document.querySelector('.dashboard-toolbar')?.classList.add('d-none');
-        document.getElementById('faseTabs')?.classList.add('d-none');
-        document.getElementById('iterFilter')?.classList.add('d-none');
+        document.getElementById('toolbarExpanded')?.classList.add('d-none');
       }
     });
   </script>
