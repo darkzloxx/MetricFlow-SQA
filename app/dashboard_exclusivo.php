@@ -125,6 +125,7 @@ if ($rs) {
       $nota = "";
     }
 
+
     $iterMap[$key]["metricas"][] = [
       "id"           => (int)$r['id_metrica'],
       "nombre"       => $r['metrica'],
@@ -276,7 +277,7 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
       color: #212529
     }
 
-    ¿ .chip-dot {
+    .chip-dot {
       width: 14px;
       height: 14px;
       border-radius: 4px;
@@ -287,10 +288,11 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
     .chip-text {
       line-height: 1;
     }
-.text-center.text-primary {
-  font-size: 1.05rem;
-  letter-spacing: 0.3px;
-}
+
+    .text-center.text-primary {
+      font-size: 1.05rem;
+      letter-spacing: 0.3px;
+    }
 
     .chip-label {
       display: block;
@@ -623,6 +625,102 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
       return v < 0 ? 0 : v;
     }
 
+    // Progreso temporal de iteración en % (0..100)
+    function pctTiempoIter(inicio, fin) {
+      const s = new Date(inicio).getTime();
+      const e = new Date(fin).getTime();
+      const now = Date.now();
+      if (!isFinite(s) || !isFinite(e) || e <= s) return 100;
+      const pct = ((now - s) / (e - s)) * 100;
+      return Math.max(0, Math.min(100, pct));
+    }
+
+    // Cargador robusto de ECharts con múltiples CDNs + fallback local
+    function loadEchartsIfNeeded() {
+      return new Promise((resolve) => {
+        if (window.echarts) return resolve(true);
+        const trySrcs = [
+          'https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js',
+          'https://unpkg.com/echarts@5/dist/echarts.min.js',
+          'https://cdnjs.cloudflare.com/ajax/libs/echarts/5.5.0/echarts.min.js',
+          '../lib/echarts.min.js'
+        ];
+        let idx = 0;
+        const tryNext = () => {
+          if (idx >= trySrcs.length) return resolve(!!window.echarts);
+          const src = trySrcs[idx++];
+          const s = document.createElement('script');
+          s.src = src;
+          s.async = true;
+          s.onload = () => resolve(true);
+          s.onerror = () => tryNext();
+          document.head.appendChild(s);
+        };
+        tryNext();
+      });
+    }
+
+    function showEchartsWarningOnce() {
+      if (window.__echartsWarnShown) return;
+      window.__echartsWarnShown = true;
+      const toolbar = document.querySelector('.dashboard-toolbar') || document.querySelector('.card.dashboard-toolbar');
+      const note = document.createElement('div');
+      note.className = 'alert alert-warning mt-2 mb-0';
+      note.innerHTML = '<b>Atención:</b> No se pudo cargar ECharts. Verificá Internet o agregá <code>lib/echarts.min.js</code>.';
+      if (toolbar && toolbar.parentNode) toolbar.parentNode.insertBefore(note, toolbar.nextSibling);
+    }
+
+    // Fallbacks simples cuando ECharts no está disponible
+    function renderDonutFallback(domId, metric) {
+      const dom = document.getElementById(domId);
+      if (!dom) return;
+      const info = computePctAndNote(metric);
+      const pct = Number(info.pct) || 0;
+      dom.innerHTML = '';
+      const wrap = document.createElement('div');
+      wrap.style.display = 'flex';
+      wrap.style.flexDirection = 'column';
+      wrap.style.alignItems = 'center';
+      wrap.style.justifyContent = 'center';
+      wrap.style.height = '100%';
+      const val = document.createElement('div');
+      val.style.fontSize = '28px';
+      val.style.fontWeight = '700';
+      val.style.color = '#212529';
+      val.textContent = `${Math.round(pct)}%`;
+      const sub = document.createElement('div');
+      sub.style.fontSize = '12px';
+      sub.style.color = '#6c757d';
+      sub.textContent = 'Cumplimiento';
+      wrap.appendChild(val);
+      wrap.appendChild(sub);
+      dom.appendChild(wrap);
+    }
+
+    function renderMiniBarFallback(domId, metric) {
+      const dom = document.getElementById(domId);
+      if (!dom) return;
+      const info = computePctAndNote(metric);
+      const pct = Number(info.pct) || 0;
+      dom.innerHTML = '';
+      const barWrap = document.createElement('div');
+      barWrap.style.width = '100%';
+      barWrap.style.height = '12px';
+      barWrap.style.background = '#e9ecef';
+      barWrap.style.border = '1px solid #000';
+      const bar = document.createElement('div');
+      bar.style.height = '100%';
+      bar.style.width = `${Math.min(100, Math.max(0, pct))}%`;
+      bar.style.background = resolveColor(metric, pct);
+      barWrap.appendChild(bar);
+      const label = document.createElement('div');
+      label.style.textAlign = 'center';
+      label.style.marginTop = '6px';
+      label.style.fontWeight = '700';
+      label.textContent = `${Math.round(pct)}%`;
+      dom.appendChild(barWrap);
+      dom.appendChild(label);
+    }
     // Colores especiales (plan=0)
     function resolveColor(metric, pct) {
       if ((metric.planned ?? 0) === 0 && (metric.executedReal ?? 0) > 0) return "rgba(100,170,255,0.95)"; // azul translúcido
@@ -698,25 +796,31 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
       return html;
     }
 
-    // ===== Registro global de charts + ResizeObserver =====
+    // ===== Registro global de charts + ResizeObserver (con gracia para animaciones) =====
     const __CHARTS = Object.create(null);
-    const __RO = (typeof ResizeObserver !== 'undefined') ?
-      new ResizeObserver(() => {
-        Object.values(__CHARTS).forEach(ch => {
-          try {
-            ch.resize && ch.resize();
-          } catch (e) {}
-        });
-      }) :
-      null;
+    const __CHART_CREATED_AT = Object.create(null);
+    let __RO_DEBOUNCE = null;
+    const RESIZE_DEBOUNCE_MS = 200;
+    const ANIM_GRACE_MS = 800; // no resizes durante la animación inicial
 
-    window.addEventListener('resize', () => {
-      Object.values(__CHARTS).forEach(ch => {
+    function resizeChartsSafe() {
+      const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+      Object.entries(__CHARTS).forEach(([id, ch]) => {
+        const createdAt = __CHART_CREATED_AT[id] || 0;
+        if (now - createdAt < ANIM_GRACE_MS) return; // evitar cortar animación
         try {
           ch.resize && ch.resize();
         } catch (e) {}
       });
-    });
+    }
+
+    function debounceResize() {
+      if (__RO_DEBOUNCE) clearTimeout(__RO_DEBOUNCE);
+      __RO_DEBOUNCE = setTimeout(resizeChartsSafe, RESIZE_DEBOUNCE_MS);
+    }
+
+    const __RO = (typeof ResizeObserver !== 'undefined') ? new ResizeObserver(debounceResize) : null;
+    window.addEventListener('resize', debounceResize);
 
     // ===== Datos desde PHP =====
     const DATA = <?= json_encode($DATA, JSON_UNESCAPED_UNICODE | JSON_NUMERIC_CHECK); ?>;
@@ -823,13 +927,16 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
       const wrap = document.getElementById('iterCards');
       if (!wrap) return;
 
-      // 🧹 1. Limpiar gráficos previos (evita residuos de altura)
-      Object.values(__CHARTS).forEach(ch => {
+      // 🧹 Limpiar solo los charts de iteraciones, no el global
+      Object.entries(__CHARTS).forEach(([id, ch]) => {
+        if (id === 'chartDistribucionGlobal') return; // 🛑 conservar el gráfico de visión general
         try {
           ch.dispose();
         } catch (e) {}
+        delete __CHARTS[id];
       });
-      for (const k in __CHARTS) delete __CHARTS[k];
+
+
 
       // 🧼 2. Vaciar contenedor
       wrap.innerHTML = '';
@@ -895,15 +1002,34 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
             const active = document.querySelector('#iterFilter .iter-pill.active');
             const iter = active ? active.dataset.iter : null;
             renderIterCards(iter === 'ALL' ? null : iter);
+
           });
 
           grid.appendChild(mCard);
 
-          // Render diferido del gráfico
+          // 🧩 Inicialización segura: programar render tras anexar al DOM
           setTimeout(() => {
-            if (mode === 'donut') renderDonut(idChart, m);
-            else renderMiniBar(idChart, m);
-          }, 0);
+            try {
+              const el = document.getElementById(idChart);
+              if (!el) return;
+              const rect = el.getBoundingClientRect();
+              const doRender = () => {
+                if (mode === 'donut') {
+                  if (window.echarts) renderDonut(idChart, m);
+                  else renderDonutFallback(idChart, m);
+                } else {
+                  if (window.echarts) renderMiniBar(idChart, m, it.inicio, it.fin);
+                  else renderMiniBarFallback(idChart, m);
+                }
+              };
+              if (rect.width > 0 && rect.height > 0) doRender();
+              else requestAnimationFrame(doRender);
+            } catch (err) {
+              console.warn("Error inicializando gráfico", idChart, err);
+            }
+          }, 150); // breve retardo para asegurar que el grid esté en el DOM
+
+
         });
 
         // Mensaje si no hay métricas
@@ -923,84 +1049,50 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
         wrap.appendChild(card);
       });
 
-      // 🧾 5. Recalcular layout + forzar resize de todos los gráficos
+      // Ajustes de layout sin interferir con animaciones: no forzar resize inmediato
       requestAnimationFrame(() => {
-        // Ajuste visual global
         document.body.style.height = 'auto';
         document.documentElement.style.height = 'auto';
-
-        // Redimensionar todos los ECharts actuales
-        Object.values(__CHARTS).forEach(ch => {
-          try {
-            ch.resize && ch.resize();
-          } catch (e) {}
-        });
-
-        // Si el footer es fijo, compensar su altura
         const footer = document.querySelector('footer');
         if (footer) {
           const footerH = footer.offsetHeight || 0;
           document.body.style.paddingBottom = footerH + 'px';
         }
-
-        // Evita márgenes colapsados
         wrap.style.marginBottom = '0';
       });
+
     }
+
+
 
     function renderDonut(domId, metric) {
       const dom = document.getElementById(domId);
       if (!dom) return;
-      const prev = echarts.getInstanceByDom(dom);
-      if (prev) prev.dispose();
-      const chart = echarts.init(dom);
-      __CHARTS[domId] = chart;
-      if (__RO) {
-        try {
-          __RO.observe(dom);
-        } catch (_) {}
+      if (typeof echarts === 'undefined') {
+        renderDonutFallback(domId, metric);
+        return;
       }
+      let chart;
+      try {
+        const prev = echarts.getInstanceByDom(dom);
+        if (prev) prev.dispose();
+        chart = echarts.init(dom);
+        __CHARTS[domId] = chart;
+        __CHART_CREATED_AT[domId] = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+        if (__RO) {
+          try {
+            __RO.observe(dom);
+          } catch (_) {}
+        }
 
-      const pctReal = Math.max(0, safePct(metric));
-      const ringPct = Math.min(100, pctReal);
-      const color = resolveColor(metric, pctReal);
-      const restColor = "#e9ecef";
-      let ringData;
-      if (ringPct >= 100) {
-        ringData = [{
-          value: 100,
-          name: "Cumplido",
-          itemStyle: {
-            color: new echarts.graphic.RadialGradient(0.5, 0.5, 0.9, [{
-                offset: 0,
-                color: echarts.color.lift(color, 0.25)
-              },
-              {
-                offset: 1,
-                color: color
-              }
-            ])
-          }
-        }];
-      } else if (ringPct <= 0) {
-        ringData = [{
-          value: 100,
-          name: "Restante",
-          itemStyle: {
-            color: new echarts.graphic.RadialGradient(0.5, 0.5, 0.9, [{
-                offset: 0,
-                color: echarts.color.lift(restColor, 0.25)
-              },
-              {
-                offset: 1,
-                color: restColor
-              }
-            ])
-          }
-        }];
-      } else {
-        ringData = [{
-            value: ringPct,
+        const pctReal = Math.max(0, safePct(metric));
+        const ringPct = Math.min(100, pctReal);
+        const color = resolveColor(metric, pctReal);
+        const restColor = "#e9ecef";
+        let ringData;
+        if (ringPct >= 100) {
+          ringData = [{
+            value: 100,
             name: "Cumplido",
             itemStyle: {
               color: new echarts.graphic.RadialGradient(0.5, 0.5, 0.9, [{
@@ -1011,13 +1103,12 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
                   offset: 1,
                   color: color
                 }
-              ]),
-              borderColor: '#000',
-              borderWidth: 1.5
+              ])
             }
-          },
-          {
-            value: 100 - ringPct,
+          }];
+        } else if (ringPct <= 0) {
+          ringData = [{
+            value: 100,
             name: "Restante",
             itemStyle: {
               color: new echarts.graphic.RadialGradient(0.5, 0.5, 0.9, [{
@@ -1028,322 +1119,385 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
                   offset: 1,
                   color: restColor
                 }
-              ]),
-              borderColor: '#000',
-              borderWidth: 1.5
+              ])
             }
-          }
-        ];
-      }
-
-
-      chart.setOption({
-        tooltip: {
-          trigger: 'item',
-          appendToBody: true,
-          backgroundColor: 'rgba(255,255,255,0.95)',
-          borderColor: '#ccc',
-          borderWidth: 1,
-          textStyle: {
-            color: '#222',
-            fontSize: 13
-          },
-          extraCssText: 'box-shadow:0 2px 8px rgba(0,0,0,.2);border-radius:6px;',
-          formatter: () => buildTooltipHtml(metric)
-        },
-        backgroundColor: 'transparent',
-        graphic: [{
-          type: 'group',
-          left: 'center',
-          top: 'center',
-          children: [{
-              type: 'text',
-              z: 100,
-              style: {
-                text: `${Math.round(pctReal)}%`,
-                fontSize: 28,
-                fontWeight: 700,
-                fill: '#212529',
-                textAlign: 'center'
+          }];
+        } else {
+          ringData = [{
+              value: ringPct,
+              name: "Cumplido",
+              itemStyle: {
+                color: new echarts.graphic.RadialGradient(0.5, 0.5, 0.9, [{
+                    offset: 0,
+                    color: echarts.color.lift(color, 0.25)
+                  },
+                  {
+                    offset: 1,
+                    color: color
+                  }
+                ]),
+                borderColor: '#000',
+                borderWidth: 1.5
               }
             },
             {
-              type: 'text',
-              top: 26,
-              z: 100,
-              style: {
-                text: 'Cumplimiento',
-                fontSize: 12,
-                fill: '#6c757d',
-                textAlign: 'center'
+              value: 100 - ringPct,
+              name: "Restante",
+              itemStyle: {
+                color: new echarts.graphic.RadialGradient(0.5, 0.5, 0.9, [{
+                    offset: 0,
+                    color: echarts.color.lift(restColor, 0.25)
+                  },
+                  {
+                    offset: 1,
+                    color: restColor
+                  }
+                ]),
+                borderColor: '#000',
+                borderWidth: 1.5
               }
             }
-          ]
-        }],
-        series: [{
-            type: 'pie',
-            radius: ['52%', '90%'],
-            startAngle: 90,
-            avoidLabelOverlap: true,
-            label: {
-              show: false
+          ];
+        }
+
+
+        chart.setOption({
+          tooltip: {
+            trigger: 'item',
+            appendToBody: true,
+            backgroundColor: 'rgba(255,255,255,0.95)',
+            borderColor: '#ccc',
+            borderWidth: 1,
+            textStyle: {
+              color: '#222',
+              fontSize: 13
             },
-            labelLine: {
-              show: false
-            },
-            itemStyle: {
-              borderWidth: 1.5,
-              borderColor: '#000'
-            },
-            data: ringData
+            extraCssText: 'box-shadow:0 2px 8px rgba(0,0,0,.2);border-radius:6px;',
+            formatter: () => buildTooltipHtml(metric)
           },
-          // línea de umbral que "corta" el donut en (1-umbral)
-          {
-            type: 'pie',
-            radius: ['52%', '90%'],
-            startAngle: 90,
-            silent: true,
-            animation: false,
-            label: {
-              show: false
-            },
-            labelLine: {
-              show: false
-            },
-            z: 10,
-            zlevel: 2,
-            data: (function() {
-              const threshold = Math.max(0, Math.min(100, Number(metric?.min ?? 100)));
-              const wedgeWidth = 1,
-                half = wedgeWidth / 2;
-              const before = Math.max(0, threshold - half);
-              const wedge = Math.min(wedgeWidth, 100 - before);
-              const after = Math.max(0, 100 - before - wedge);
-              return [{
-                  value: before,
-                  itemStyle: {
-                    color: 'rgba(0,0,0,0)'
-                  }
-                },
-                {
-                  value: wedge,
-                  itemStyle: {
-                    color: '#343a40',
-                    shadowColor: 'rgba(0,0,0,0.25)',
-                    shadowBlur: 5
-                  }
-                },
-                {
-                  value: after,
-                  itemStyle: {
-                    color: 'rgba(0,0,0,0)'
-                  }
+          backgroundColor: 'transparent',
+          graphic: [{
+            type: 'group',
+            left: 'center',
+            top: 'center',
+            children: [{
+                type: 'text',
+                z: 100,
+                style: {
+                  text: `${Math.round(pctReal)}%`,
+                  fontSize: 28,
+                  fontWeight: 700,
+                  fill: '#212529',
+                  textAlign: 'center'
                 }
-              ];
-            })()
-          }
-        ],
-        animation: true,
-        animationDuration: 800,
-        animationEasing: 'cubicOut' // igual que las iteraciones
-      });
+              },
+              {
+                type: 'text',
+                top: 26,
+                z: 100,
+                style: {
+                  text: 'Cumplimiento',
+                  fontSize: 12,
+                  fill: '#6c757d',
+                  textAlign: 'center'
+                }
+              }
+            ]
+          }],
+          series: [{
+              type: 'pie',
+              radius: ['52%', '90%'],
+              startAngle: 90,
+              avoidLabelOverlap: true,
+              label: {
+                show: false
+              },
+              labelLine: {
+                show: false
+              },
+              itemStyle: {
+                borderWidth: 1.5,
+                borderColor: '#000'
+              },
+              data: ringData
+            },
+            // línea de umbral que "corta" el donut en (1-umbral)
+            {
+              type: 'pie',
+              radius: ['52%', '90%'],
+              startAngle: 90,
+              silent: true,
+              animation: false,
+              label: {
+                show: false
+              },
+              labelLine: {
+                show: false
+              },
+              z: 10,
+              zlevel: 2,
+              data: (function() {
+                const threshold = Math.max(0, Math.min(100, Number(metric?.min ?? 100)));
+                const wedgeWidth = 1,
+                  half = wedgeWidth / 2;
+                const before = Math.max(0, threshold - half);
+                const wedge = Math.min(wedgeWidth, 100 - before);
+                const after = Math.max(0, 100 - before - wedge);
+                return [{
+                    value: before,
+                    itemStyle: {
+                      color: 'rgba(0,0,0,0)'
+                    }
+                  },
+                  {
+                    value: wedge,
+                    itemStyle: {
+                      color: '#343a40',
+                      shadowColor: 'rgba(0,0,0,0.25)',
+                      shadowBlur: 5
+                    }
+                  },
+                  {
+                    value: after,
+                    itemStyle: {
+                      color: 'rgba(0,0,0,0)'
+                    }
+                  }
+                ];
+              })()
+            }
+          ],
+          animation: true,
+          animationDuration: 800,
+          animationEasing: 'cubicOut', // igual que las iteraciones
+          animationDurationUpdate: 500,
+          animationEasingUpdate: 'cubicOut'
+        });
+      } catch (e) {
+        try {
+          chart && chart.dispose && chart.dispose();
+        } catch (_) {}
+        renderDonutFallback(domId, metric);
+      }
     }
 
 
 
-    function renderMiniBar(domId, metric) {
+    function renderMiniBar(domId, metric, ini = null, fin = null) {
       const dom = document.getElementById(domId);
       if (!dom) return;
-      const prev = echarts.getInstanceByDom(dom);
-      if (prev) prev.dispose();
-      const chart = echarts.init(dom);
-      __CHARTS[domId] = chart;
-      if (__RO) {
-        try {
-          __RO.observe(dom);
-        } catch (_) {}
+      if (typeof echarts === 'undefined') {
+        renderMiniBarFallback(domId, metric);
+        return;
       }
+      let chart;
+      try {
+        const prev = echarts.getInstanceByDom(dom);
+        if (prev) prev.dispose();
+        chart = echarts.init(dom);
+        __CHARTS[domId] = chart;
+        __CHART_CREATED_AT[domId] = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+        if (__RO) {
+          try {
+            __RO.observe(dom);
+          } catch (_) {}
+        }
 
-      const pctReal = Math.max(0, safePct(metric));
-      const executedCol = resolveColor(metric, pctReal);
-      const VISIBLE_MAX = 120,
-        OVERFLOW_TOP = 130;
-      const yMax = pctReal > VISIBLE_MAX ? OVERFLOW_TOP : VISIBLE_MAX;
-      const baseVal = Math.min(100, pctReal);
-      const overflowVal = pctReal > 100 ? Math.max(0, Math.min(OVERFLOW_TOP, pctReal) - 100) : 0;
-      const minLine = Math.max(0, Math.min(yMax, Number(metric?.min ?? 100)));
+        const pctReal = Math.max(0, safePct(metric));
+        const executedCol = resolveColor(metric, pctReal);
+        const VISIBLE_MAX = 120,
+          OVERFLOW_TOP = 130;
+        const yMax = pctReal > VISIBLE_MAX ? OVERFLOW_TOP : VISIBLE_MAX;
+        const baseVal = Math.min(100, pctReal);
+        const overflowVal = pctReal > 100 ? Math.max(0, Math.min(OVERFLOW_TOP, pctReal) - 100) : 0;
+        const minLine = Math.max(0, Math.min(yMax, Number(metric?.min ?? 100)));
+        const timePct = Math.max(0, Math.min(yMax, pctTiempoIter(ini, fin)));
 
-      chart.setOption({
-        tooltip: {
-          trigger: 'axis',
-          axisPointer: {
-            type: 'shadow'
+        chart.setOption({
+          tooltip: {
+            trigger: 'axis',
+            axisPointer: {
+              type: 'shadow'
+            },
+            appendToBody: true,
+            backgroundColor: 'rgba(255,255,255,0.95)',
+            borderColor: '#ccc',
+            borderWidth: 1,
+            textStyle: {
+              color: '#222',
+              fontSize: 13
+            },
+            extraCssText: 'box-shadow:0 2px 8px rgba(0,0,0,.2);border-radius:6px;',
+            formatter: () => buildTooltipHtml(metric)
           },
-          appendToBody: true,
-          backgroundColor: 'rgba(255,255,255,0.95)',
-          borderColor: '#ccc',
-          borderWidth: 1,
-          textStyle: {
-            color: '#222',
-            fontSize: 13
+          grid: {
+            left: 40,
+            right: 60,
+            top: 20,
+            bottom: 28,
+            containLabel: true
           },
-          extraCssText: 'box-shadow:0 2px 8px rgba(0,0,0,.2);border-radius:6px;',
-          formatter: () => buildTooltipHtml(metric)
-        },
-        grid: {
-          left: 40,
-          right: 60,
-          top: 20,
-          bottom: 28,
-          containLabel: true
-        },
-        xAxis: {
-          type: 'category',
-          data: ['Planificado', 'Ejecutado'],
-          axisLine: {
-            lineStyle: {
-              color: '#d7dbe8'
+          xAxis: {
+            type: 'category',
+            data: ['Planificado', 'Ejecutado'],
+            axisLine: {
+              lineStyle: {
+                color: '#d7dbe8'
+              }
+            },
+            axisTick: {
+              show: false
+            },
+            axisLabel: {
+              color: '#6c7a92',
+              fontWeight: 600
             }
           },
-          axisTick: {
-            show: false
-          },
-          axisLabel: {
-            color: '#6c7a92',
-            fontWeight: 600
-          }
-        },
-        yAxis: {
-          type: 'value',
-          min: 0,
-          max: yMax,
-          splitLine: {
-            lineStyle: {
-              type: 'dashed',
-              color: '#e5e9f2'
-            }
-          },
-          axisLabel: {
-            color: '#6c7a92',
-            formatter: '{value}%'
-          }
-        },
-        series: [{ // plan=100% con borde negro
-            name: 'Planificado',
-            type: 'bar',
-            barWidth: 34,
-            itemStyle: {
-              borderRadius: 0,
-              color: '#a8b5d7',
-              borderColor: '#000',
-              borderWidth: 1.5
-            },
-            label: {
-              show: true,
-              position: 'top',
-              fontWeight: 700,
-              color: '#1b2533',
-              formatter: (p) => p.dataIndex === 0 ? '100%' : ''
-            },
-            data: [100, null]
-          },
-          { // marco para 100% de ejecutado
-            name: 'Marco 100',
-            type: 'bar',
-            barWidth: 34,
-            barGap: '30%',
-            itemStyle: {
-              color: 'rgba(0,0,0,0)',
-              borderColor: '#000',
-              borderWidth: 1.5,
-              borderRadius: 0
-            },
-            emphasis: {
-              disabled: true
-            },
-            silent: true,
-            data: [null, 100]
-          },
-          { // ejecutado base (0..100)
-            name: 'Ejecutado',
-            type: 'bar',
-            barWidth: 34,
-            barGap: '-100%',
-            stack: 'exec',
-            itemStyle: {
-              borderRadius: 0,
-              color: executedCol,
-              borderColor: '#000',
-              borderWidth: 1.5
-            },
-            label: {
-              show: true,
-              position: 'top',
-              fontWeight: 700,
-              color: '#1b2533',
-              formatter: (p) => p.dataIndex === 1 ? `${pctReal}%` : ''
-            },
-            markLine: {
-              symbol: 'none',
+          yAxis: {
+            type: 'value',
+            min: 0,
+            max: yMax,
+            splitLine: {
               lineStyle: {
                 type: 'dashed',
-                color: '#0d6efd',
-                width: 2
-              },
-              data: [{
-                  yAxis: 100,
-                  lineStyle: {
-                    type: 'dashed',
-                    color: '#0d6efd',
-                    width: 2
-                  },
-                  label: {
-                    show: true,
-                    formatter: '100%',
-                    position: 'end',
-                    distance: 6,
-                    color: '#0d6efd',
-                    backgroundColor: '#fff',
-                    padding: [1, 4],
-                    borderRadius: 3
-                  }
-                },
-                {
-                  yAxis: minLine,
-                  lineStyle: {
-                    type: 'solid',
-                    color: '#343a40',
-                    width: 1.5
-                  },
-                  label: {
-                    show: false
-                  }
-                }
-              ]
+                color: '#e5e9f2'
+              }
             },
-            data: [null, baseVal]
+            axisLabel: {
+              color: '#6c7a92',
+              formatter: '{value}%'
+            }
           },
-          { // overflow >100%
-            name: 'Overflow',
-            type: 'bar',
-            barWidth: 34,
-            barGap: '-100%',
-            stack: 'exec',
-            itemStyle: {
-              color: executedCol,
-              opacity: .35,
-              borderRadius: 0,
-              borderColor: '#000',
-              borderWidth: 1.5
+          series: [{ // plan=100% con borde negro
+              name: 'Planificado',
+              type: 'bar',
+              barWidth: 34,
+              animationDelay: 0,
+              itemStyle: {
+                borderRadius: 0,
+                color: '#a8b5d7',
+                borderColor: '#000',
+                borderWidth: 1.5
+              },
+              label: {
+                show: true,
+                position: 'top',
+                fontWeight: 700,
+                color: '#1b2533',
+                formatter: (p) => p.dataIndex === 0 ? '100%' : ''
+              },
+              data: [100, null]
             },
-            emphasis: {
-              disabled: true
+            { // marco para 100% de ejecutado
+              name: 'Marco 100',
+              type: 'bar',
+              barWidth: 34,
+              barGap: '30%',
+              animationDelay: 80,
+              itemStyle: {
+                color: 'rgba(0,0,0,0)',
+                borderColor: '#000',
+                borderWidth: 1.5,
+                borderRadius: 0
+              },
+              emphasis: {
+                disabled: true
+              },
+              silent: true,
+              data: [null, 100]
             },
-            data: [null, overflowVal]
-          }
-        ],
-        animation: true
-      });
+            { // ejecutado base (0..100)
+              name: 'Ejecutado',
+              type: 'bar',
+              barWidth: 34,
+              barGap: '-100%',
+              stack: 'exec',
+              animationDelay: 160,
+              itemStyle: {
+                borderRadius: 0,
+                color: executedCol,
+                borderColor: '#000',
+                borderWidth: 1.5
+              },
+              label: {
+                show: true,
+                position: 'top',
+                fontWeight: 700,
+                color: '#1b2533',
+                formatter: (p) => p.dataIndex === 1 ? `${pctReal}%` : ''
+              },
+              markLine: {
+                symbol: 'none',
+                lineStyle: {
+                  type: 'dashed',
+                  color: '#0d6efd',
+                  width: 2
+                },
+                data: [{
+                    yAxis: timePct,
+                    lineStyle: {
+                      type: 'dashed',
+                      color: '#0d6efd',
+                      width: 2
+                    },
+                    label: {
+                      show: true,
+                      formatter: () => `${Math.round(timePct)}%`,
+                      position: 'end',
+                      distance: 6,
+                      color: '#0d6efd',
+                      backgroundColor: '#fff',
+                      padding: [1, 4],
+                      borderRadius: 3
+                    }
+                  },
+                  {
+                    yAxis: minLine,
+                    lineStyle: {
+                      type: 'solid',
+                      color: '#343a40',
+                      width: 1.5
+                    },
+                    label: {
+                      show: false
+                    }
+                  }
+                ]
+              },
+              data: [null, baseVal]
+            },
+            { // overflow >100%
+              name: 'Overflow',
+              type: 'bar',
+              barWidth: 34,
+              barGap: '-100%',
+              stack: 'exec',
+              animationDelay: 240,
+              itemStyle: {
+                color: executedCol,
+                opacity: .35,
+                borderRadius: 0,
+                borderColor: '#000',
+                borderWidth: 1.5
+              },
+              emphasis: {
+                disabled: true
+              },
+              data: [null, overflowVal]
+            }
+          ],
+          animation: true,
+          animationDuration: 700,
+          animationEasing: 'cubicOut',
+          animationDurationUpdate: 500,
+          animationEasingUpdate: 'cubicOut'
+        });
+      } catch (e) {
+        try {
+          chart && chart.dispose && chart.dispose();
+        } catch (_) {}
+        renderMiniBarFallback(domId, metric);
+      }
     }
 
     // ===== Resumen global igual al original =====
@@ -1384,7 +1538,7 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
         const plan = Number(m.planned) || 0;
         const ejec = Number(m.executedReal) || 0;
         const pct = Number(m.executed) || 0;
-        const minLine = 100 - (Number(m.umbral_desviacion) || 0); // si preferís derivarlo directo
+        const minLine = Number(m.min ?? 100);
 
         totalPct += pct;
         if (plan > 0 && ejec === 0) noExec++;
@@ -1420,7 +1574,15 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
       const dom = document.getElementById('chartDistribucionGlobal');
       if (!dom) return;
 
+      const prev = echarts.getInstanceByDom(dom);
+      if (prev) prev.dispose();
       const chart = echarts.init(dom);
+      __CHARTS.chartDistribucionGlobal = chart;
+      if (__RO) {
+        try {
+          __RO.observe(dom);
+        } catch (_) {}
+      }
 
       const total = Object.values(stats).reduce((a, b) => a + b, 0);
 
@@ -1494,14 +1656,20 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
 
         series: [{
           type: 'pie',
-          radius: ['42%', '75%'],
-            center: ['50%', '38%'],
+          radius: ['42%', '72%'],
+          center: ['50%', '38%'],
           label: {
             formatter: '{b}\n{d}%',
             fontSize: 12
           },
           animationDuration: 900,
           animationEasing: 'cubicOut',
+          itemStyle: {
+            borderColor: '#000',
+            borderWidth: 2,
+            borderType: 'solid',
+            borderJoin: 'round'
+          },
           data: [{
               value: stats.over,
               name: 'Supera plan',
@@ -1515,6 +1683,7 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
               itemStyle: {
                 color: 'rgba(40,167,69,0.95)'
               }
+
             },
             {
               value: stats.inRange,
@@ -1562,14 +1731,23 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
       });
     })();
 
-    // ===== Init =====
-    document.addEventListener('DOMContentLoaded', () => {
+    document.addEventListener('DOMContentLoaded', async () => {
+      const ok = await loadEchartsIfNeeded();
+      if (!ok || !window.echarts) showEchartsWarningOnce();
+
       buildMetricFilter();
       buildPhaseTabs();
       const scoped = (DATA || []).filter(it => !SELECTED_PHASE || it.fase === SELECTED_PHASE);
       buildIterFilter(scoped);
       renderIterCards(null);
       computeAndRenderGlobalSummary();
+
+      // Opcional: ocultar toolbar y tabs si no hay datos
+      if (!DATA || !DATA.length) {
+        document.querySelector('.dashboard-toolbar')?.classList.add('d-none');
+        document.getElementById('faseTabs')?.classList.add('d-none');
+        document.getElementById('iterFilter')?.classList.add('d-none');
+      }
     });
   </script>
 
