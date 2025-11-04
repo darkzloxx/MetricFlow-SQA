@@ -648,7 +648,7 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
             <option value="">Todas las métricas</option>
           </select>
           <button id="clearMetricFilter" type="button" class="btn btn-outline-secondary btn-sm ml-2 btn-clear" title="Limpiar filtro">
-            <span class="oi oi-x mr-1"></span> Limpiar
+            <span class="oi oi-x mr-1"></span> Limpiar Filtros
           </button>
         </div>
         <div class="d-flex align-items-center mt-2 mt-md-0">
