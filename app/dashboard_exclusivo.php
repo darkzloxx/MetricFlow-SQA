@@ -287,6 +287,10 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
     .chip-text {
       line-height: 1;
     }
+.text-center.text-primary {
+  font-size: 1.05rem;
+  letter-spacing: 0.3px;
+}
 
     .chip-label {
       display: block;
@@ -552,11 +556,13 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
 
     <!-- Resumen global (cálculo en JS igual al original) -->
     <div class="card mb-4 shadow-sm border-0">
-      <div class="card-header bg-white font-weight-bold text-primary">Resumen Global del Proyecto</div>
+      <h6 class="text-primary font-weight-bold mb-3 text-center">
+        Visión General del Proyecto
+      </h6>
       <div class="card-body">
 
         <!-- Gráfico de distribución global de métricas -->
-        <div id="chartDistribucionGlobal" style="height:300px; margin-top:1rem;"></div>
+        <div id="chartDistribucionGlobal" style="height:340px; margin-top:1rem;"></div>
 
 
       </div>
@@ -1419,119 +1425,121 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
       const total = Object.values(stats).reduce((a, b) => a + b, 0);
 
       chart.setOption({
-          tooltip: {
-            trigger: 'item',
-            backgroundColor: 'rgba(255,255,255,0.95)',
-            borderColor: '#ccc',
-            borderWidth: 1,
-            textStyle: {
-              color: '#222',
-              fontSize: 13
-            },
-            extraCssText: 'box-shadow:0 2px 8px rgba(0,0,0,.2);border-radius:6px;',
-            formatter: (p) => `
-        <b>${p.name}</b><br>
-        Métricas: <b>${p.value}</b><br>
-        Porcentaje: <b>${p.percent.toFixed(1)}%</b>
-      `
+        tooltip: {
+          trigger: 'item',
+          backgroundColor: 'rgba(255,255,255,0.95)',
+          borderColor: '#ccc',
+          borderWidth: 1,
+          textStyle: {
+            color: '#222',
+            fontSize: 13
           },
-          legend: {
-            bottom: 0,
-            textStyle: {
-              color: '#555',
-              fontSize: 12
-            }
-          },
-          graphic: [{
-            type: 'group',
-            left: 'center',
-            top: 'middle',
-            children: [{
-                type: 'text',
-                top: -18, // más arriba del centro
-                style: {
-                  text: `${avg}%`,
-                  fontSize: 30,
-                  fontWeight: 700,
-                  fill: '#212529',
-                  textAlign: 'center',
-                  textVerticalAlign: 'middle',
-                  textShadowColor: 'rgba(0,0,0,0.1)',
-                  textShadowBlur: 2
-                }
-              },
-              {
-                type: 'text',
-                top: 8,
-                style: {
-                  text: 'Cumplimiento',
-                  fontSize: 14,
-                  fill: '#6c757d',
-                  textAlign: 'center',
-                  textVerticalAlign: 'middle'
-                }
-              },
-              {
-                type: 'text',
-                top: 26,
-                style: {
-                  text: `(${totalMetricas} métricas)`,
-                  fontSize: 12,
-                  fill: '#adb5bd',
-                  textAlign: 'center',
-                  textVerticalAlign: 'middle'
-                }
-              }
-            ]
-          }],
+          extraCssText: 'box-shadow:0 2px 8px rgba(0,0,0,.2);border-radius:6px;',
+          formatter: (p) => `
+  <b>${p.name}</b><br>
+  ${p.percent.toFixed(1)}% del total<br>
+  <span style="color:#6c757d;">(${p.value} métricas)</span>
+`
 
-          series: [{
-              type: 'pie',
-              radius: ['45%', '70%'],
-              label: {
-                formatter: '{b}\n{d}%',
-                fontSize: 12
-              },
-              animationDuration: 900,
-              animationEasing: 'cubicOut',
-              data: [{
-                  value: stats.over,
-                  name: 'Supera plan',
-                  itemStyle: {
-                    color: 'rgba(140,220,170,0.9)'
-                  }
-                },
-                {
-                  value: stats.exact,
-                  name: 'Cumple (=100%)',
-                  itemStyle: {
-                    color: 'rgba(40,167,69,0.95)'
-                  }
-                },
-                {
-                  value: stats.inRange,
-                  name: 'Dentro del umbral',
-                  itemStyle: {
-                    color: 'rgba(255,193,7,0.9)'
-                  }
-                },
-                {
-                  value: stats.below,
-                  name: 'Fuera del umbral',
-                  itemStyle: {
-                    color: 'rgba(220,53,69,0.9)'
-                  }
-                },
-                {
-                  value: stats.noExec,
-                  name: 'Sin ejecución',
-                  itemStyle: {
-                    color: '#6c757d'
-                  
-                }
+        },
+        legend: {
+          bottom: 0,
+          textStyle: {
+            color: '#555',
+            fontSize: 12
+          }
+        },
+        graphic: [{
+          type: 'group',
+          left: 'center',
+          top: '30%',
+          children: [{
+              type: 'text',
+              top: -20,
+              style: {
+                text: `${avg}%`,
+                fontSize: 30,
+                fontWeight: 700,
+                fill: '#212529',
+                textAlign: 'center',
+                textVerticalAlign: 'middle',
+                textShadowColor: 'rgba(0,0,0,0.1)',
+                textShadowBlur: 2
               }
-            ]
-          }]
+            },
+            {
+              type: 'text',
+              top: 8,
+              style: {
+                text: 'Cumplimiento',
+                fontSize: 14,
+                fill: '#6c757d',
+                textAlign: 'center',
+                textVerticalAlign: 'middle'
+              }
+            },
+            {
+              type: 'text',
+              top: 28,
+              style: {
+                text: `(${totalMetricas} métricas)`,
+                fontSize: 12,
+                fill: '#6c757d', // en lugar de '#adb5bd'
+                textAlign: 'center',
+                textVerticalAlign: 'middle'
+              }
+            }
+          ]
+        }],
+
+        series: [{
+          type: 'pie',
+          radius: ['42%', '75%'],
+            center: ['50%', '38%'],
+          label: {
+            formatter: '{b}\n{d}%',
+            fontSize: 12
+          },
+          animationDuration: 900,
+          animationEasing: 'cubicOut',
+          data: [{
+              value: stats.over,
+              name: 'Supera plan',
+              itemStyle: {
+                color: 'rgba(140,220,170,0.9)'
+              }
+            },
+            {
+              value: stats.exact,
+              name: 'Cumple (=100%)',
+              itemStyle: {
+                color: 'rgba(40,167,69,0.95)'
+              }
+            },
+            {
+              value: stats.inRange,
+              name: 'Dentro del umbral',
+              itemStyle: {
+                color: 'rgba(255,193,7,0.9)'
+              }
+            },
+            {
+              value: stats.below,
+              name: 'Fuera del umbral',
+              itemStyle: {
+                color: 'rgba(220,53,69,0.9)'
+              }
+            },
+            {
+              value: stats.noExec,
+              name: 'Sin ejecución',
+              itemStyle: {
+                color: '#6c757d'
+
+              }
+            }
+          ]
+        }]
       });
     }
 
