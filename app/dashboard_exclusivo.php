@@ -73,6 +73,13 @@ $qIters = "SELECT COUNT(DISTINCT i.id_iteracion) AS total
            WHERE i.id_proyecto = $idProyecto";
 $rIters = $cn->query($qIters);
 $totalIteraciones = ($rIters && $rIters->num_rows) ? (int)$rIters->fetch_assoc()['total'] : 0;
+
+// Iteraciones creadas (tengan o no métricas planificadas)
+$qItersAll = "SELECT COUNT(*) AS total
+           FROM iteracion i
+           WHERE i.id_proyecto = $idProyecto";
+$rItersAll = $cn->query($qItersAll);
+$totalIteracionesCreadas = ($rItersAll && $rItersAll->num_rows) ? (int)$rItersAll->fetch_assoc()['total'] : 0;
 $q = "
 SELECT 
     i.id_iteracion,
@@ -568,7 +575,10 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
         <div class="card-body p-5">
           <i class="oi oi-warning mb-3" style="font-size:2rem;color:#dc3545;"></i>
           <h5 class="text-danger font-weight-bold mb-2">Proyecto no encontrado</h5>
-          <p class="text-muted mb-0">No existe un proyecto con el identificador <b>ID <?= (int)$idProyecto ?></b>.</p>
+          <p class="text-muted mb-0">
+            No existe un proyecto con el identificador <b>ID <?= (int)$idProyecto ?></b>.<br>
+            Verifique el parámetro o cree un nuevo proyecto antes de continuar.
+          </p>
         </div>
       </div>
       <?php exit; ?>
@@ -883,7 +893,8 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
     window.addEventListener('resize', debounceResize);
 
     // ===== Datos desde PHP =====
-    const DATA = <?= json_encode($DATA, JSON_UNESCAPED_UNICODE | JSON_NUMERIC_CHECK); ?>;
+  const DATA = <?= json_encode($DATA, JSON_UNESCAPED_UNICODE | JSON_NUMERIC_CHECK); ?>;
+  const HAY_ITERACIONES = <?= ($totalIteracionesCreadas > 0 ? 'true' : 'false'); ?>;
     let SELECTED_METRIC_ID = null;
     let SELECTED_PHASE = null;
 
@@ -986,6 +997,43 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
     function renderIterCards(filterIter = null) {
       const wrap = document.getElementById('iterCards');
       if (!wrap) return;
+
+      // VALIDACIONES GENERALES
+      // ==========================
+      if (!Array.isArray(DATA) || DATA.length === 0) {
+        // ⚠️ Caso 2: Hay iteraciones pero sin metricas planificadas
+        if (HAY_ITERACIONES) {
+          wrap.innerHTML = `
+      <div class="col-12">
+        <div class="card h-100 d-flex flex-column justify-content-center align-items-center text-center"
+             style=\"border: 1px dashed rgba(13,110,253,0.25); background: rgba(13,110,253,0.05); min-height:340px;\">
+          <div class="p-4">
+            <i class="oi oi-bar-chart mb-3" style="font-size:2rem; color:#0d6efd;"></i>
+            <h6 class="text-primary font-weight-bold mb-2">Faltan métricas asociadas</h6>
+            <p class="text-muted mb-0" style="max-width:460px;">
+              Espere a que el líder del proyecto o gerente de calidad vincule métrica/s a alguna iteración.
+            </p>
+          </div>
+        </div>
+      </div>`;
+        } else {
+          // ❌ Caso 1: No hay iteraciones 
+          wrap.innerHTML = `
+      <div class=\"col-12\"> 
+        <div class=\"card h-100 d-flex flex-column justify-content-center align-items-center text-center\"
+             style=\"border: 1px dashed rgba(108,117,125,0.25); background: rgba(248,249,250,0.7); min-height:340px;\">
+          <div class=\"p-4\">
+            <i class=\"oi oi-clock mb-3\" style=\"font-size:2rem; color:#6c757d;\"></i>
+            <h6 class=\"text-secondary font-weight-bold mb-2\">No hay iteraciones cargadas</h6>
+            <p class=\"text-muted mb-0\" style=\"max-width:420px;\">
+              Espere al líder del proyecto.
+            </p>
+          </div>
+        </div>
+      </div>`;
+        }
+        return;
+      }
 
       // 🧹 Limpiar solo los charts de iteraciones, no el global
       Object.entries(__CHARTS).forEach(([id, ch]) => {
@@ -1804,7 +1852,14 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
       const scoped = (DATA || []).filter(it => !SELECTED_PHASE || it.fase === SELECTED_PHASE);
       buildIterFilter(scoped);
       renderIterCards(null);
-      computeAndRenderGlobalSummary();
+      // Ocultar "Visión General del Proyecto" si no hay datos o no hay iteraciones
+      const globalCard = document.querySelector('.card-global-vision');
+      if (!DATA || !DATA.length || !HAY_ITERACIONES) {
+        if (globalCard) globalCard.style.display = 'none';
+      } else {
+        if (globalCard) globalCard.style.display = '';
+        computeAndRenderGlobalSummary();
+      }
 
       // Sticky toolbar + offset dinámico + autocollapse en scroll
       (function setupStickyToolbar() {
