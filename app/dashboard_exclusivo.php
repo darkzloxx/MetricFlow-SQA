@@ -1439,7 +1439,7 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
             formatter: () => buildTooltipHtml(metric)
           },
           grid: {
-            left: 40,
+            left: 64,
             right: 60,
             top: 20,
             bottom: 28,
@@ -1457,14 +1457,18 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
               show: false
             },
             axisLabel: {
-              color: '#6c7a92',
-              fontWeight: 600
+              color: '#000000ff',
+              fontWeight: 300
             }
           },
           yAxis: {
             type: 'value',
             min: 0,
             max: yMax,
+            name: 'Cumplimiento (%)',
+            nameLocation: 'middle',
+            nameGap: 52,
+            nameTextStyle: { color: '#6c7a92', fontWeight: 600 },
             splitLine: {
               lineStyle: {
                 type: 'dashed',
@@ -1473,6 +1477,7 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
             },
             axisLabel: {
               color: '#6c7a92',
+              margin: 8,
               formatter: '{value}%'
             }
           },
