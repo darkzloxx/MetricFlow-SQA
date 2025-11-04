@@ -45,7 +45,7 @@ if ($rp && $rp->num_rows) {
 $qMetricasPlanificadas = "
 SELECT COUNT(*) AS total
 FROM metrica_iteracion mi
-JOIN iteracion i ON mi.id_iteracion = i.id_iteracion
+JOIN iteracion i         ON mi.id_iteracion = i.id_iteracion AND i.id_proyecto = $idProyecto
 JOIN fase f ON f.id_fase = i.id_fase
 JOIN proyecto_fase pf ON pf.id_fase = f.id_fase
 WHERE pf.id_proyecto = $idProyecto
@@ -54,12 +54,14 @@ $rMetricasPlanificadas = $cn->query($qMetricasPlanificadas);
 $totalMetricasPlanificadas = ($rMetricasPlanificadas && $rMetricasPlanificadas->num_rows) ? (int)$rMetricasPlanificadas->fetch_assoc()['total'] : 0;
 
 // Cantidad de tipos de métricas distintas utilizadas en el proyecto
-$qMetricasDistintas = "SELECT COUNT(DISTINCT mi.id_metrica) AS total
-              FROM metrica_iteracion mi
-              JOIN iteracion i ON mi.id_iteracion = i.id_iteracion
-              JOIN fase f ON f.id_fase = i.id_fase
-              JOIN proyecto_fase pf ON pf.id_fase = f.id_fase
-              WHERE pf.id_proyecto = $idProyecto";
+$qMetricasDistintas = "
+SELECT COUNT(DISTINCT mi.id_metrica) AS total
+FROM metrica_iteracion mi
+JOIN iteracion i         ON mi.id_iteracion = i.id_iteracion AND i.id_proyecto = $idProyecto
+JOIN fase f              ON i.id_fase = f.id_fase
+JOIN proyecto_fase pf    ON pf.id_fase = f.id_fase AND pf.id_proyecto = $idProyecto
+WHERE pf.id_proyecto = $idProyecto
+";
 $rMetricasDistintas = $cn->query($qMetricasDistintas);
 $totalMetricasDistintas = ($rMetricasDistintas && $rMetricasDistintas->num_rows) ? (int)$rMetricasDistintas->fetch_assoc()['total'] : 0;
 
@@ -68,11 +70,9 @@ $qIters = "SELECT COUNT(DISTINCT i.id_iteracion) AS total
            JOIN fase f ON f.id_fase = i.id_fase
            JOIN proyecto_fase pf ON pf.id_fase = f.id_fase
            JOIN metrica_iteracion mi ON mi.id_iteracion = i.id_iteracion
-           WHERE pf.id_proyecto = $idProyecto";
+           WHERE i.id_proyecto = $idProyecto";
 $rIters = $cn->query($qIters);
 $totalIteraciones = ($rIters && $rIters->num_rows) ? (int)$rIters->fetch_assoc()['total'] : 0;
-
-// -------- DATA (misma del dashboard principal)
 $q = "
 SELECT 
     i.id_iteracion,
@@ -86,13 +86,14 @@ SELECT
     mi.valor_ejecutado AS ejecutado,
     mi.umbral_desviacion AS umbral
 FROM metrica_iteracion mi
-JOIN metrica m ON mi.id_metrica = m.id_metrica
-JOIN iteracion i ON mi.id_iteracion = i.id_iteracion
-JOIN fase f ON i.id_fase = f.id_fase
-JOIN proyecto_fase pf ON pf.id_fase = f.id_fase
+JOIN metrica m           ON mi.id_metrica = m.id_metrica
+JOIN iteracion i         ON mi.id_iteracion = i.id_iteracion AND i.id_proyecto = $idProyecto
+JOIN fase f              ON i.id_fase = f.id_fase
+JOIN proyecto_fase pf    ON pf.id_fase = f.id_fase AND pf.id_proyecto = $idProyecto
 WHERE pf.id_proyecto = $idProyecto
 ORDER BY f.id_fase, i.numero_iteracion, m.id_metrica;
 ";
+
 $rs = $cn->query($q);
 
 $iterMap = [];
@@ -491,11 +492,14 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
 
     .dashboard-toolbar {
       position: sticky;
-      top: var(--toolbar-top, 72px); /* keep below fixed navbar (dinámico) */
-      z-index: 1030; /* above charts */
+      top: var(--toolbar-top, 72px);
+      /* keep below fixed navbar (dinámico) */
+      z-index: 1030;
+      /* above charts */
       background: #fff;
       transition: box-shadow .2s ease, border-color .2s ease, background-color .2s ease, padding .2s ease;
-      padding: .5rem .75rem; /* compacto */
+      padding: .5rem .75rem;
+      /* compacto */
     }
 
     .dashboard-toolbar.stuck {
@@ -504,7 +508,9 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
     }
 
     @media (max-width: 575.98px) {
-      .dashboard-toolbar { top: var(--toolbar-top, 56px); }
+      .dashboard-toolbar {
+        top: var(--toolbar-top, 56px);
+      }
     }
 
     #iterCards {
@@ -659,7 +665,7 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
       </div>
     </div>
 
-   
+
     <!-- Contenedor de tarjetas por iteración -->
     <div id="iterCards"></div>
   </div>
@@ -1828,19 +1834,22 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
           toolbar.classList.toggle('stuck', stuck);
         };
 
-        const onResize = () => { computeThreshold(); onScroll(); };
+        const onResize = () => {
+          computeThreshold();
+          onScroll();
+        };
 
         // Chevron: alterna icono segun estado y recomputa threshold (por cambio de altura)
         if (expanded && toggleBtn) {
-          $('#toolbarExpanded').on('shown.bs.collapse', function(){
-            toggleBtn.setAttribute('aria-expanded','true');
+          $('#toolbarExpanded').on('shown.bs.collapse', function() {
+            toggleBtn.setAttribute('aria-expanded', 'true');
             const i = toggleBtn.querySelector('i');
             if (i) i.className = 'oi oi-chevron-top';
             computeThreshold();
             onScroll();
           });
-          $('#toolbarExpanded').on('hidden.bs.collapse', function(){
-            toggleBtn.setAttribute('aria-expanded','false');
+          $('#toolbarExpanded').on('hidden.bs.collapse', function() {
+            toggleBtn.setAttribute('aria-expanded', 'false');
             const i = toggleBtn.querySelector('i');
             if (i) i.className = 'oi oi-chevron-bottom';
             computeThreshold();
@@ -1850,33 +1859,37 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
 
         computeThreshold();
         onScroll();
-        window.addEventListener('scroll', onScroll, { passive: true });
+        window.addEventListener('scroll', onScroll, {
+          passive: true
+        });
         window.addEventListener('resize', onResize);
       })();
 
       // Botón chevron: aseguro el toggle del collapse por JS (evito doble manejo del data-api)
-      (function wireToolbarToggle(){
+      (function wireToolbarToggle() {
         const btn = document.getElementById('toggleToolbar');
         if (!btn || typeof $ === 'undefined') return;
-        btn.addEventListener('click', function(e){
+        btn.addEventListener('click', function(e) {
           e.preventDefault();
           if (e.stopImmediatePropagation) e.stopImmediatePropagation();
-          try { $('#toolbarExpanded').collapse('toggle'); } catch(_) {}
+          try {
+            $('#toolbarExpanded').collapse('toggle');
+          } catch (_) {}
         });
       })();
 
       // Asegurar que inicia expandido
-      (function ensureExpandedOnLoad(){
+      (function ensureExpandedOnLoad() {
         if (typeof $ === 'undefined') return;
         try {
           $('#toolbarExpanded').collapse('show');
           const btn = document.getElementById('toggleToolbar');
           if (btn) {
-            btn.setAttribute('aria-expanded','true');
+            btn.setAttribute('aria-expanded', 'true');
             const i = btn.querySelector('i');
             if (i) i.className = 'oi oi-chevron-top';
           }
-        } catch(_) {}
+        } catch (_) {}
       })();
 
       // Ocultar toolbar expandida si no hay datos
