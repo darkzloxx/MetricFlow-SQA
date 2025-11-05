@@ -1136,11 +1136,15 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
         renderIterCards(iter === 'ALL' ? null : iter);
       });
       btn.addEventListener('click', () => {
+        // Limpiar todos los filtros: métrica, fase e iteración
         SELECTED_METRIC_ID = null;
         sel.value = '';
-        const active = document.querySelector('#iterFilter .iter-pill.active');
-        const iter = active ? active.dataset.iter : null;
-        renderIterCards(iter === 'ALL' ? null : iter);
+        // Volver a "Todas las fases" y "Todas las iteraciones"
+        SELECTED_PHASE = null;
+        buildPhaseTabs();
+        buildIterFilter((DATA || []).filter(it => !SELECTED_PHASE || it.fase === SELECTED_PHASE));
+        // Render sin filtro de iteración
+        renderIterCards(null);
       });
     }
 
