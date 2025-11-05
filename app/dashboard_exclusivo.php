@@ -731,11 +731,22 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
               <div id="exportMetricEmpty" class="text-muted small pl-3 d-none">Sin datos disponibles</div>
             </div>
 
-            <!-- Opciones adicionales -->
-            <div class="border rounded p-2 mb-2">
-              <div class="custom-control custom-checkbox">
+            <!-- Opciones adicionales (solo PNG) -->
+            <div id="exportPngOptions" class="border rounded p-2 mb-2">
+              <div class="custom-control custom-checkbox mb-2">
                 <input type="checkbox" class="custom-control-input" id="exportIncluirGlobal" checked>
                 <label class="custom-control-label" for="exportIncluirGlobal">Incluir "Visión General del Proyecto"</label>
+              </div>
+              <div id="exportChartTypeGroup">
+                <div class="font-weight-bold mb-1">Tipo de gráficos</div>
+                <div class="custom-control custom-radio">
+                  <input type="radio" id="chartTypeDonut" name="exportChartType" class="custom-control-input" value="donut" checked>
+                  <label class="custom-control-label" for="chartTypeDonut"><span class="oi oi-pie-chart mr-1"></span> Donuts</label>
+                </div>
+                <div class="custom-control custom-radio">
+                  <input type="radio" id="chartTypeBar" name="exportChartType" class="custom-control-input" value="bar">
+                  <label class="custom-control-label" for="chartTypeBar"><span class="oi oi-bar-chart mr-1"></span> Barras</label>
+                </div>
               </div>
             </div>
 
@@ -904,7 +915,7 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
         ejec
       } = computePctAndNote(metric);
       const min = Math.max(0, Number(metric?.min ?? 100));
-  let html = `<b>${metric?.nombre??''}</b><br>`;
+      let html = `<b>${metric?.nombre??''}</b><br>`;
       html += `Planificado: <b>${plan}</b><br>`;
       html += `Ejecutado: <b>${ejec}</b><br>`;
       html += `Cumplimiento: <b>${pct}%</b><br>`;
@@ -964,16 +975,16 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
     window.addEventListener('resize', debounceResize);
 
     // ===== Datos desde PHP =====
-  const DATA = <?= json_encode($DATA, JSON_UNESCAPED_UNICODE | JSON_NUMERIC_CHECK); ?>;
-  const HAY_ITERACIONES = <?= ($totalIteracionesCreadas > 0 ? 'true' : 'false'); ?>;
-  const PROYECTO_ID = <?= (int)$idProyecto ?>;
-  // Selección global del modal de exportación: arrays vacíos significan "todo"
-  const exportSelection = {
-    fases: [],
-    iteraciones: [],
-    metricas: [],
-    incluirGlobal: true
-  };
+    const DATA = <?= json_encode($DATA, JSON_UNESCAPED_UNICODE | JSON_NUMERIC_CHECK); ?>;
+    const HAY_ITERACIONES = <?= ($totalIteracionesCreadas > 0 ? 'true' : 'false'); ?>;
+    const PROYECTO_ID = <?= (int)$idProyecto ?>;
+    // Selección global del modal de exportación: arrays vacíos significan "todo"
+    const exportSelection = {
+      fases: [],
+      iteraciones: [],
+      metricas: [],
+      incluirGlobal: true
+    };
     let SELECTED_METRIC_ID = null;
     let SELECTED_PHASE = null;
 
@@ -1055,7 +1066,7 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
       const sel = document.getElementById('metricFilterSelect'),
         btn = document.getElementById('clearMetricFilter');
       const uniques = uniqueMetricsFromData(DATA);
-  sel.innerHTML = '<option value="">Todas las métricas</option>' + uniques.map(m => `<option value="${m.id}">${m.nombre}</option>`).join('');
+      sel.innerHTML = '<option value="">Todas las métricas</option>' + uniques.map(m => `<option value="${m.id}">${m.nombre}</option>`).join('');
       sel.value = SELECTED_METRIC_ID != null ? String(SELECTED_METRIC_ID) : '';
       sel.addEventListener('change', () => {
         const v = sel.value.trim();
@@ -1494,6 +1505,7 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
         const executedCol = resolveColor(metric, pctReal);
         const VISIBLE_MAX = 120,
           OVERFLOW_TOP = 130;
+        const HEADROOM = 5; // evita recortes de etiquetas en el borde superior
         const yMax = pctReal > VISIBLE_MAX ? OVERFLOW_TOP : VISIBLE_MAX;
         const baseVal = Math.min(100, pctReal);
         const overflowVal = pctReal > 100 ? Math.max(0, Math.min(OVERFLOW_TOP, pctReal) - 100) : 0;
@@ -1519,8 +1531,8 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
           },
           grid: {
             left: 64,
-            right: 60,
-            top: 20,
+            right: 76, // más espacio para etiqueta de línea punteada
+            top: 28, // mayor margen superior para evitar clipping
             bottom: 28,
             containLabel: true
           },
@@ -1538,21 +1550,32 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
             axisLabel: {
               interval: 0, // mostrar SIEMPRE ambas etiquetas (Planificado y Ejecutado)
               // Colorea cada etiqueta para que coincida con Planificado (azul suave) y Ejecutado (color semáforo)
-              formatter: function(value, idx) { return idx === 0 ? '{plan|Planificado}' : '{exec|Ejecutado}'; },
+              formatter: function(value, idx) {
+                return idx === 0 ? '{plan|Planificado}' : '{exec|Ejecutado}';
+              },
               rich: {
-                plan: { color: '#000000ff', fontWeight: 500 },
-                exec: { color: '#000000ff', fontWeight: 500 }
+                plan: {
+                  color: '#000000ff',
+                  fontWeight: 500
+                },
+                exec: {
+                  color: '#000000ff',
+                  fontWeight: 500
+                }
               }
             }
           },
           yAxis: {
             type: 'value',
             min: 0,
-            max: yMax,
+            max: yMax + HEADROOM,
             name: 'Cumplimiento (%)',
             nameLocation: 'middle',
             nameGap: 52,
-            nameTextStyle: { color: '#6c7a92', fontWeight: 600 },
+            nameTextStyle: {
+              color: '#6c7a92',
+              fontWeight: 600
+            },
             splitLine: {
               lineStyle: {
                 type: 'dashed',
@@ -1640,12 +1663,13 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
                     label: {
                       show: true,
                       formatter: () => `${Math.round(timePct)}%`,
-                      position: 'end',
+                      position: 'end', // anclada al fin de la línea
                       distance: 6,
                       color: '#0d6efd',
-                      backgroundColor: '#fff',
-                      padding: [1, 4],
-                      borderRadius: 3
+                      backgroundColor: '#ffffff',
+                      padding: [2, 6],
+                      borderRadius: 4,
+                      fontWeight: 600
                     }
                   },
                   {
@@ -1771,9 +1795,9 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
       const dom = document.getElementById('chartDistribucionGlobal');
       if (!dom) return;
 
-      // 🔹 Ajustes de tamaño del canvas (acá va el cambio)
-      dom.style.height = '290px'; // altura ideal
-      dom.style.marginTop = '-30px'; // 🔼 sube el gráfico para eliminar el espacio superior
+      // 🔹 Ajustes de tamaño del canvas
+      dom.style.height = '300px'; // altura estable
+      // Evitamos offsets "mágicos"; centrado basado en la geometría del gráfico
 
       const prev = echarts.getInstanceByDom(dom);
       if (prev) prev.dispose();
@@ -1799,66 +1823,43 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
           },
           extraCssText: 'box-shadow:0 2px 8px rgba(0,0,0,.2);border-radius:6px;',
           formatter: (p) => `
-  <b>${p.name}</b><br>
-  ${p.percent.toFixed(1)}% del total<br>
-  <span style="color:#6c757d;">(${p.value} métricas)</span>
-`
+      <b>${p.name}</b><br>
+      ${p.percent.toFixed(1)}% del total<br>
+      <span style="color:#6c757d;">(${p.value} métricas)</span>
+    `
+        },
 
-        },
+        // 🔹 Leyendas más abajo y sin superponer el gráfico
         legend: {
-          bottom: 14,
-          textStyle: {
-            color: '#555',
-            fontSize: 12
-          }
+          bottom: 2, // pegadas al borde inferior del canvas
+          itemGap: 12,
+          textStyle: { color: '#555', fontSize: 12 }
         },
+
+        // 🔹 Bloque único de texto centrado geométricamente
         graphic: [{
-          type: 'group',
+          type: 'text',
           left: 'center',
-          top: '30%',
-          children: [{
-              type: 'text',
-              top: -20,
-              style: {
-                text: `${avg}%`,
-                fontSize: 30,
-                fontWeight: 700,
-                fill: '#212529',
-                textAlign: 'center',
-                textVerticalAlign: 'middle',
-                textShadowColor: 'rgba(0,0,0,0.1)',
-                textShadowBlur: 2
-              }
+          top: '36%',
+          // ajuste un poco mayor hacia arriba para percibirlo perfectamente centrado
+          z: 100,
+          style: {
+            text: `{val|${avg}%}` + '\n' + `{sub|Cumplimiento}` + '\n' + `{cnt|(${totalMetricas} métricas)}`,
+            rich: {
+              val: { fontSize: 34, fontWeight: 700, fill: '#212529', lineHeight: 36 },
+              sub: { fontSize: 14, fill: '#6c757d', lineHeight: 18 },
+              cnt: { fontSize: 12, fill: '#6c757d', lineHeight: 16 }
             },
-            {
-              type: 'text',
-              top: 8,
-              style: {
-                text: 'Cumplimiento',
-                fontSize: 14,
-                fill: '#6c757d',
-                textAlign: 'center',
-                textVerticalAlign: 'middle'
-              }
-            },
-            {
-              type: 'text',
-              top: 28,
-              style: {
-                text: `(${totalMetricas} métricas)`,
-                fontSize: 12,
-                fill: '#6c757d', // en lugar de '#adb5bd'
-                textAlign: 'center',
-                textVerticalAlign: 'middle'
-              }
-            }
-          ]
+            align: 'center',
+            verticalAlign: 'middle'
+          }
         }],
 
         series: [{
           type: 'pie',
-          radius: ['42%', '72%'],
-          center: ['50%', '38%'],
+          // subimos levemente el centro para dar más espacio a las leyendas abajo
+          radius: ['45%', '74%'],
+          center: ['50%', '46%'],
           label: {
             formatter: '{b}\n{d}%',
             fontSize: 12
@@ -1868,7 +1869,6 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
           itemStyle: {
             borderColor: '#000',
             borderWidth: 2,
-            borderType: 'solid',
             borderJoin: 'round'
           },
           data: [{
@@ -1884,7 +1884,6 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
               itemStyle: {
                 color: 'rgba(40,167,69,0.95)'
               }
-
             },
             {
               value: stats.inRange,
@@ -1905,12 +1904,12 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
               name: 'Sin ejecución',
               itemStyle: {
                 color: '#6c757d'
-
               }
             }
           ]
         }]
       });
+
     }
 
 
@@ -1946,13 +1945,13 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
         const btn = document.getElementById('exportBtn');
         if (!btn) return;
 
-        const $phaseGroup  = $('#exportPhaseGroup');
-        const $iterGroup   = $('#exportIterGroup');
+        const $phaseGroup = $('#exportPhaseGroup');
+        const $iterGroup = $('#exportIterGroup');
         const $metricGroup = $('#exportMetricGroup');
-        const $phaseList   = $('#exportPhaseList');
-        const $iterList    = $('#exportIterList');
-        const $metricList  = $('#exportMetricList');
-        const $alertBox    = $('#exportAlert');
+        const $phaseList = $('#exportPhaseList');
+        const $iterList = $('#exportIterList');
+        const $metricList = $('#exportMetricList');
+        const $alertBox = $('#exportAlert');
 
         function hideAllGroups() {
           $iterGroup.hide();
@@ -1964,12 +1963,18 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
           $alertBox.removeClass('d-none').text(msg);
         }
 
-        function unique(arr) { return Array.from(new Set(arr)); }
-        function sortByTextAsc(a, b) { return String(a).localeCompare(String(b)); }
+        function unique(arr) {
+          return Array.from(new Set(arr));
+        }
+
+        function sortByTextAsc(a, b) {
+          return String(a).localeCompare(String(b));
+        }
 
         function getAllPhases() {
           return unique((DATA || []).map(d => d.fase).filter(Boolean)).sort(sortByTextAsc);
         }
+
         function getIterationsForPhases(fasesSel) {
           const fases = Array.isArray(fasesSel) && fasesSel.length ? fasesSel : getAllPhases();
           return unique((DATA || [])
@@ -1977,6 +1982,7 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
             .map(d => d.iteracion)
             .filter(Boolean)).sort(sortByTextAsc);
         }
+
         function getMetricsForIterations(fasesSel, itersSel) {
           const fases = Array.isArray(fasesSel) && fasesSel.length ? fasesSel : getAllPhases();
           const iters = Array.isArray(itersSel) && itersSel.length ? itersSel : getIterationsForPhases(fases);
@@ -1984,9 +1990,14 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
             .filter(d => fases.includes(String(d.fase)))
             .filter(d => iters.includes(String(d.iteracion)));
           const map = new Map();
-          scoped.forEach(d => (d.metricas||[]).forEach(m => { if (!map.has(String(m.id))) map.set(String(m.id), m.nombre); }));
-          return Array.from(map, ([id, nombre]) => ({ id, nombre }))
-                      .sort((a,b) => String(a.nombre).localeCompare(String(b.nombre)));
+          scoped.forEach(d => (d.metricas || []).forEach(m => {
+            if (!map.has(String(m.id))) map.set(String(m.id), m.nombre);
+          }));
+          return Array.from(map, ([id, nombre]) => ({
+              id,
+              nombre
+            }))
+            .sort((a, b) => String(a.nombre).localeCompare(String(b.nombre)));
         }
 
         function checklistItemHtml(id, label, nameAttr) {
@@ -1998,22 +2009,25 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
             </div>`;
         }
 
-        function markAllIn($container, checked=true) {
+        function markAllIn($container, checked = true) {
           $container.find('input[type="checkbox"]').prop('checked', checked);
         }
 
         function readCheckedValues($container) {
-          return $container.find('input[type="checkbox"]:checked').map(function(){ return String(this.value); }).get();
+          return $container.find('input[type="checkbox"]:checked').map(function() {
+            return String(this.value);
+          }).get();
         }
 
         function syncExportSelectionFromUI() {
           const fases = readCheckedValues($phaseList);
           const iters = readCheckedValues($iterList);
-          const mets  = readCheckedValues($metricList);
+          const mets = readCheckedValues($metricList);
           exportSelection.fases = (fases.length && fases.length !== $phaseList.find('input').length) ? fases : [];
           exportSelection.iteraciones = (iters.length && iters.length !== $iterList.find('input').length) ? iters : [];
           exportSelection.metricas = (mets.length && mets.length !== $metricList.find('input').length) ? mets : [];
-          exportSelection.incluirGlobal = !!document.getElementById('exportIncluirGlobal')?.checked;
+          const fmt = (document.querySelector('input[name="exportFmt"]:checked')?.value || 'png').toLowerCase();
+          exportSelection.incluirGlobal = fmt === 'png' ? !!document.getElementById('exportIncluirGlobal')?.checked : false;
         }
 
         function buildPhaseChecklist() {
@@ -2041,7 +2055,7 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
             iters.forEach(i => $iterList.append(checklistItemHtml(i, i, 'iter')));
             markAllIn($iterList, true);
           }
-          $iterGroup.stop(true,true).slideDown(120);
+          $iterGroup.stop(true, true).slideDown(120);
         }
 
         function buildMetricChecklist() {
@@ -2056,16 +2070,28 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
             mets.forEach(m => $metricList.append(checklistItemHtml(m.id, `${m.nombre}`, 'met')));
             markAllIn($metricList, true);
           }
-          $metricGroup.stop(true,true).slideDown(120);
+          $metricGroup.stop(true, true).slideDown(120);
         }
 
         function resetSelections() {
           exportSelection.fases = [];
           exportSelection.iteraciones = [];
           exportSelection.metricas = [];
-          exportSelection.incluirGlobal = true;
+          const fmt = (document.querySelector('input[name="exportFmt"]:checked')?.value || 'png').toLowerCase();
+          exportSelection.incluirGlobal = (fmt === 'png');
           const inc = document.getElementById('exportIncluirGlobal');
-          if (inc) inc.checked = true;
+          if (inc) inc.checked = (fmt === 'png');
+        }
+
+        function togglePngOnlyOptions() {
+          const fmt = (document.querySelector('input[name="exportFmt"]:checked')?.value || 'png').toLowerCase();
+          const box = document.getElementById('exportPngOptions');
+          if (box) box.style.display = (fmt === 'png') ? '' : 'none';
+          if (fmt !== 'png') {
+            const inc = document.getElementById('exportIncluirGlobal');
+            if (inc) inc.checked = false;
+          }
+          syncExportSelectionFromUI();
         }
 
         btn.addEventListener('click', () => {
@@ -2076,11 +2102,12 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
           buildPhaseChecklist();
           buildIterChecklist();
           buildMetricChecklist();
+          togglePngOnlyOptions();
           $('#exportModal').modal('show');
         });
 
         // Al abrir por data-API también reconstruir (seguridad)
-        $('#exportModal').on('show.bs.modal', function(){
+        $('#exportModal').on('show.bs.modal', function() {
           showAlert('');
           resetSelections();
           hideAllGroups();
@@ -2088,25 +2115,47 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
           buildIterChecklist();
           buildMetricChecklist();
           syncExportSelectionFromUI();
+          togglePngOnlyOptions();
         });
 
         // Interacciones jerárquicas
-        $phaseList.on('change', 'input[type="checkbox"]', function(){
+        $phaseList.on('change', 'input[type="checkbox"]', function() {
           buildIterChecklist();
           buildMetricChecklist();
           syncExportSelectionFromUI();
         });
-        $iterList.on('change', 'input[type="checkbox"]', function(){
+        $iterList.on('change', 'input[type="checkbox"]', function() {
           buildMetricChecklist();
           syncExportSelectionFromUI();
         });
-        $metricList.on('change', 'input[type="checkbox"]', function(){
+        $metricList.on('change', 'input[type="checkbox"]', function() {
           syncExportSelectionFromUI();
         });
-        $('#exportIncluirGlobal').on('change', function(){ syncExportSelectionFromUI(); });
+        $('#exportIncluirGlobal').on('change', function() {
+          syncExportSelectionFromUI();
+        });
+        $('#fmtPng, #fmtPdf').on('change', function() {
+          togglePngOnlyOptions();
+        });
 
         // Confirmar exportación
         const confirmBtn = document.getElementById('exportConfirmBtn');
+
+        function setModeAndRerender(newMode) {
+          const btnToggle = document.getElementById('modeToggle');
+          if (!btnToggle) return;
+          const prev = btnToggle.dataset.mode || 'donut';
+          if (prev === newMode) return;
+          btnToggle.dataset.mode = newMode;
+          btnToggle.classList.toggle('off', newMode === 'donut');
+          btnToggle.innerHTML = newMode === 'donut' ?
+            '<i class="oi oi-bar-chart"></i> Ver como barras' :
+            '<i class="oi oi-pie-chart"></i> Ver como donuts';
+          const active = document.querySelector('#iterFilter .iter-pill.active');
+          const iter = active ? active.dataset.iter : null;
+          renderIterCards(iter === 'ALL' ? null : iter);
+        }
+
         if (confirmBtn) confirmBtn.addEventListener('click', async () => {
           showAlert('');
           syncExportSelectionFromUI();
@@ -2118,7 +2167,25 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
 
           try {
             if (fmt === 'png') {
-              await exportChartsToServerPNG({ fases, iteraciones, metricas, incluirGlobal });
+              const chartType = (document.querySelector('input[name="exportChartType"]:checked')?.value || 'donut');
+              const btnToggle = document.getElementById('modeToggle');
+              const prevMode = btnToggle ? (btnToggle.dataset.mode || 'donut') : 'donut';
+              const needSwitch = (chartType !== prevMode);
+              if (needSwitch) {
+                setModeAndRerender(chartType);
+                // esperar un instante para que los charts se preparen
+                await new Promise(r => setTimeout(r, 700));
+              }
+              await exportChartsToServerPNG({
+                fases,
+                iteraciones,
+                metricas,
+                incluirGlobal
+              });
+              if (needSwitch) {
+                setModeAndRerender(prevMode);
+                setTimeout(() => {}, 0);
+              }
               $('#exportModal').modal('hide');
             } else {
               // PDF: construir URL con arrays GET
@@ -2127,25 +2194,40 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
               fases.forEach(f => p.append('fase[]', f));
               iteraciones.forEach(i => p.append('iteracion[]', i));
               metricas.forEach(m => p.append('metrica[]', m));
-              p.set('incluirGlobal', incluirGlobal ? '1' : '0');
+              // No aplica incluirGlobal en PDF
               // compat: si solo hay una fase o métrica, enviar además los parámetros simples
               if (fases.length === 1) p.set('fase', fases[0]);
               if (metricas.length === 1) p.set('metricId', metricas[0]);
               const url = 'api/exportar_pdf.php?' + p.toString();
               const a = document.createElement('a');
-              a.href = url; a.target = '_blank'; a.rel = 'noopener';
-              document.body.appendChild(a); a.click(); setTimeout(()=>{ try{ a.remove(); }catch(_){} },0);
+              a.href = url;
+              a.target = '_blank';
+              a.rel = 'noopener';
+              document.body.appendChild(a);
+              a.click();
+              setTimeout(() => {
+                try {
+                  a.remove();
+                } catch (_) {}
+              }, 0);
               $('#exportModal').modal('hide');
             }
-          } catch(err) {
+          } catch (err) {
             showAlert('No se pudo iniciar la exportación: ' + (err && err.message ? err.message : String(err)));
           }
         });
 
         // Utilidades de exportación (PNG)
-        async function exportChartsToServerPNG(opts={}) {
-          const { fases=[], iteraciones=[], metricas=[], incluirGlobal=true } = opts;
-          const canvas = await composeChartsCanvasGrid({ fases, iteraciones, metricas, incluirGlobal });
+        async function exportChartsToServerPNG(opts = {}) {
+          const {
+            fases = [], iteraciones = [], metricas = [], incluirGlobal = true
+          } = opts;
+          const canvas = await composeChartsCanvasGrid({
+            fases,
+            iteraciones,
+            metricas,
+            incluirGlobal
+          });
           const pngDataUrl = canvas.toDataURL('image/png');
           await postDataUrlForDownload('api/exportar_png.php', pngDataUrl, suggestedFileName('png'));
         }
@@ -2159,22 +2241,82 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
           });
         }
 
+        // Esperar 1 o más frames para asegurar pintura de canvas/DOM
+        function waitNextFrame(times = 1) {
+          return new Promise(resolve => {
+            const step = (n) => {
+              if (n <= 0) return resolve();
+              requestAnimationFrame(() => step(n - 1));
+            };
+            step(Math.max(1, times));
+          });
+        }
+
+        // Espera a que un gráfico ECharts termine su render antes de capturar
+        function waitChartFinished(instance, timeout = 2000) {
+          return new Promise((resolve) => {
+            if (!instance || typeof instance.on !== 'function') return resolve();
+            let done = false;
+            const finish = () => {
+              if (!done) {
+                done = true;
+                try {
+                  instance.off('finished', finish);
+                } catch (_) {}
+                resolve();
+              }
+            };
+            try {
+              instance.on('finished', finish);
+            } catch (_) {
+              return resolve();
+            }
+            // Fallback por tiempo máximo
+            setTimeout(finish, timeout);
+            // Un resize suave ayuda a disparar el evento terminado
+            try {
+              instance.resize && instance.resize();
+            } catch (_) {}
+          });
+        }
+
+        // (duplicado eliminado)
+
         function suggestedFileName(ext) {
-          const name = (document.getElementById('projectName')?.textContent || 'proyecto').replace(/\s+/g,'_');
-          const ts = new Date().toISOString().replace(/[:T]/g,'-').slice(0,16);
+          const name = (document.getElementById('projectName')?.textContent || 'proyecto').replace(/\s+/g, '_');
+          const ts = new Date().toISOString().replace(/[:T]/g, '-').slice(0, 16);
           return `${name}_tablero_${ts}.${ext}`;
         }
 
         async function postDataUrlForDownload(url, dataUrl, filename) {
           return new Promise(resolve => {
             const form = document.createElement('form');
-            form.method = 'POST'; form.action = url; form.style.display = 'none';
-            const input = document.createElement('input'); input.type = 'hidden'; input.name = 'image'; input.value = dataUrl;
-            const name = document.createElement('input'); name.type = 'hidden'; name.name = 'filename'; name.value = filename;
-            const proj = document.createElement('input'); proj.type = 'hidden'; proj.name = 'proyecto'; proj.value = String(PROYECTO_ID);
-            form.appendChild(input); form.appendChild(name); form.appendChild(proj);
-            document.body.appendChild(form); form.submit();
-            setTimeout(() => { try { form.remove(); } catch(_){} resolve(); }, 250);
+            form.method = 'POST';
+            form.action = url;
+            form.style.display = 'none';
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'image';
+            input.value = dataUrl;
+            const name = document.createElement('input');
+            name.type = 'hidden';
+            name.name = 'filename';
+            name.value = filename;
+            const proj = document.createElement('input');
+            proj.type = 'hidden';
+            proj.name = 'proyecto';
+            proj.value = String(PROYECTO_ID);
+            form.appendChild(input);
+            form.appendChild(name);
+            form.appendChild(proj);
+            document.body.appendChild(form);
+            form.submit();
+            setTimeout(() => {
+              try {
+                form.remove();
+              } catch (_) {}
+              resolve();
+            }, 250);
           });
         }
 
@@ -2184,86 +2326,196 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
           const iteraciones = (params && (params.iteraciones || params.iterSel)) || [];
           const metricas = (params && (params.metricas || params.metSel)) || [];
           const incluirGlobal = !!(params && params.incluirGlobal);
-          // Recopilar DOMs
+
+          // 1) Recopilar DOMs de gráficos a capturar
           const chartDoms = [];
           if (incluirGlobal) {
             const globalEl = document.getElementById('chartDistribucionGlobal');
-            if (globalEl && globalEl.offsetWidth && globalEl.offsetHeight) chartDoms.push(globalEl);
+            if (globalEl) chartDoms.push(globalEl);
           }
           const metricEls = Array.from(document.querySelectorAll('.metric-body-chart'));
           metricEls.forEach(el => {
             const fase = el.getAttribute('data-fase');
             const iter = el.getAttribute('data-iter');
-            const mid  = el.getAttribute('data-metric-id');
+            const mid = el.getAttribute('data-metric-id');
             const faseOk = !fases.length || fases.includes(String(fase));
             const iterOk = !iteraciones.length || iteraciones.includes(String(iter));
-            const metOk  = !metricas.length  || metricas.includes(String(mid));
+            const metOk = !metricas.length || metricas.includes(String(mid));
             if (faseOk && iterOk && metOk) chartDoms.push(el);
           });
 
           if (!chartDoms.length) throw new Error('No hay gráficos coincidentes con la selección.');
 
+          // 2) Utilidad: metadatos de métrica (para etiquetas bajo cada donut)
+          const findMetricMeta = (el) => {
+            try {
+              const iterKey = el.getAttribute('data-iter');
+              const mid = el.getAttribute('data-metric-id');
+              if (!iterKey || !mid) return null;
+              const it = (DATA || []).find(d => String(d.iteracion) === String(iterKey));
+              if (!it) return null;
+              const m = (it.metricas || []).find(mm => String(mm.id) === String(mid));
+              if (!m) return null;
+              const plan = Number(m.planned || m.plan || 0);
+              const ejec = Number(m.executedReal || m.ejecutado || 0);
+              const umbral = Number(m.umbral != null ? m.umbral : (m.min != null ? m.min : 100));
+              return {
+                plan,
+                ejec,
+                umbral
+              };
+            } catch (_) {
+              return null;
+            }
+          };
+
+          // 3) Capturar imágenes de cada gráfico, aplicando ajustes temporales
           const images = [];
           for (const el of chartDoms) {
             const inst = (window.echarts && window.echarts.getInstanceByDom) ? window.echarts.getInstanceByDom(el) : null;
             if (!inst) continue;
-            let tweaked = false, originalOpt = null, originalHStyle = null;
+            let tweaked = false,
+              originalOpt = null,
+              originalHStyle = null;
+
+            // Clonar opción y deshabilitar animaciones para captura estable
+            try {
+              originalOpt = inst.getOption();
+            } catch (_) {
+              originalOpt = null;
+            }
+            let cloned = {};
+            try {
+              cloned = JSON.parse(JSON.stringify(originalOpt || {}));
+            } catch (_) {
+              cloned = {};
+            }
+            cloned.animation = false;
+            cloned.animationDuration = 0;
+            cloned.animationDurationUpdate = 0;
+            if (cloned.series && Array.isArray(cloned.series)) {
+              cloned.series = cloned.series.map(s => Object.assign({}, s, {
+                animation: false,
+                animationDuration: 0,
+                animationDurationUpdate: 0
+              }));
+            }
+
             if (el.id === 'chartDistribucionGlobal') {
               try {
-                originalOpt = inst.getOption();
-                const cloned = JSON.parse(JSON.stringify(originalOpt));
-                // Ocultar leyenda y centrar, igualar tamaño de donut con las demás
+                // Donut global más grande y centrado; ocultar leyenda si existe
                 if (cloned.legend) {
-                  if (Array.isArray(cloned.legend)) cloned.legend.forEach(l => l.show = false);
+                  if (Array.isArray(cloned.legend)) cloned.legend = cloned.legend.map(l => Object.assign({}, l, {
+                    show: false
+                  }));
                   else cloned.legend.show = false;
                 }
                 if (cloned.series && cloned.series[0] && cloned.series[0].type === 'pie') {
-                  cloned.series[0].radius = ['52%','90%'];
-                  cloned.series[0].center = ['50%','50%'];
-                  // ocultar etiquetas externas para que no reduzca el donut
-                  cloned.series[0].label = Object.assign({}, cloned.series[0].label, { show: false });
-                  cloned.series[0].labelLine = Object.assign({}, cloned.series[0].labelLine, { show: false });
-                  cloned.series[0].itemStyle = Object.assign({}, cloned.series[0].itemStyle, { borderWidth: 1.5 });
+                  cloned.series[0].radius = ['48%', '80%'];
+                  cloned.series[0].center = ['50%', '50%'];
+                  cloned.series[0].label = Object.assign({}, cloned.series[0].label, {
+                    show: true,
+                    formatter: '{b}\n{d}%',
+                    fontSize: 12,
+                    color: '#333'
+                  });
+                  cloned.series[0].labelLine = Object.assign({}, cloned.series[0].labelLine, {
+                    show: true
+                  });
+                  cloned.series[0].itemStyle = Object.assign({}, cloned.series[0].itemStyle, {
+                    borderWidth: 1.5
+                  });
                 }
-                // igualar alto del canvas al de una métrica
+                // Centrar el texto en exportación (sin offset de pantalla)
+                if (cloned.graphic && Array.isArray(cloned.graphic) && cloned.graphic[0] && cloned.graphic[0].type === 'text') {
+                  cloned.graphic[0].left = 'center';
+                  cloned.graphic[0].top = 'middle';
+                  cloned.graphic[0].position = [0, 0];
+                }
+                // Igualar alto al de una métrica para armonizar composición
                 const sampleMetricEl = document.querySelector('.metric-body-chart');
                 if (sampleMetricEl && sampleMetricEl.clientHeight) {
                   originalHStyle = el.style.height;
-                  el.style.height = sampleMetricEl.clientHeight + 'px';
+                  el.style.height = (sampleMetricEl.clientHeight + 60) + 'px';
                   inst.resize();
+
                 }
-                inst.setOption(cloned, true);
-                tweaked = true;
-              } catch(_) {}
+              } catch (_) {}
             }
 
-            const url = inst.getDataURL({ pixelRatio: 2, backgroundColor: '#ffffff' });
-            images.push({ url, w: el.clientWidth, h: el.clientHeight, title: el.getAttribute('data-title') || '' });
+            // Aplicar opciones clonadas sin animaciones
+            try {
+              inst.setOption(cloned, true);
+              tweaked = true;
+            } catch (_) {}
 
+            // Esperar render completo antes de capturar
+            try {
+              await waitChartFinished(inst, 2500);
+            } catch (_) {}
+            await waitNextFrame(2);
+
+            const url = inst.getDataURL({
+              pixelRatio: 2,
+              backgroundColor: '#ffffff'
+            });
+            images.push({
+              url,
+              w: el.clientWidth,
+              h: el.clientHeight,
+              title: el.getAttribute('data-title') || (el.id === 'chartDistribucionGlobal' ? 'Visión General del Proyecto' : ''),
+              isGlobal: (el.id === 'chartDistribucionGlobal'),
+              meta: findMetricMeta(el)
+            });
+
+            // Restaurar opciones/alto originales
             if (tweaked && originalOpt) {
-              try { inst.setOption(originalOpt, true); } catch(_) {}
-              try { if (originalHStyle !== null) { el.style.height = originalHStyle; inst.resize(); } } catch(_) {}
+              try {
+                inst.setOption(originalOpt, true);
+              } catch (_) {}
+              try {
+                if (originalHStyle !== null) {
+                  el.style.height = originalHStyle;
+                  inst.resize();
+                }
+              } catch (_) {}
             }
           }
           if (!images.length) throw new Error('No se pudieron generar imágenes de los gráficos.');
 
           // Separar global (si existe) y resto
-          const globalIdx = images.findIndex(im => (im.title||'').includes('Visión General'));
+          const globalIdx = images.findIndex(im => im.isGlobal || (im.title || '').includes('Visión General'));
           const globalImg = globalIdx >= 0 ? images[globalIdx] : null;
-          const others = images.filter((_,i) => i !== globalIdx).sort((a,b) => (a.title||'').localeCompare(b.title||''));
+          const others = images.filter((_, i) => i !== globalIdx).sort((a, b) => (a.title || '').localeCompare(b.title || ''));
 
-          // Composición en grilla para el resto: 2 o 3 columnas según cantidad
+          // Composición en grilla para el resto: columnas adaptativas para escalar hasta 50 sin solapes
           const othersCount = others.length;
-          const cols = othersCount >= 6 ? 3 : (othersCount >= 2 ? 2 : 1);
-          const PADDING = 18, GAP = 12, TITLE_H = 22;
-          const cellW = Math.max(320, Math.min(520, Math.max(...images.map(i => i.w))));
+          const cols = (othersCount >= 36) ? 4 : (othersCount >= 25) ? 4 : (othersCount >= 16) ? 4 : (othersCount >= 6) ? 3 : (othersCount >= 2) ? 2 : 1;
+          const PADDING = (othersCount >= 36) ? 12 : (othersCount >= 25 ? 14 : 18);
+          const GAP = (othersCount >= 36) ? 8 : 12;
+          const TITLE_H = 20,
+            LABEL_GAP = 6,
+            LABEL_H = (othersCount >= 25 ? 14 : 16);
+          const titleFontSize = (othersCount >= 36) ? 10 : (othersCount >= 25 ? 11 : 12);
+          let cellW;
+          if (othersCount >= 36) cellW = 260;
+          else if (othersCount >= 25) cellW = 300;
+          else if (othersCount >= 16) cellW = 320;
+          else if (othersCount >= 6) cellW = 340;
+          else cellW = Math.max(360, Math.min(520, Math.max(...images.map(i => i.w))));
           const totalW = PADDING + Math.max(1, cols) * (cellW + PADDING);
 
           // Calcular alto total: fila global (si hay) + filas del resto
           let globalRowHeight = 0;
           if (globalImg) {
-            const scaledHG = Math.round(globalImg.h * (cellW / globalImg.w));
+            // agrandar global para ocupar 2 columnas si es posible
+            const gCols = cols >= 2 ? 2 : 1;
+            const gCellW = (gCols * cellW) + ((gCols - 1) * PADDING);
+            const scaledHG = Math.round(globalImg.h * (gCellW / globalImg.w));
             globalRowHeight = TITLE_H + scaledHG + GAP;
+            // guardar medidas para dibujo
+            globalImg._gCols = gCols;
+            globalImg._gCellW = gCellW;
           }
           const rows = cols > 0 ? Math.ceil(othersCount / cols) : 0;
           const rowHeights = new Array(rows).fill(0);
@@ -2274,18 +2526,21 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
               if (idx >= othersCount) break;
               const img = others[idx];
               const scaledH = Math.round(img.h * (cellW / img.w));
-              maxH = Math.max(maxH, TITLE_H + scaledH + GAP);
+              maxH = Math.max(maxH, TITLE_H + scaledH + LABEL_GAP + LABEL_H + GAP);
             }
             rowHeights[r] = maxH;
           }
-          const totalH = PADDING + globalRowHeight + rowHeights.reduce((a,b)=>a+b,0) + PADDING;
+          const totalH = PADDING + globalRowHeight + rowHeights.reduce((a, b) => a + b, 0) + PADDING;
 
+          // alta resolución
+          const SCALE = 2; // 2x para mejor nitidez
           const canvas = document.createElement('canvas');
-          canvas.width = totalW;
-          canvas.height = totalH;
+          canvas.width = Math.round(totalW * SCALE);
+          canvas.height = Math.round(totalH * SCALE);
           const ctx = canvas.getContext('2d');
+          ctx.scale(SCALE, SCALE);
           ctx.fillStyle = '#ffffff';
-          ctx.fillRect(0,0,totalW,totalH);
+          ctx.fillRect(0, 0, totalW, totalH);
           // header
           ctx.fillStyle = '#222';
           ctx.font = 'bold 16px Arial, sans-serif';
@@ -2296,18 +2551,23 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
           // Dibujar fila global centrada si existe
           if (globalImg) {
             const contentW = Math.max(1, cols) * (cellW + PADDING) - PADDING;
-            const x = PADDING + Math.floor((contentW - cellW) / 2);
-            // título
+            const gCellW = globalImg._gCellW || cellW;
+            const x = PADDING + Math.floor((contentW - gCellW) / 2);
+            // título (centrado)
             if (globalImg.title) {
-              ctx.font = 'bold 12px Arial, sans-serif';
+              ctx.font = `bold ${titleFontSize}px Arial, sans-serif`;
               ctx.fillStyle = '#333';
               let title = globalImg.title;
-              while (ctx.measureText(title).width > cellW) { title = title.slice(0, -1); }
-              ctx.fillText(title, x, y + 14);
+              while (ctx.measureText(title).width > gCellW) {
+                title = title.slice(0, -1);
+              }
+              ctx.textAlign = 'center';
+              ctx.fillText(title, x + Math.floor(gCellW / 2), y + 14);
+              ctx.textAlign = 'left';
             }
             const imgG = await loadImage(globalImg.url);
-            const scaledHG = Math.round(globalImg.h * (cellW / globalImg.w));
-            ctx.drawImage(imgG, x, y + TITLE_H, cellW, scaledHG);
+            const scaledHG = Math.round(globalImg.h * (gCellW / globalImg.w));
+            ctx.drawImage(imgG, x, y + TITLE_H, gCellW, scaledHG);
             y += globalRowHeight;
           }
 
@@ -2319,9 +2579,9 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
               const img = others[idx];
               const image = await loadImage(img.url);
               const x = PADDING + c * (cellW + PADDING);
-              // título
+              // título (centrado)
               if (img.title) {
-                ctx.font = 'bold 12px Arial, sans-serif';
+                ctx.font = `bold ${titleFontSize}px Arial, sans-serif`;
                 ctx.fillStyle = '#333';
                 const maxTitleWidth = cellW;
                 let title = img.title;
@@ -2329,10 +2589,27 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
                 while (ctx.measureText(title).width > maxTitleWidth) {
                   title = title.slice(0, -1);
                 }
-                ctx.fillText(title, x, y + 14);
+                ctx.textAlign = 'center';
+                ctx.fillText(title, x + Math.floor(cellW / 2), y + 14);
+                ctx.textAlign = 'left';
               }
               const scaledH = Math.round(img.h * (cellW / img.w));
               ctx.drawImage(image, x, y + TITLE_H, cellW, scaledH);
+              // etiquetas bajo el donut: Planificado | Ejecutado | Umbral (%)
+              if (img.meta) {
+                const labelText = `Planificado: ${img.meta.plan}  |  Ejecutado: ${img.meta.ejec}  |  Umbral: ${img.meta.umbral}%`;
+                // ajustar tamaño para que quepa
+                let fontSize = 12;
+                ctx.fillStyle = '#000';
+                while (fontSize >= 9) {
+                  ctx.font = `normal ${fontSize}px Arial, sans-serif`;
+                  if (ctx.measureText(labelText).width <= cellW) break;
+                  fontSize -= 1;
+                }
+                ctx.textAlign = 'center';
+                ctx.fillText(labelText, x + Math.floor(cellW / 2), y + TITLE_H + scaledH + LABEL_GAP + (LABEL_H - 4));
+                ctx.textAlign = 'left';
+              }
             }
             y += rowHeights[r];
           }
