@@ -454,12 +454,12 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
     }
 
     .card-global-vision .card-body {
-      padding-top: 0.5rem !important;
+      padding-top: 0.15rem !important; /* menos espacio entre título y gráfico */
       padding-bottom: 0.25rem !important;
     }
 
     #chartDistribucionGlobal {
-      height: 300px !important;
+      height: 340px !important; /* +40px para que entren las leyendas completas */
       /* mantiene proporción visual */
       margin-top: -5px !important;
     }
@@ -626,13 +626,13 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
 
     <!-- Resumen global (cálculo en JS igual al original) -->
     <div class="card mb-3 shadow-sm border-0 card-global-vision">
-      <h6 class="text-primary font-weight-bold mb-2 text-center">
+      <h6 class="text-primary font-weight-bold mb-1 text-center">
         Visión General del Proyecto
       </h6>
 
       <div class="card-body p-2">
         <!-- Gráfico de distribución global de métricas -->
-        <div id="chartDistribucionGlobal" data-title="Visión General del Proyecto" style="height:300px; margin-top:-10px;"></div>
+  <div id="chartDistribucionGlobal" data-title="Visión General del Proyecto" style="height:340px; margin-top:-12px;"></div>
       </div>
     </div>
 
@@ -1378,7 +1378,8 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
             type: 'group',
             left: 'center',
             top: 'center',
-            children: [{
+            children: [
+              {
                 type: 'text',
                 z: 100,
                 style: {
@@ -1831,24 +1832,43 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
 
         // 🔹 Leyendas más abajo y sin superponer el gráfico
         legend: {
-          bottom: 2, // pegadas al borde inferior del canvas
+          bottom: -5, // mantener dentro del canvas y evitar recortes
           itemGap: 12,
-          textStyle: { color: '#555', fontSize: 12 }
+          textStyle: {
+            color: '#555',
+            fontSize: 12
+          }
         },
 
         // 🔹 Bloque único de texto centrado geométricamente
         graphic: [{
           type: 'text',
           left: 'center',
-          top: '36%',
-          // ajuste un poco mayor hacia arriba para percibirlo perfectamente centrado
+          top: 'middle',
+          position: [0, 0],
+          // centrado geométrico estable (pantalla y export)
           z: 100,
+          silent: true,
+          bounding: 'raw',
           style: {
             text: `{val|${avg}%}` + '\n' + `{sub|Cumplimiento}` + '\n' + `{cnt|(${totalMetricas} métricas)}`,
             rich: {
-              val: { fontSize: 34, fontWeight: 700, fill: '#212529', lineHeight: 36 },
-              sub: { fontSize: 14, fill: '#6c757d', lineHeight: 18 },
-              cnt: { fontSize: 12, fill: '#6c757d', lineHeight: 16 }
+              val: {
+                fontSize: 34,
+                fontWeight: 700,
+                fill: '#212529',
+                lineHeight: 36
+              },
+              sub: {
+                fontSize: 14,
+                fill: '#6c757d',
+                lineHeight: 18
+              },
+              cnt: {
+                fontSize: 12,
+                fill: '#6c757d',
+                lineHeight: 16
+              }
             },
             align: 'center',
             verticalAlign: 'middle'
@@ -1857,9 +1877,9 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
 
         series: [{
           type: 'pie',
-          // subimos levemente el centro para dar más espacio a las leyendas abajo
-          radius: ['45%', '74%'],
-          center: ['50%', '46%'],
+          // centro geométrico
+          radius: ['45%', '70%'],
+          center: ['50%', '50%'],
           label: {
             formatter: '{b}\n{d}%',
             fontSize: 12
@@ -2426,12 +2446,35 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
                     borderWidth: 1.5
                   });
                 }
-                // Centrar el texto en exportación (sin offset de pantalla)
-                if (cloned.graphic && Array.isArray(cloned.graphic) && cloned.graphic[0] && cloned.graphic[0].type === 'text') {
-                  cloned.graphic[0].left = 'center';
-                  cloned.graphic[0].top = 'middle';
-                  cloned.graphic[0].position = [0, 0];
+                // === 🔧 RE-CENTRAR TEXTO DEL DONUT GLOBAL (EXPORTACIÓN PNG) ===
+                try {
+                  const OFFSET_Y = 12; // píxeles hacia abajo solo para el PNG
+                  const centerAndOffset = (g) => {
+                    if (!g) return;
+                    if (g.type === 'text') {
+                      g.left = 'center';
+                      g.top = 'middle';
+                      g.position = [0, OFFSET_Y];
+                      g.style = Object.assign({}, g.style, { align: 'center', verticalAlign: 'middle' });
+                    } else if (g.type === 'group') {
+                      g.left = 'center';
+                      g.top = 'middle';
+                      g.position = [0, OFFSET_Y];
+                      if (Array.isArray(g.children)) g.children.forEach(centerAndOffset);
+                    }
+                  };
+                  if (Array.isArray(cloned.graphic)) {
+                    cloned.graphic.forEach(centerAndOffset);
+                  } else if (cloned.graphic && Array.isArray(cloned.graphic.elements)) {
+                    cloned.graphic.elements.forEach(centerAndOffset);
+                  }
+                } catch (e) {
+                  console.warn('No se pudo ajustar texto central del donut en exportación:', e);
                 }
+
+
+
+
                 // Igualar alto al de una métrica para armonizar composición
                 const sampleMetricEl = document.querySelector('.metric-body-chart');
                 if (sampleMetricEl && sampleMetricEl.clientHeight) {
