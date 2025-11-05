@@ -1,13 +1,24 @@
 <?php
 include_once '../lib/ControlAcceso.Class.php';
 ControlAcceso::requierePermiso(PermisosSistema::PERMISO_USUARIOS);
+// Admin/SuperAdmin only
+$__isAjax = !empty($_POST['ajax']) || (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest');
+if (!ControlAcceso::esAdminGlobal()) {
+    if ($__isAjax) {
+        header('Content-Type: application/json', true, 403);
+        echo json_encode(['success' => false, 'error' => 'Acceso restringido a administradores.']);
+    } else {
+        header('Location: usuarios.php?msg=' . urlencode('Acceso restringido a administradores.') . '&type=danger');
+    }
+    exit;
+}
 include_once '../modelo/BDConexion.Class.php';
 
 $DatosFormulario = $_POST;
 $bd = BDConexion::getInstancia();
 
 // detectar AJAX
-$isAjax = !empty($_POST['ajax']) || (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest');
+$isAjax = $__isAjax;
 
 $bd->autocommit(false);
 $bd->begin_transaction();

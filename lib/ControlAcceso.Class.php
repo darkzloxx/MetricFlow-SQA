@@ -160,6 +160,23 @@ class UsuarioSesion
 
 class ControlAcceso
 {
+    /**
+     * Verifica si el usuario autenticado posee un rol global Administrador o SuperAdmin.
+     */
+    public static function esAdminGlobal(): bool
+    {
+        $usr = self::usuarioActual();
+        if (!$usr || !isset($usr->roles) || !is_array($usr->roles)) {
+            return false;
+        }
+        foreach ($usr->roles as $r) {
+            $rolName = strtoupper(trim((string)($r->nombre ?? '')));
+            if ($rolName === 'ADMINISTRADOR' || $rolName === 'SUPERADMIN') {
+                return true;
+            }
+        }
+        return false;
+    }
     public static function requierePermiso(string $permisoNombre): void
     {
         if (!isset($_SESSION['usuario']) || !($_SESSION['usuario'] instanceof UsuarioSesion)) {

@@ -1,6 +1,10 @@
 <?php
 include_once '../lib/ControlAcceso.Class.php';
 ControlAcceso::requierePermiso(PermisosSistema::PERMISO_USUARIOS);
+if (!ControlAcceso::esAdminGlobal()) {
+    header('Location: usuarios.php?msg=' . urlencode('Acceso restringido a administradores.') . '&type=danger');
+    exit;
+}
 include_once '../modelo/Usuario.Class.php';
 $id = $_GET["id"];
 $Usuario = new Usuario($id);

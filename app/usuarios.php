@@ -1,6 +1,11 @@
 <?php
 include_once '../lib/ControlAcceso.Class.php';
 ControlAcceso::requierePermiso(PermisosSistema::PERMISO_USUARIOS);
+// Restringir exclusivamente a roles ADMINISTRADOR o SUPERADMIN
+if (!ControlAcceso::esAdminGlobal()) {
+    header('Location: proyectos.php?msg=' . urlencode('Acceso restringido a administradores.') . '&type=danger');
+    exit;
+}
 include_once '../modelo/ColeccionUsuarios.php';
 $ColeccionUsuarios = new ColeccionUsuarios();
 ?>

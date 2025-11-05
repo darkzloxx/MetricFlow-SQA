@@ -1,6 +1,15 @@
 <?php
 include_once '../lib/ControlAcceso.Class.php';
 ControlAcceso::requierePermiso(PermisosSistema::ABM_PROYECTOS);
+if (!ControlAcceso::esAdminGlobal()) {
+    if (!empty($_POST['ajax'])) {
+        header('Content-Type: application/json', true, 403);
+        echo json_encode(['success' => false, 'message' => 'Acceso restringido a administradores.']);
+    } else {
+        header('Location: proyectos.php?msg=' . urlencode('Acceso restringido a administradores.') . '&type=danger');
+    }
+    exit;
+}
 include_once '../modelo/BDConexion.Class.php';
 
 $bd = BDConexion::getInstancia();

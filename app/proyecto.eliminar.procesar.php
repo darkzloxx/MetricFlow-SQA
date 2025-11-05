@@ -1,6 +1,12 @@
 <?php
 include_once '../lib/ControlAcceso.Class.php';
 ControlAcceso::requierePermiso(PermisosSistema::ABM_PROYECTOS);
+if (!ControlAcceso::esAdminGlobal()) {
+    http_response_code(403);
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode(['success' => false, 'message' => 'Acceso restringido a administradores.']);
+    exit;
+}
 include_once '../modelo/BDConexion.Class.php';
 
 header('Content-Type: application/json; charset=utf-8');

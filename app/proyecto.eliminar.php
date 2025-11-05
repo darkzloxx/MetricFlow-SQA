@@ -1,6 +1,10 @@
 <?php
 include_once '../lib/ControlAcceso.class.php';
 ControlAcceso::requierePermiso(PermisosSistema::ABM_PROYECTOS);
+if (!ControlAcceso::esAdminGlobal()) {
+    header('Location: proyectos.php?msg=' . urlencode('Acceso restringido a administradores.') . '&type=danger');
+    exit;
+}
 include_once '../modelo/Permiso.php';
 $id = $_GET["id"];
 
