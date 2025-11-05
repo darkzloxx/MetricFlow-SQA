@@ -2398,52 +2398,48 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
               originalOpt = null,
               originalHStyle = null;
 
-            // Clonar opción y deshabilitar animaciones para captura estable
+            // Tomar opción actual y preparar un setOption por "merge" para no perder formatters (funciones)
             try {
               originalOpt = inst.getOption();
             } catch (_) {
               originalOpt = null;
             }
-            let cloned = {};
-            try {
-              cloned = JSON.parse(JSON.stringify(originalOpt || {}));
-            } catch (_) {
-              cloned = {};
-            }
-            cloned.animation = false;
-            cloned.animationDuration = 0;
-            cloned.animationDurationUpdate = 0;
-            if (cloned.series && Array.isArray(cloned.series)) {
-              cloned.series = cloned.series.map(s => Object.assign({}, s, {
-                animation: false,
-                animationDuration: 0,
-                animationDurationUpdate: 0
-              }));
-            }
+            const seriesCount = Array.isArray(originalOpt?.series) ? originalOpt.series.length : 0;
+            const seriesAnimTweaks = Array.from({ length: seriesCount }, () => ({
+              animation: false,
+              animationDuration: 0,
+              animationDurationUpdate: 0
+            }));
+            const tweaks = {
+              animation: false,
+              animationDuration: 0,
+              animationDurationUpdate: 0,
+              series: seriesAnimTweaks
+            };
 
             if (el.id === 'chartDistribucionGlobal') {
               try {
                 // Donut global más grande y centrado; ocultar leyenda si existe
-                if (cloned.legend) {
-                  if (Array.isArray(cloned.legend)) cloned.legend = cloned.legend.map(l => Object.assign({}, l, {
-                    show: false
-                  }));
-                  else cloned.legend.show = false;
+                if (originalOpt?.legend) {
+                  tweaks.legend = Array.isArray(originalOpt.legend)
+                    ? originalOpt.legend.map(() => ({ show: false }))
+                    : { show: false };
                 }
-                if (cloned.series && cloned.series[0] && cloned.series[0].type === 'pie') {
-                  cloned.series[0].radius = ['48%', '80%'];
-                  cloned.series[0].center = ['50%', '50%'];
-                  cloned.series[0].label = Object.assign({}, cloned.series[0].label, {
-                    show: true,
-                    formatter: '{b}\n{d}%',
-                    fontSize: 12,
-                    color: '#333'
-                  });
-                  cloned.series[0].labelLine = Object.assign({}, cloned.series[0].labelLine, {
-                    show: true
-                  });
-                  cloned.series[0].itemStyle = Object.assign({}, cloned.series[0].itemStyle, {
-                    borderWidth: 1.5
+                if (originalOpt?.series && originalOpt.series[0] && originalOpt.series[0].type === 'pie') {
+                  // aplicar ajustes sólo al primer series (la dona global)
+                  tweaks.series = tweaks.series || [];
+                  if (!tweaks.series[0]) tweaks.series[0] = {};
+                  Object.assign(tweaks.series[0], {
+                    radius: ['48%', '80%'],
+                    center: ['50%', '50%'],
+                    label: Object.assign({}, originalOpt.series[0].label || {}, {
+                      show: true,
+                      formatter: '{b}\n{d}%',
+                      fontSize: 12,
+                      color: '#333'
+                    }),
+                    labelLine: Object.assign({}, originalOpt.series[0].labelLine || {}, { show: true }),
+                    itemStyle: Object.assign({}, originalOpt.series[0].itemStyle || {}, { borderWidth: 1.5 })
                   });
                 }
                 // === 🔧 RE-CENTRAR TEXTO DEL DONUT GLOBAL (EXPORTACIÓN PNG) ===
@@ -2463,10 +2459,18 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
                       if (Array.isArray(g.children)) g.children.forEach(centerAndOffset);
                     }
                   };
-                  if (Array.isArray(cloned.graphic)) {
-                    cloned.graphic.forEach(centerAndOffset);
-                  } else if (cloned.graphic && Array.isArray(cloned.graphic.elements)) {
-                    cloned.graphic.elements.forEach(centerAndOffset);
+                  if (Array.isArray(originalOpt?.graphic)) {
+                    tweaks.graphic = originalOpt.graphic.map(g => {
+                      const cp = JSON.parse(JSON.stringify(g || {}));
+                      centerAndOffset(cp);
+                      return cp;
+                    });
+                  } else if (originalOpt?.graphic && Array.isArray(originalOpt.graphic.elements)) {
+                    tweaks.graphic = { elements: originalOpt.graphic.elements.map(g => {
+                      const cp = JSON.parse(JSON.stringify(g || {}));
+                      centerAndOffset(cp);
+                      return cp;
+                    }) };
                   }
                 } catch (e) {
                   console.warn('No se pudo ajustar texto central del donut en exportación:', e);
@@ -2486,9 +2490,9 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
               } catch (_) {}
             }
 
-            // Aplicar opciones clonadas sin animaciones
+            // Aplicar tweaks sin reemplazar toda la opción (preserva formatters/funciones)
             try {
-              inst.setOption(cloned, true);
+              inst.setOption(tweaks, false);
               tweaked = true;
             } catch (_) {}
 
