@@ -1536,11 +1536,12 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
               show: false
             },
             axisLabel: {
+              interval: 0, // mostrar SIEMPRE ambas etiquetas (Planificado y Ejecutado)
               // Colorea cada etiqueta para que coincida con Planificado (azul suave) y Ejecutado (color semáforo)
               formatter: function(value, idx) { return idx === 0 ? '{plan|Planificado}' : '{exec|Ejecutado}'; },
               rich: {
-                plan: { color: '#a8b5d7', fontWeight: 700 },
-                exec: { color: executedCol, fontWeight: 700 }
+                plan: { color: '#000000ff', fontWeight: 500 },
+                exec: { color: '#000000ff', fontWeight: 500 }
               }
             }
           },
