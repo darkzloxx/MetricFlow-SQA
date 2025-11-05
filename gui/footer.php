@@ -128,8 +128,6 @@ foreach ($proyectosRoles as $pr) {
             <span class="oi oi-info"></span>
         </span>
     <?php endif; ?>
-    <span class="mx-2">|</span>
-<a href="../app/salir.php" id="btnSalir">Salir</a>
 </footer>
 
 <!-- ✅ Dependencias necesarias -->
@@ -147,15 +145,5 @@ $(function () {
     }
   });
 });
-// Confirmación antes de cerrar sesión
-document.addEventListener('DOMContentLoaded', function() {
-  var btnSalir = document.getElementById('btnSalir');
-  if (btnSalir) {
-    btnSalir.addEventListener('click', function(e) {
-      if (!confirm('¿Está seguro que desea cerrar sesión?')) {
-        e.preventDefault();
-      }
-    });
-  }
-});
+
 </script>

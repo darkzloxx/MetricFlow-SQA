@@ -21,7 +21,7 @@ $currentPage = isset($_SERVER['SCRIPT_NAME']) ? basename($_SERVER['SCRIPT_NAME']
         <span class="navbar-toggler-icon"></span>
     </button>
     <div class="collapse navbar-collapse" id="navbarSupportedContent">
-        <?php if ($currentPage !== 'index.php' && $currentPage !== 'salir.php'  ) { ?>
+        <?php if ($currentPage !== 'index.php' && $currentPage !== 'salir.php') { ?>
             <ul class="navbar-nav mr-auto">
 
                 <?php if (ControlAcceso::verificaPermiso(PermisosSistema::ABM_USUARIOS)) { ?>
@@ -68,7 +68,7 @@ $currentPage = isset($_SERVER['SCRIPT_NAME']) ? basename($_SERVER['SCRIPT_NAME']
                     <?php } */ ?>
 
                 <li class="nav-item">
-                    <a class="nav-link" href="../app/salir.php">
+                    <a class="nav-link" id="btnSalir" href="../app/salir.php">
                         <span class="oi oi-account-logout" />
                         Salir
                     </a>
@@ -77,7 +77,19 @@ $currentPage = isset($_SERVER['SCRIPT_NAME']) ? basename($_SERVER['SCRIPT_NAME']
         <?php } ?>
     </div>
 </nav>
-
+<script>
+    // Confirmación antes de cerrar sesión
+    document.addEventListener('DOMContentLoaded', function() {
+        var btnSalir = document.getElementById('btnSalir');
+        if (btnSalir) {
+            btnSalir.addEventListener('click', function(e) {
+                if (!confirm('¿Está seguro que desea cerrar sesión?')) {
+                    e.preventDefault();
+                }
+            });
+        }
+    });
+</script>
 <?php /*
 <div class="alert alert-info alert-dismissible fade show" role="alert">
     <?php $nom = isset($_SESSION['usuario']) ? ($_SESSION['usuario']->nombre ?? 'Usuario') : 'Invitado'; ?>
