@@ -681,54 +681,64 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
     <!-- Contenedor de tarjetas por iteración -->
     <div id="iterCards"></div>
 
-    <!-- Modal de Exportación -->
+    <!-- Modal de Exportación (rediseñado jerárquico con checklists) -->
     <div class="modal fade" id="exportModal" tabindex="-1" role="dialog" aria-labelledby="exportModalLabel" aria-hidden="true">
       <div class="modal-dialog modal-lg" role="document">
         <div class="modal-content">
           <div class="modal-header">
-            <h5 class="modal-title" id="exportModalLabel">Exportar tablero</h5>
+            <div>
+              <h5 class="modal-title mb-1" id="exportModalLabel">Exportar tablero</h5>
+              <div class="text-muted small">Seleccione el alcance y formato de exportación según las fases, iteraciones y métricas del proyecto actual.</div>
+            </div>
             <button type="button" class="close" data-dismiss="modal" aria-label="Close">
               <span aria-hidden="true">&times;</span>
             </button>
           </div>
-          <div class="modal-body">
-            <div class="form-row">
-              <div class="form-group col-md-4">
-                <label class="mb-1">Formato</label>
-                <div>
-                  <div class="custom-control custom-radio">
-                    <input type="radio" id="fmtPng" name="exportFmt" class="custom-control-input" value="png" checked>
-                    <label class="custom-control-label" for="fmtPng">PNG (imagen)</label>
-                  </div>
-                  <div class="custom-control custom-radio">
-                    <input type="radio" id="fmtPdf" name="exportFmt" class="custom-control-input" value="pdf">
-                    <label class="custom-control-label" for="fmtPdf">PDF</label>
-                  </div>
-                </div>
+          <div class="modal-body" style="background:#fff;">
+            <div id="exportAlert" class="alert alert-warning d-none mb-3"></div>
+
+            <!-- Formato -->
+            <div class="border rounded p-2 mb-2">
+              <div class="font-weight-bold mb-1">Formato</div>
+              <div class="custom-control custom-radio">
+                <input type="radio" id="fmtPng" name="exportFmt" class="custom-control-input" value="png" checked>
+                <label class="custom-control-label" for="fmtPng"><span class="oi oi-image mr-1"></span> PNG (imagen)</label>
               </div>
-              <div class="form-group col-md-8">
-                <label class="mb-1 d-flex align-items-center">Alcance <small class="text-muted ml-2">(opcional, por defecto usa los filtros actuales)</small></label>
-                <div class="form-row">
-                  <div class="form-group col-12 col-md-4">
-                    <label for="exportFases" class="small text-muted">Fases</label>
-                    <select id="exportFases" class="form-control form-control-sm" multiple></select>
-                  </div>
-                  <div class="form-group col-12 col-md-4">
-                    <label for="exportIters" class="small text-muted">Iteraciones</label>
-                    <select id="exportIters" class="form-control form-control-sm" multiple></select>
-                  </div>
-                  <div class="form-group col-12 col-md-4">
-                    <label for="exportMetricas" class="small text-muted">Métricas</label>
-                    <select id="exportMetricas" class="form-control form-control-sm" multiple></select>
-                  </div>
-                </div>
-                <div class="custom-control custom-checkbox mt-2">
-                  <input type="checkbox" class="custom-control-input" id="exportIncluirGlobal" checked>
-                  <label class="custom-control-label" for="exportIncluirGlobal">Incluir "Visión General del Proyecto"</label>
-                </div>
+              <div class="custom-control custom-radio">
+                <input type="radio" id="fmtPdf" name="exportFmt" class="custom-control-input" value="pdf">
+                <label class="custom-control-label" for="fmtPdf"><span class="oi oi-document mr-1"></span> PDF</label>
               </div>
             </div>
-            
+
+            <!-- Fases -->
+            <div id="exportPhaseGroup" class="border rounded p-2 mb-2" style="display:none;">
+              <div class="font-weight-bold mb-1">Fases</div>
+              <div id="exportPhaseList" class="d-flex flex-column"></div>
+              <div id="exportPhaseEmpty" class="text-muted small pl-3 d-none">Sin datos disponibles</div>
+            </div>
+
+            <!-- Iteraciones -->
+            <div id="exportIterGroup" class="border rounded p-2 mb-2" style="display:none;">
+              <div class="font-weight-bold mb-1">Iteraciones</div>
+              <div id="exportIterList" class="d-flex flex-column"></div>
+              <div id="exportIterEmpty" class="text-muted small pl-3 d-none">Sin datos disponibles</div>
+            </div>
+
+            <!-- Métricas -->
+            <div id="exportMetricGroup" class="border rounded p-2 mb-2" style="display:none;">
+              <div class="font-weight-bold mb-1">Métricas</div>
+              <div id="exportMetricList" class="d-flex flex-column"></div>
+              <div id="exportMetricEmpty" class="text-muted small pl-3 d-none">Sin datos disponibles</div>
+            </div>
+
+            <!-- Opciones adicionales -->
+            <div class="border rounded p-2 mb-2">
+              <div class="custom-control custom-checkbox">
+                <input type="checkbox" class="custom-control-input" id="exportIncluirGlobal" checked>
+                <label class="custom-control-label" for="exportIncluirGlobal">Incluir "Visión General del Proyecto"</label>
+              </div>
+            </div>
+
           </div>
           <div class="modal-footer">
             <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
@@ -894,7 +904,7 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
         ejec
       } = computePctAndNote(metric);
       const min = Math.max(0, Number(metric?.min ?? 100));
-      let html = `<b>#${metric?.id??''} - ${metric?.nombre??''}</b><br>`;
+  let html = `<b>${metric?.nombre??''}</b><br>`;
       html += `Planificado: <b>${plan}</b><br>`;
       html += `Ejecutado: <b>${ejec}</b><br>`;
       html += `Cumplimiento: <b>${pct}%</b><br>`;
@@ -957,6 +967,13 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
   const DATA = <?= json_encode($DATA, JSON_UNESCAPED_UNICODE | JSON_NUMERIC_CHECK); ?>;
   const HAY_ITERACIONES = <?= ($totalIteracionesCreadas > 0 ? 'true' : 'false'); ?>;
   const PROYECTO_ID = <?= (int)$idProyecto ?>;
+  // Selección global del modal de exportación: arrays vacíos significan "todo"
+  const exportSelection = {
+    fases: [],
+    iteraciones: [],
+    metricas: [],
+    incluirGlobal: true
+  };
     let SELECTED_METRIC_ID = null;
     let SELECTED_PHASE = null;
 
@@ -1038,7 +1055,7 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
       const sel = document.getElementById('metricFilterSelect'),
         btn = document.getElementById('clearMetricFilter');
       const uniques = uniqueMetricsFromData(DATA);
-      sel.innerHTML = '<option value="">Todas las métricas</option>' + uniques.map(m => `<option value="${m.id}">#${m.id} - ${m.nombre}</option>`).join('');
+  sel.innerHTML = '<option value="">Todas las métricas</option>' + uniques.map(m => `<option value="${m.id}">${m.nombre}</option>`).join('');
       sel.value = SELECTED_METRIC_ID != null ? String(SELECTED_METRIC_ID) : '';
       sel.addEventListener('change', () => {
         const v = sel.value.trim();
@@ -1154,8 +1171,8 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
           const umbralPct = Math.round(Math.max(0, 100 - (Number(m.min ?? 100))));
 
           mCard.innerHTML = `
-        <div class="metric-name">#${m.id} - ${m.nombre}</div>
-        <div id="${idChart}" class="metric-body-chart" data-fase="${String(it.fase)}" data-iter="${it.iteracion}" data-metric-id="${String(m.id)}" data-title="#${m.id} - ${m.nombre} | ${it.iteracion}"></div>
+  <div class="metric-name">${m.nombre}</div>
+  <div id="${idChart}" class="metric-body-chart" data-fase="${String(it.fase)}" data-iter="${it.iteracion}" data-metric-id="${String(m.id)}" data-title="${m.nombre} | ${it.iteracion}"></div>
         <div class="metric-foot">
           Planificado: <b>${m.planned}</b> | Ejecutado: <b>${m.executedReal}</b><br>
           <span class="legend-threshold">
@@ -1923,131 +1940,214 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
       const scoped = (DATA || []).filter(it => !SELECTED_PHASE || it.fase === SELECTED_PHASE);
       buildIterFilter(scoped);
       renderIterCards(null);
-      // Exportar: abre modal y maneja envío
+      // Exportar: abre modal y maneja envío (checklists jerárquicos)
       (function setupExportModal() {
         const btn = document.getElementById('exportBtn');
         if (!btn) return;
 
-        // Construye opciones
+        const $phaseGroup  = $('#exportPhaseGroup');
+        const $iterGroup   = $('#exportIterGroup');
+        const $metricGroup = $('#exportMetricGroup');
+        const $phaseList   = $('#exportPhaseList');
+        const $iterList    = $('#exportIterList');
+        const $metricList  = $('#exportMetricList');
+        const $alertBox    = $('#exportAlert');
+
+        function hideAllGroups() {
+          $iterGroup.hide();
+          $metricGroup.hide();
+        }
+
+        function showAlert(msg) {
+          if (!msg) return $alertBox.addClass('d-none').text('');
+          $alertBox.removeClass('d-none').text(msg);
+        }
+
         function unique(arr) { return Array.from(new Set(arr)); }
-        function buildExportOptions() {
-          try {
-            const faseSel = document.getElementById('exportFases');
-            const iterSel = document.getElementById('exportIters');
-            const metSel  = document.getElementById('exportMetricas');
+        function sortByTextAsc(a, b) { return String(a).localeCompare(String(b)); }
 
-            const fases = unique((DATA || []).map(d => d.fase).filter(v => v != null));
-            faseSel.innerHTML = fases.map(f => `<option value="${String(f)}">Fase ${String(f)}</option>`).join('');
-            if (SELECTED_PHASE != null) {
-              Array.from(faseSel.options).forEach(op => { if (String(op.value) === String(SELECTED_PHASE)) op.selected = true; });
-            }
-            rebuildItersAndMetrics();
-          } catch(err) { console.warn('No se pudieron construir opciones de exportación', err); }
+        function getAllPhases() {
+          return unique((DATA || []).map(d => d.fase).filter(Boolean)).sort(sortByTextAsc);
         }
-
-        function rebuildItersAndMetrics() {
-          const faseSel = document.getElementById('exportFases');
-          const iterSel = document.getElementById('exportIters');
-          const metSel  = document.getElementById('exportMetricas');
-          const selFases = Array.from(faseSel?.selectedOptions || []).map(o => String(o.value));
-          const scoped = (DATA || []).filter(d => !selFases.length || selFases.includes(String(d.fase)));
-          const iters = unique(scoped.map(d => d.iteracion).filter(Boolean));
-          iterSel.innerHTML = iters.map(i => `<option value="${i}">${i}</option>`).join('');
-
-          rebuildMetrics();
+        function getIterationsForPhases(fasesSel) {
+          const fases = Array.isArray(fasesSel) && fasesSel.length ? fasesSel : getAllPhases();
+          return unique((DATA || [])
+            .filter(d => fases.includes(String(d.fase)))
+            .map(d => d.iteracion)
+            .filter(Boolean)).sort(sortByTextAsc);
         }
-
-        function rebuildMetrics() {
-          const faseSel = document.getElementById('exportFases');
-          const iterSel = document.getElementById('exportIters');
-          const metSel  = document.getElementById('exportMetricas');
-          const selFases = Array.from(faseSel?.selectedOptions || []).map(o => String(o.value));
-          const selIters = Array.from(iterSel?.selectedOptions || []).map(o => String(o.value));
+        function getMetricsForIterations(fasesSel, itersSel) {
+          const fases = Array.isArray(fasesSel) && fasesSel.length ? fasesSel : getAllPhases();
+          const iters = Array.isArray(itersSel) && itersSel.length ? itersSel : getIterationsForPhases(fases);
           const scoped = (DATA || [])
-            .filter(d => !selFases.length || selFases.includes(String(d.fase)))
-            .filter(d => !selIters.length || selIters.includes(String(d.iteracion)));
-          const metPairs = unique([].concat(...scoped.map(d => (d.metricas || []).map(m => `${m.id}:::${m.nombre}`))));
-          metSel.innerHTML = metPairs.map(p => { const [id,n] = p.split(':::'); return `<option value="${id}">#${id} - ${n}</option>`; }).join('');
-          if (SELECTED_METRIC_ID != null) {
-            Array.from(metSel.options).forEach(op => { if (String(op.value) === String(SELECTED_METRIC_ID)) op.selected = true; });
+            .filter(d => fases.includes(String(d.fase)))
+            .filter(d => iters.includes(String(d.iteracion)));
+          const map = new Map();
+          scoped.forEach(d => (d.metricas||[]).forEach(m => { if (!map.has(String(m.id))) map.set(String(m.id), m.nombre); }));
+          return Array.from(map, ([id, nombre]) => ({ id, nombre }))
+                      .sort((a,b) => String(a.nombre).localeCompare(String(b.nombre)));
+        }
+
+        function checklistItemHtml(id, label, nameAttr) {
+          const inputId = `${nameAttr}-${btoa(unescape(encodeURIComponent(String(id)))).replace(/=/g,'')}`;
+          return `
+            <div class="custom-control custom-checkbox mb-1">
+              <input type="checkbox" class="custom-control-input" id="${inputId}" name="${nameAttr}" value="${String(id)}">
+              <label class="custom-control-label" for="${inputId}">${label}</label>
+            </div>`;
+        }
+
+        function markAllIn($container, checked=true) {
+          $container.find('input[type="checkbox"]').prop('checked', checked);
+        }
+
+        function readCheckedValues($container) {
+          return $container.find('input[type="checkbox"]:checked').map(function(){ return String(this.value); }).get();
+        }
+
+        function syncExportSelectionFromUI() {
+          const fases = readCheckedValues($phaseList);
+          const iters = readCheckedValues($iterList);
+          const mets  = readCheckedValues($metricList);
+          exportSelection.fases = (fases.length && fases.length !== $phaseList.find('input').length) ? fases : [];
+          exportSelection.iteraciones = (iters.length && iters.length !== $iterList.find('input').length) ? iters : [];
+          exportSelection.metricas = (mets.length && mets.length !== $metricList.find('input').length) ? mets : [];
+          exportSelection.incluirGlobal = !!document.getElementById('exportIncluirGlobal')?.checked;
+        }
+
+        function buildPhaseChecklist() {
+          const fases = getAllPhases();
+          $phaseList.empty();
+          if (!fases.length) {
+            $('#exportPhaseEmpty').removeClass('d-none');
+          } else {
+            $('#exportPhaseEmpty').addClass('d-none');
+            fases.forEach(f => $phaseList.append(checklistItemHtml(f, f, 'fase')));
+            // por defecto: todas marcadas
+            markAllIn($phaseList, true);
           }
+          $phaseGroup.slideDown(120);
+        }
+
+        function buildIterChecklist() {
+          const fasesSel = readCheckedValues($phaseList); // si vacío => todas
+          const iters = getIterationsForPhases(fasesSel);
+          $iterList.empty();
+          if (!iters.length) {
+            $('#exportIterEmpty').removeClass('d-none');
+          } else {
+            $('#exportIterEmpty').addClass('d-none');
+            iters.forEach(i => $iterList.append(checklistItemHtml(i, i, 'iter')));
+            markAllIn($iterList, true);
+          }
+          $iterGroup.stop(true,true).slideDown(120);
+        }
+
+        function buildMetricChecklist() {
+          const fasesSel = readCheckedValues($phaseList);
+          const itersSel = readCheckedValues($iterList);
+          const mets = getMetricsForIterations(fasesSel, itersSel);
+          $metricList.empty();
+          if (!mets.length) {
+            $('#exportMetricEmpty').removeClass('d-none');
+          } else {
+            $('#exportMetricEmpty').addClass('d-none');
+            mets.forEach(m => $metricList.append(checklistItemHtml(m.id, `${m.nombre}`, 'met')));
+            markAllIn($metricList, true);
+          }
+          $metricGroup.stop(true,true).slideDown(120);
+        }
+
+        function resetSelections() {
+          exportSelection.fases = [];
+          exportSelection.iteraciones = [];
+          exportSelection.metricas = [];
+          exportSelection.incluirGlobal = true;
+          const inc = document.getElementById('exportIncluirGlobal');
+          if (inc) inc.checked = true;
         }
 
         btn.addEventListener('click', () => {
-          buildExportOptions();
+          // abrir modal y construir listas
+          showAlert('');
+          resetSelections();
+          hideAllGroups();
+          buildPhaseChecklist();
+          buildIterChecklist();
+          buildMetricChecklist();
           $('#exportModal').modal('show');
         });
 
-        // No hay campos adicionales para PDF: se toma todo de BD con los filtros
+        // Al abrir por data-API también reconstruir (seguridad)
+        $('#exportModal').on('show.bs.modal', function(){
+          showAlert('');
+          resetSelections();
+          hideAllGroups();
+          buildPhaseChecklist();
+          buildIterChecklist();
+          buildMetricChecklist();
+          syncExportSelectionFromUI();
+        });
 
-        // Dependencias: fases -> iteraciones -> métricas
-        document.getElementById('exportFases').addEventListener('change', rebuildItersAndMetrics);
-        document.getElementById('exportIters').addEventListener('change', rebuildMetrics);
+        // Interacciones jerárquicas
+        $phaseList.on('change', 'input[type="checkbox"]', function(){
+          buildIterChecklist();
+          buildMetricChecklist();
+          syncExportSelectionFromUI();
+        });
+        $iterList.on('change', 'input[type="checkbox"]', function(){
+          buildMetricChecklist();
+          syncExportSelectionFromUI();
+        });
+        $metricList.on('change', 'input[type="checkbox"]', function(){
+          syncExportSelectionFromUI();
+        });
+        $('#exportIncluirGlobal').on('change', function(){ syncExportSelectionFromUI(); });
 
         // Confirmar exportación
         const confirmBtn = document.getElementById('exportConfirmBtn');
         if (confirmBtn) confirmBtn.addEventListener('click', async () => {
+          showAlert('');
+          syncExportSelectionFromUI();
           const fmt = (document.querySelector('input[name="exportFmt"]:checked')?.value || 'png').toLowerCase();
-          if (fmt === 'png') {
-            try {
-              await exportChartsToServerPNG();
+          const fases = exportSelection.fases.slice();
+          const iteraciones = exportSelection.iteraciones.slice();
+          const metricas = exportSelection.metricas.slice();
+          const incluirGlobal = !!exportSelection.incluirGlobal;
+
+          try {
+            if (fmt === 'png') {
+              await exportChartsToServerPNG({ fases, iteraciones, metricas, incluirGlobal });
               $('#exportModal').modal('hide');
-            } catch(err) {
-              alert('No se pudo exportar a PNG. ' + (err?.message || err));
-            }
-          } else {
-            // Exportar PDF desde servidor (sin gráficos), con misma data que CSV/XLS
-            try {
-              const { faseSel, metSel } = getSelection();
+            } else {
+              // PDF: construir URL con arrays GET
               const p = new URLSearchParams();
               p.set('proyecto', String(PROYECTO_ID));
-              // fase: si seleccionó solo 1, usar esa; si no, usar la fase activa si existe
-              if (Array.isArray(faseSel) && faseSel.length === 1) {
-                p.set('fase', String(faseSel[0]));
-              } else if (SELECTED_PHASE) {
-                p.set('fase', String(SELECTED_PHASE));
-              }
-              // metrica: si seleccionó solo 1, usarla; sino si hay una activa, usarla
-              if (Array.isArray(metSel) && metSel.length === 1) {
-                p.set('metricId', String(metSel[0]));
-              } else if (SELECTED_METRIC_ID != null) {
-                p.set('metricId', String(SELECTED_METRIC_ID));
-              }
+              fases.forEach(f => p.append('fase[]', f));
+              iteraciones.forEach(i => p.append('iteracion[]', i));
+              metricas.forEach(m => p.append('metrica[]', m));
+              p.set('incluirGlobal', incluirGlobal ? '1' : '0');
+              // compat: si solo hay una fase o métrica, enviar además los parámetros simples
+              if (fases.length === 1) p.set('fase', fases[0]);
+              if (metricas.length === 1) p.set('metricId', metricas[0]);
               const url = 'api/exportar_pdf.php?' + p.toString();
               const a = document.createElement('a');
-              a.href = url;
-              a.target = '_blank';
-              a.rel = 'noopener';
-              document.body.appendChild(a);
-              a.click();
-              setTimeout(()=>{ try{ document.body.removeChild(a);}catch(_){} },0);
+              a.href = url; a.target = '_blank'; a.rel = 'noopener';
+              document.body.appendChild(a); a.click(); setTimeout(()=>{ try{ a.remove(); }catch(_){} },0);
               $('#exportModal').modal('hide');
-            } catch(err) {
-              alert('No se pudo exportar a PDF. ' + (err?.message || err));
             }
+          } catch(err) {
+            showAlert('No se pudo iniciar la exportación: ' + (err && err.message ? err.message : String(err)));
           }
         });
 
-        function getSelection() {
-          const faseSel = Array.from(document.getElementById('exportFases')?.selectedOptions || []).map(o => String(o.value));
-          const iterSel = Array.from(document.getElementById('exportIters')?.selectedOptions || []).map(o => String(o.value));
-          const metSel  = Array.from(document.getElementById('exportMetricas')?.selectedOptions || []).map(o => String(o.value));
-          const incluirGlobal = !!document.getElementById('exportIncluirGlobal')?.checked;
-          return { faseSel, iterSel, metSel, incluirGlobal };
-        }
-
-        async function exportChartsToServerPNG() {
-          // Lee selección opcional
-          const { faseSel, iterSel, metSel, incluirGlobal } = getSelection();
-
-          // Toma charts visibles y filtra por selección si corresponde
-          const canvas = await composeChartsCanvasGrid({ faseSel, iterSel, metSel, incluirGlobal });
+        // Utilidades de exportación (PNG)
+        async function exportChartsToServerPNG(opts={}) {
+          const { fases=[], iteraciones=[], metricas=[], incluirGlobal=true } = opts;
+          const canvas = await composeChartsCanvasGrid({ fases, iteraciones, metricas, incluirGlobal });
           const pngDataUrl = canvas.toDataURL('image/png');
-          // Envía al servidor para descarga
           await postDataUrlForDownload('api/exportar_png.php', pngDataUrl, suggestedFileName('png'));
         }
-
-        // (El exportar a PDF se hace en el servidor con FPDF; no generamos gráficos en el PDF)
 
         function loadImage(dataUrl) {
           return new Promise((resolve, reject) => {
@@ -2067,31 +2167,22 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
         async function postDataUrlForDownload(url, dataUrl, filename) {
           return new Promise(resolve => {
             const form = document.createElement('form');
-            form.method = 'POST';
-            form.action = url;
-            form.style.display = 'none';
-            const input = document.createElement('input');
-            input.type = 'hidden';
-            input.name = 'image';
-            input.value = dataUrl;
-            const name = document.createElement('input');
-            name.type = 'hidden';
-            name.name = 'filename';
-            name.value = filename;
-            const proj = document.createElement('input');
-            proj.type = 'hidden';
-            proj.name = 'proyecto';
-            proj.value = String(PROYECTO_ID);
-            form.appendChild(input);
-            form.appendChild(name);
-            form.appendChild(proj);
-            document.body.appendChild(form);
-            form.submit();
-            setTimeout(() => { try { document.body.removeChild(form); } catch(_){} resolve(); }, 250);
+            form.method = 'POST'; form.action = url; form.style.display = 'none';
+            const input = document.createElement('input'); input.type = 'hidden'; input.name = 'image'; input.value = dataUrl;
+            const name = document.createElement('input'); name.type = 'hidden'; name.name = 'filename'; name.value = filename;
+            const proj = document.createElement('input'); proj.type = 'hidden'; proj.name = 'proyecto'; proj.value = String(PROYECTO_ID);
+            form.appendChild(input); form.appendChild(name); form.appendChild(proj);
+            document.body.appendChild(form); form.submit();
+            setTimeout(() => { try { form.remove(); } catch(_){} resolve(); }, 250);
           });
         }
 
-        async function composeChartsCanvasGrid({ faseSel, iterSel, metSel, incluirGlobal }) {
+        async function composeChartsCanvasGrid(params) {
+          // Compat: aceptar nombres antiguos y nuevos
+          const fases = (params && (params.fases || params.faseSel)) || [];
+          const iteraciones = (params && (params.iteraciones || params.iterSel)) || [];
+          const metricas = (params && (params.metricas || params.metSel)) || [];
+          const incluirGlobal = !!(params && params.incluirGlobal);
           // Recopilar DOMs
           const chartDoms = [];
           if (incluirGlobal) {
@@ -2103,9 +2194,9 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
             const fase = el.getAttribute('data-fase');
             const iter = el.getAttribute('data-iter');
             const mid  = el.getAttribute('data-metric-id');
-            const faseOk = !faseSel.length || faseSel.includes(String(fase));
-            const iterOk = !iterSel.length || iterSel.includes(String(iter));
-            const metOk  = !metSel.length  || metSel.includes(String(mid));
+            const faseOk = !fases.length || fases.includes(String(fase));
+            const iterOk = !iteraciones.length || iteraciones.includes(String(iter));
+            const metOk  = !metricas.length  || metricas.includes(String(mid));
             if (faseOk && iterOk && metOk) chartDoms.push(el);
           });
 
@@ -2246,59 +2337,7 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
           }
           return canvas;
         }
-
-        function buildPdfReportHtml() {
-          const project = (document.getElementById('projectName')?.textContent || 'Proyecto');
-          const siglas = document.getElementById('pdfSiglas')?.value || '';
-          const codigo = document.getElementById('pdfCodigo')?.value || '';
-          const fecha  = document.getElementById('pdfFecha')?.value || new Date().toISOString().slice(0,10);
-          const lider  = document.getElementById('pdfLider')?.value || '';
-          const equipo = document.getElementById('pdfEquipo')?.value || '';
-          const objetivos = document.getElementById('pdfObjetivos')?.value || '';
-          const evalGral  = document.getElementById('pdfEvaluacion')?.value || '';
-          const acciones  = document.getElementById('pdfAcciones')?.value || '';
-          const comentarios = document.getElementById('pdfComentarios')?.value || '';
-          const estado = (document.querySelector('.status-line .badge')?.textContent || '').trim();
-          const totalMet = document.getElementById('totalMetricasValue')?.textContent || '';
-          const totalIter = document.getElementById('totalIteracionesValue')?.textContent || '';
-
-          return `
-  <style>
-    .hdr {text-align:center; font-weight:700; font-size:18px; margin-bottom:6px;}
-    .sub {text-align:center; color:#444; font-size:12px; margin-bottom:14px;}
-    table {width:100%; border-collapse:collapse;}
-    th, td {border:1px solid #666; padding:6px 8px; font-size:12px;}
-    th {background:#e9ecef; text-align:left;}
-    .row2 td {height:24px;}
-  </style>
-  <div class="hdr">INFORME DE AUDITORÍA DE CALIDAD</div>
-  <div class="sub">Proyecto: <b>${project}</b> &nbsp; • &nbsp; Estado: <b>${estado}</b> &nbsp; • &nbsp; Fecha: <b>${fecha}</b></div>
-  <table>
-    <tr>
-      <th>Nombre del Proyecto</th><th>Siglas del Proyecto</th>
-    </tr>
-    <tr class="row2"><td>${project}</td><td>${siglas}</td></tr>
-    <tr>
-      <th>Código de la auditoría</th><th>Líder de la auditoría</th>
-    </tr>
-    <tr class="row2"><td>${codigo}</td><td>${lider}</td></tr>
-    <tr>
-      <th>Equipo de auditoría</th><th>Objetivos de la auditoría</th>
-    </tr>
-    <tr><td>${equipo}</td><td>${objetivos}</td></tr>
-  </table>
-  <br/>
-  <table>
-    <tr><th>Evaluación general de lo auditado</th></tr>
-    <tr><td>${evalGral}</td></tr>
-  </table>
-  <br/>
-  <table>
-    <tr><th>Métricas planificadas</th><th>Iteraciones con métricas</th></tr>
-    <tr class="row2"><td>${totalMet}</td><td>${totalIter}</td></tr>
-  </table>
-          `;
-        }
+        // (Sin formularios PDF locales: la exportación PDF es 100% server-side)
       })();
       // Ocultar "Visión General del Proyecto" si no hay datos o no hay iteraciones
       const globalCard = document.querySelector('.card-global-vision');
