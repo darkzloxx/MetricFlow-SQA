@@ -16,37 +16,60 @@
 require_once __DIR__ . '/../lib/ControlAcceso.Class.php';
 // Reglas: debe estar autenticado y tener rol en el proyecto que desea ver
 ControlAcceso::verificaLogin();
-//conexión a la base de datos para probar
-//$conexion = new mysqli("localhost", "root", "", "bd_codevit", 3306);
-// Si algo falla aquí, no hay dashboard: aborta con un mensaje explícito.
-/*if ($conexion->connect_error) {
-  die("Error al conectar: " . $conexion->connect_error);
-}*/
-// Conexión centralizada
 $conexion = BDConexion::getConexion();
-
-// Obtiene id de proyecto por GET; acepta tanto 'proyecto' como 'id_proyecto'
-$idProyecto = 0;
-if (isset($_GET['proyecto'])) {
-  $idProyecto = (int)$_GET['proyecto'];
-} elseif (isset($_GET['id_proyecto'])) {
-  $idProyecto = (int)$_GET['id_proyecto'];
-}
-// si no viene, redirige al primer proyecto asignado
-if (!isset($_GET['proyecto']) && !isset($_GET['id_proyecto'])) {
+// -------- Proyecto
+$idProyecto = isset($_GET['proyecto']) ? (int)$_GET['proyecto'] : 0;
+if ($idProyecto <= 0) {
+  // Caso: no se pasó ningún proyecto válido
   $asignados = ControlAcceso::proyectosAsignadosDelUsuario();
   if (!empty($asignados)) {
-    header('Location: /metricflow/app/dashboard.php?proyecto=' . (int)$asignados[0]);
+    header('Location: proyectos.php?proyecto=' . (int)$asignados[0]);
     exit;
   } else {
-    header('Location: ' . Constantes::HOMEAUTH);
-    exit;
+    header('Location: proyectos.php');
   }
+  exit;
 }
 
+// -------- Verificar que el proyecto pertenece al usuario actual --------
+// Nota: No bloqueamos aquí por pertenencia al proyecto.
+// ControlAcceso::requiereProyecto maneja el caso y permite a Administrador/SuperAdmin o quienes tengan ABM_PROYECTOS.
 
-// Verifica pertenencia al proyecto
+// -------- Verificar permisos específicos --------
 ControlAcceso::requiereProyecto($idProyecto);
+
+$rolUsuario = ControlAcceso::rolUsuarioEnProyecto($idProyecto);
+$tienePermiso = ControlAcceso::verificaPermiso(PermisosSistema::DASHBOARD);
+
+if (!$tienePermiso && strtoupper($rolUsuario) !== 'SUPERADMIN' && strtoupper($rolUsuario) !== 'ADMINISTRADOR') {
+  echo '<!DOCTYPE html>
+    <html lang="es">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Acceso denegado</title>
+      <link rel="stylesheet" href="../assets/bootstrap.min.css">
+      <link rel="stylesheet" href="../assets/open-iconic/font/css/open-iconic-bootstrap.min.css">
+    </head>
+    <body class="bg-light d-flex flex-column justify-content-center align-items-center" style="height:100vh;">
+      <div class="card shadow-sm text-center p-4" style="max-width:520px;">
+        <div class="card-body">
+          <i class="oi oi-lock-locked mb-3" style="font-size:2rem; color:#dc3545;"></i>
+          <h5 class="text-danger font-weight-bold mb-2">Acceso denegado</h5>
+          <p class="text-muted mb-0">
+            No posee permisos para acceder a este dashboard.<br>
+            Requiere el permiso <em>"Visualización de Métricas"</em>.
+          </p>
+          <a href="proyectos.php" class="btn btn-outline-secondary mt-3">
+            <span class="oi oi-arrow-left mr-1"></span> Volver a Mis Proyectos
+          </a>
+        </div>
+      </div>
+    </body>
+    </html>';
+    exit;
+}
+
 // ------------------------------------------------------------
 // 2️⃣ Información del proyecto actual
 // ------------------------------------------------------------

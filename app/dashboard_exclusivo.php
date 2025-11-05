@@ -22,26 +22,9 @@ if ($idProyecto <= 0) {
     header('Location: proyectos.php?proyecto=' . (int)$asignados[0]);
     exit;
   } else {
-    echo '<!DOCTYPE html>
-    <html lang="es">
-    <head>
-      <meta charset="UTF-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>Sin proyectos asignados</title>
-      <link rel="stylesheet" href="../assets/bootstrap.min.css">
-    </head>
-    <body class="bg-light d-flex flex-column justify-content-center align-items-center" style="height:100vh;">
-      <div class="card shadow-sm text-center p-4" style="max-width: 480px;">
-        <h4 class="text-warning mb-3">Sin proyectos asignados</h4>
-        <p>No posee ningún proyecto asignado actualmente.</p>
-        <a href="proyectos.php" class="btn btn-primary mt-3">
-          <span class="oi oi-arrow-left mr-1"></span> Volver al inicio
-        </a>
-      </div>
-    </body>
-    </html>';
-    exit;
+    header('Location: proyectos.php');
   }
+  exit;
 }
 
 // -------- Verificar que el proyecto pertenece al usuario actual --------
@@ -55,33 +38,32 @@ $rolUsuario = ControlAcceso::rolUsuarioEnProyecto($idProyecto);
 $tienePermiso = ControlAcceso::verificaPermiso(PermisosSistema::VISUALIZACION_METRICAS);
 
 if (!$tienePermiso && strtoupper($rolUsuario) !== 'SUPERADMIN') {
-    echo '<!DOCTYPE html>
+  echo '<!DOCTYPE html>
     <html lang="es">
     <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Acceso denegado</title>
-        <link rel="stylesheet" href="../assets/bootstrap.min.css">
-        <link rel="stylesheet" href="../assets/open-iconic/font/css/open-iconic-bootstrap.min.css">
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Acceso denegado</title>
+      <link rel="stylesheet" href="../assets/bootstrap.min.css">
+      <link rel="stylesheet" href="../assets/open-iconic/font/css/open-iconic-bootstrap.min.css">
     </head>
-    <body class="bg-light d-flex flex-column justify-content-center align-items-center" style="height: 100vh;">
-        <div class="card shadow-sm text-center p-4" style="max-width: 500px;">
-            <div class="card-body">
-                <h3 class="text-danger mb-3">
-                    <span class="oi oi-lock-locked"></span> Acceso denegado
-                </h3>
-                <p class="text-secondary mb-4">
-                    No posee permisos para acceder al <strong>Dashboard Exclusivo</strong>.<br>
-                    Este módulo requiere el permiso <em>"Visualización de Métricas"</em>.
-                </p>
-                <a href="proyectos.php" class="btn btn-primary">
-                   <span class="oi oi-arrow-left mr-1"></span> Volver a Mis Proyectos
-                </a>
-            </div>
+    <body class="bg-light d-flex flex-column justify-content-center align-items-center" style="height:100vh;">
+      <div class="card shadow-sm text-center p-4" style="max-width:520px;">
+        <div class="card-body">
+          <i class="oi oi-lock-locked mb-3" style="font-size:2rem; color:#dc3545;"></i>
+          <h5 class="text-danger font-weight-bold mb-2">Acceso denegado</h5>
+          <p class="text-muted mb-0">
+            No posee permisos para acceder a este dashboard.<br>
+            Requiere el permiso <em>"Visualización de Métricas"</em>.
+          </p>
+          <a href="proyectos.php" class="btn btn-outline-secondary mt-3">
+            <span class="oi oi-arrow-left mr-1"></span> Volver a Mis Proyectos
+          </a>
         </div>
+      </div>
     </body>
     </html>';
-    exit;
+  exit;
 }
 
 $sqlProyecto = "SELECT nombre, estado FROM proyecto WHERE id_proyecto = $idProyecto";
@@ -1577,9 +1559,9 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
         // Quieres que el overflow "llegue hasta arriba" (120%) como en las barras verdes.
         // Regla: si hay overflow (pct>100) o es caso plan=0 con ejecución, extender al menos hasta 120.
         const hasOverflow = (pctReal > 100) || zeroPlanOverflow;
-        const overflowVal = hasOverflow
-          ? (zeroPlanOverflow ? 1000 : Math.max(yMax - 100, Math.max(0, pctReal - 100)))
-          : 0;
+        const overflowVal = hasOverflow ?
+          (zeroPlanOverflow ? 1000 : Math.max(yMax - 100, Math.max(0, pctReal - 100))) :
+          0;
         // Clampeamos guías al tope visible del eje para evitar recortes
         const minLine = Math.max(0, Math.min(VISIBLE_MAX, Number(metric?.min ?? 100)));
         const timePct = Math.max(0, Math.min(VISIBLE_MAX, pctTiempoIter(ini, fin)));
@@ -2501,8 +2483,7 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
                   tweaks.legend = Array.isArray(originalOpt.legend) ?
                     originalOpt.legend.map(() => ({
                       show: false
-                    })) :
-                    {
+                    })) : {
                       show: false
                     };
                 }
