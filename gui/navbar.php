@@ -32,15 +32,14 @@ $currentPage = isset($_SERVER['SCRIPT_NAME']) ? basename($_SERVER['SCRIPT_NAME']
                         </a>
                     </li>
                 <?php } ?>
-                <?php /* Bloque de Roles (deshabilitado)
-                if (ControlAcceso::verificaPermiso(PermisosSistema::ABM_USUARIOS)) { ?>
-                    <li class = "nav-item">
-                        <a class = "nav-link" href = "../app/roles.php">
-                            <span class = "oi oi-graph" />
+                <?php if (ControlAcceso::esSuperAdminGlobal()) { ?>
+                    <li class="nav-item">
+                        <a class="nav-link" href="../app/roles.php">
+                            <span class="oi oi-graph" />
                             Roles
                         </a>
                     </li>
-                <?php } */ ?>
+                <?php } ?>
                 <?php
                 $mostrarProyectos = ControlAcceso::verificaPermiso(PermisosSistema::ABM_PROYECTOS);
                 if (!$mostrarProyectos && class_exists('ControlAcceso')) {

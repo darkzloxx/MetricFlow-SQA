@@ -1,6 +1,10 @@
 <?php
 include_once '../lib/ControlAcceso.class.php';
 ControlAcceso::requierePermiso(PermisosSistema::PERMISO_PERMISOS);
+if (!ControlAcceso::esSuperAdminGlobal()) {
+    header('Location: proyectos.php?msg=' . urlencode('Acceso restringido a SUPERADMIN.') . '&type=danger');
+    exit;
+}
 include_once '../modelo/ColeccionPermisos.php';
 $ColeccionPermisos = new ColeccionPermisos();
 ?>

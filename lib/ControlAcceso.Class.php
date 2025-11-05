@@ -16,6 +16,7 @@ class PermisosSistema
     // Permiso para ver las métricas individuales / dashboard exclusivo
     public const VISUALIZACION_METRICAS = 'Visualización de Métricas';
     public const GESTION_MODELO_CALIDAD = 'Gestión de Modelo de Calidad';
+    public const GESTION_METRICAS = 'Gestión de Métricas';
     // Alias de compatibilidad con código antiguo
     public const PERMISO_USUARIOS = self::ABM_USUARIOS;
     public const PERMISO_PERMISOS = 'ABM Permisos';
@@ -172,6 +173,24 @@ class ControlAcceso
         foreach ($usr->roles as $r) {
             $rolName = strtoupper(trim((string)($r->nombre ?? '')));
             if ($rolName === 'ADMINISTRADOR' || $rolName === 'SUPERADMIN') {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Verifica si el usuario autenticado posee un rol global SuperAdmin.
+     */
+    public static function esSuperAdminGlobal(): bool
+    {
+        $usr = self::usuarioActual();
+        if (!$usr || !isset($usr->roles) || !is_array($usr->roles)) {
+            return false;
+        }
+        foreach ($usr->roles as $r) {
+            $rolName = strtoupper(trim((string)($r->nombre ?? '')));
+            if ($rolName === 'SUPERADMIN') {
                 return true;
             }
         }
