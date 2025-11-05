@@ -12,19 +12,77 @@ require_once __DIR__ . '/../modelo/BDConexion.Class.php';
 
 ControlAcceso::verificaLogin();
 $cn = BDConexion::getConexion();
-
 // -------- Proyecto
 $idProyecto = isset($_GET['proyecto']) ? (int)$_GET['proyecto'] : 0;
+
 if ($idProyecto <= 0) {
+  // Caso: no se pasó ningún proyecto válido
   $asignados = ControlAcceso::proyectosAsignadosDelUsuario();
   if (!empty($asignados)) {
-    header('Location: ' . '/metricflow/app/dashboard_exclusivo.php?proyecto=' . (int)$asignados[0]);
+    header('Location: proyectos.php?proyecto=' . (int)$asignados[0]);
     exit;
   } else {
+    echo '<!DOCTYPE html>
+    <html lang="es">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Sin proyectos asignados</title>
+      <link rel="stylesheet" href="../assets/bootstrap.min.css">
+    </head>
+    <body class="bg-light d-flex flex-column justify-content-center align-items-center" style="height:100vh;">
+      <div class="card shadow-sm text-center p-4" style="max-width: 480px;">
+        <h4 class="text-warning mb-3">Sin proyectos asignados</h4>
+        <p>No posee ningún proyecto asignado actualmente.</p>
+        <a href="proyectos.php" class="btn btn-primary mt-3">
+          <span class="oi oi-arrow-left mr-1"></span> Volver al inicio
+        </a>
+      </div>
+    </body>
+    </html>';
     exit;
   }
 }
+
+// -------- Verificar que el proyecto pertenece al usuario actual --------
+// Nota: No bloqueamos aquí por pertenencia al proyecto.
+// ControlAcceso::requiereProyecto maneja el caso y permite a Administrador/SuperAdmin o quienes tengan ABM_PROYECTOS.
+
+// -------- Verificar permisos específicos --------
 ControlAcceso::requiereProyecto($idProyecto);
+
+$rolUsuario = ControlAcceso::rolUsuarioEnProyecto($idProyecto);
+$tienePermiso = ControlAcceso::verificaPermiso(PermisosSistema::VISUALIZACION_METRICAS);
+
+if (!$tienePermiso && strtoupper($rolUsuario) !== 'SUPERADMIN') {
+    echo '<!DOCTYPE html>
+    <html lang="es">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Acceso denegado</title>
+        <link rel="stylesheet" href="../assets/bootstrap.min.css">
+        <link rel="stylesheet" href="../assets/open-iconic/font/css/open-iconic-bootstrap.min.css">
+    </head>
+    <body class="bg-light d-flex flex-column justify-content-center align-items-center" style="height: 100vh;">
+        <div class="card shadow-sm text-center p-4" style="max-width: 500px;">
+            <div class="card-body">
+                <h3 class="text-danger mb-3">
+                    <span class="oi oi-lock-locked"></span> Acceso denegado
+                </h3>
+                <p class="text-secondary mb-4">
+                    No posee permisos para acceder al <strong>Dashboard Exclusivo</strong>.<br>
+                    Este módulo requiere el permiso <em>"Visualización de Métricas"</em>.
+                </p>
+                <a href="proyectos.php" class="btn btn-primary">
+                   <span class="oi oi-arrow-left mr-1"></span> Volver a Mis Proyectos
+                </a>
+            </div>
+        </div>
+    </body>
+    </html>';
+    exit;
+}
 
 $sqlProyecto = "SELECT nombre, estado FROM proyecto WHERE id_proyecto = $idProyecto";
 $rp = $cn->query($sqlProyecto);
@@ -454,12 +512,14 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
     }
 
     .card-global-vision .card-body {
-      padding-top: 0.15rem !important; /* menos espacio entre título y gráfico */
+      padding-top: 0.15rem !important;
+      /* menos espacio entre título y gráfico */
       padding-bottom: 0.25rem !important;
     }
 
     #chartDistribucionGlobal {
-      height: 340px !important; /* +40px para que entren las leyendas completas */
+      height: 340px !important;
+      /* +40px para que entren las leyendas completas */
       /* mantiene proporción visual */
       margin-top: -5px !important;
     }
@@ -632,7 +692,7 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
 
       <div class="card-body p-2">
         <!-- Gráfico de distribución global de métricas -->
-  <div id="chartDistribucionGlobal" data-title="Visión General del Proyecto" style="height:340px; margin-top:-12px;"></div>
+        <div id="chartDistribucionGlobal" data-title="Visión General del Proyecto" style="height:340px; margin-top:-12px;"></div>
       </div>
     </div>
 
@@ -944,7 +1004,7 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
         default:
           html += `<span style="color:#999;">❔ Sin datos disponibles</span><br>`;
       }
-      html += `Límite de desviación (1 − umbral): <b>${min}%</b>`;
+      html += `Límite de desviación: <b>${min}%</b>`;
       return html;
     }
 
@@ -1188,7 +1248,7 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
           Planificado: <b>${m.planned}</b> | Ejecutado: <b>${m.executedReal}</b><br>
           <span class="legend-threshold">
             <span class="legend-dot" style="background:#343a40;width:20px;height:3px;border-radius:0;border:0"></span>
-            Umbral: <b>${100 - umbralPct}%</b>
+            Límite de desviación: <b>${100 - umbralPct}%</b>
           </span>
         </div>`;
 
@@ -1378,8 +1438,7 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
             type: 'group',
             left: 'center',
             top: 'center',
-            children: [
-              {
+            children: [{
                 type: 'text',
                 z: 100,
                 style: {
@@ -1504,14 +1563,22 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
 
         const pctReal = Math.max(0, safePct(metric));
         const executedCol = resolveColor(metric, pctReal);
-        const VISIBLE_MAX = 120,
-          OVERFLOW_TOP = 130;
-        const HEADROOM = 5; // evita recortes de etiquetas en el borde superior
-        const yMax = pctReal > VISIBLE_MAX ? OVERFLOW_TOP : VISIBLE_MAX;
+        const planReal = Number(metric?.planned ?? metric?.plan ?? 0);
+        const ejecReal = Number(metric?.executedReal ?? metric?.ejecutado ?? 0);
+        const zeroPlanOverflow = (planReal === 0 && ejecReal > 0);
+        const VISIBLE_MAX = 120; // tope visual de eje Y (último tick = 120%)
+        const yMax = VISIBLE_MAX;
         const baseVal = Math.min(100, pctReal);
-        const overflowVal = pctReal > 100 ? Math.max(0, Math.min(OVERFLOW_TOP, pctReal) - 100) : 0;
-        const minLine = Math.max(0, Math.min(yMax, Number(metric?.min ?? 100)));
-        const timePct = Math.max(0, Math.min(yMax, pctTiempoIter(ini, fin)));
+        // Sin límite artificial para overflow: mostrar todo lo que exceda 100
+        // Quieres que el overflow "llegue hasta arriba" (120%) como en las barras verdes.
+        // Regla: si hay overflow (pct>100) o es caso plan=0 con ejecución, extender al menos hasta 120.
+        const hasOverflow = (pctReal > 100) || zeroPlanOverflow;
+        const overflowVal = hasOverflow
+          ? (zeroPlanOverflow ? 1000 : Math.max(yMax - 100, Math.max(0, pctReal - 100)))
+          : 0;
+        // Clampeamos guías al tope visible del eje para evitar recortes
+        const minLine = Math.max(0, Math.min(VISIBLE_MAX, Number(metric?.min ?? 100)));
+        const timePct = Math.max(0, Math.min(VISIBLE_MAX, pctTiempoIter(ini, fin)));
 
         chart.setOption({
           tooltip: {
@@ -1533,7 +1600,7 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
           grid: {
             left: 64,
             right: 76, // más espacio para etiqueta de línea punteada
-            top: 28, // mayor margen superior para evitar clipping
+            top: 36, // más margen superior para evitar clipping sin subir el eje a >120
             bottom: 28,
             containLabel: true
           },
@@ -1569,7 +1636,7 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
           yAxis: {
             type: 'value',
             min: 0,
-            max: yMax + HEADROOM,
+            max: yMax, // último tick 120%
             name: 'Cumplimiento (%)',
             nameLocation: 'middle',
             nameGap: 52,
@@ -1640,6 +1707,7 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
                 borderColor: '#000',
                 borderWidth: 1.5
               },
+              // No necesitamos que este segmento salga del eje (<=100)
               label: {
                 show: true,
                 position: 'top',
@@ -1666,7 +1734,7 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
                       formatter: () => `${Math.round(timePct)}%`,
                       position: 'end', // anclada al fin de la línea
                       distance: 6,
-                      color: '#0d6efd',
+                      color: 'rgba(13, 110, 253, 1)',
                       backgroundColor: '#ffffff',
                       padding: [2, 6],
                       borderRadius: 4,
@@ -1696,8 +1764,8 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
               stack: 'exec',
               animationDelay: 240,
               itemStyle: {
-                color: executedCol,
-                opacity: .35,
+                color: zeroPlanOverflow ? 'rgba(166, 204, 252, 0.95)' : executedCol, // azul translúcido especial si plan=0 y hay ejecución
+                opacity: zeroPlanOverflow ? 1 : .35,
                 borderRadius: 0,
                 borderColor: '#000',
                 borderWidth: 1.5
@@ -1705,6 +1773,9 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
               emphasis: {
                 disabled: true
               },
+              // Permitir que el overflow se muestre por encima del eje Y sin recorte visual
+              clip: false,
+              z: 2,
               data: [null, overflowVal]
             }
           ],
@@ -2405,7 +2476,9 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
               originalOpt = null;
             }
             const seriesCount = Array.isArray(originalOpt?.series) ? originalOpt.series.length : 0;
-            const seriesAnimTweaks = Array.from({ length: seriesCount }, () => ({
+            const seriesAnimTweaks = Array.from({
+              length: seriesCount
+            }, () => ({
               animation: false,
               animationDuration: 0,
               animationDurationUpdate: 0
@@ -2421,9 +2494,13 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
               try {
                 // Donut global más grande y centrado; ocultar leyenda si existe
                 if (originalOpt?.legend) {
-                  tweaks.legend = Array.isArray(originalOpt.legend)
-                    ? originalOpt.legend.map(() => ({ show: false }))
-                    : { show: false };
+                  tweaks.legend = Array.isArray(originalOpt.legend) ?
+                    originalOpt.legend.map(() => ({
+                      show: false
+                    })) :
+                    {
+                      show: false
+                    };
                 }
                 if (originalOpt?.series && originalOpt.series[0] && originalOpt.series[0].type === 'pie') {
                   // aplicar ajustes sólo al primer series (la dona global)
@@ -2438,8 +2515,12 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
                       fontSize: 12,
                       color: '#333'
                     }),
-                    labelLine: Object.assign({}, originalOpt.series[0].labelLine || {}, { show: true }),
-                    itemStyle: Object.assign({}, originalOpt.series[0].itemStyle || {}, { borderWidth: 1.5 })
+                    labelLine: Object.assign({}, originalOpt.series[0].labelLine || {}, {
+                      show: true
+                    }),
+                    itemStyle: Object.assign({}, originalOpt.series[0].itemStyle || {}, {
+                      borderWidth: 1.5
+                    })
                   });
                 }
                 // === 🔧 RE-CENTRAR TEXTO DEL DONUT GLOBAL (EXPORTACIÓN PNG) ===
@@ -2451,7 +2532,10 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
                       g.left = 'center';
                       g.top = 'middle';
                       g.position = [0, OFFSET_Y];
-                      g.style = Object.assign({}, g.style, { align: 'center', verticalAlign: 'middle' });
+                      g.style = Object.assign({}, g.style, {
+                        align: 'center',
+                        verticalAlign: 'middle'
+                      });
                     } else if (g.type === 'group') {
                       g.left = 'center';
                       g.top = 'middle';
@@ -2466,11 +2550,13 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
                       return cp;
                     });
                   } else if (originalOpt?.graphic && Array.isArray(originalOpt.graphic.elements)) {
-                    tweaks.graphic = { elements: originalOpt.graphic.elements.map(g => {
-                      const cp = JSON.parse(JSON.stringify(g || {}));
-                      centerAndOffset(cp);
-                      return cp;
-                    }) };
+                    tweaks.graphic = {
+                      elements: originalOpt.graphic.elements.map(g => {
+                        const cp = JSON.parse(JSON.stringify(g || {}));
+                        centerAndOffset(cp);
+                        return cp;
+                      })
+                    };
                   }
                 } catch (e) {
                   console.warn('No se pudo ajustar texto central del donut en exportación:', e);

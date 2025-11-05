@@ -20,7 +20,7 @@ class PermisosSistema
     public const PERMISO_USUARIOS = self::ABM_USUARIOS;
     public const PERMISO_PERMISOS = 'ABM Permisos';
     public const PERMISO_ROLES = 'ABM Roles';
-    
+
     // Rol por defecto para auto-registro
     public const ROL_ESTANDAR = 'Espectador';
 }
@@ -64,7 +64,7 @@ class UsuarioSesion
     public $nombre; // nombre_apellido
     /** @var RolSesion[] */
     public $roles = [];
-    
+
     /** @var object[] lista de proyectos con sus roles asociados */
     public $proyectos = [];
 
@@ -206,6 +206,26 @@ class ControlAcceso
             ? $_SESSION['usuario']
             : null;
     }
+   public static function rolUsuarioEnProyecto($idProyecto)
+{
+    if (!isset($_SESSION['usuario']) || !is_object($_SESSION['usuario'])) {
+        return null;
+    }
+    $usuario = $_SESSION['usuario'];
+    if (!isset($usuario->proyectos) || !is_array($usuario->proyectos)) {
+        return null;
+    }
+    foreach ($usuario->proyectos as $p) {
+        // ⚙️ Cambiado id_proyecto → id
+        if ((int)$p->id === (int)$idProyecto) {
+            if (isset($p->roles) && is_array($p->roles) && count($p->roles)) {
+                return $p->roles[0]->nombre; // devuelve el nombre del primer rol asignado
+            }
+        }
+    }
+    return null;
+}
+
 
     /**
      * Lista los IDs de proyectos asignados al usuario actual (usuario_proyecto)
@@ -258,7 +278,7 @@ class ControlAcceso
     public static function requiereProyecto(int $idProyecto, bool $emitir403 = false): void
     {
         self::verificaLogin();
-            // Permitir a Administrador / SuperAdmin o a quien tenga ABM_PROYECTOS
+        // Permitir a Administrador / SuperAdmin o a quien tenga ABM_PROYECTOS
         $usr = self::usuarioActual();
         if ($usr) {
             // roles globales (RolSesion->nombre)
@@ -292,13 +312,13 @@ class ControlAcceso
         $_SESSION['usuario'] = new UsuarioSesion($email, $nombre);
         $usuario = $_SESSION['usuario'];
 
-       // ============================================
-// 🔹 Cargar proyectos y roles asociados
-// ============================================
-$cn = BDConexion::getConexion();
+        // ============================================
+        // 🔹 Cargar proyectos y roles asociados
+        // ============================================
+        $cn = BDConexion::getConexion();
 
-// Ahora la tabla `usuario_proyecto` tiene `id_rol` como FK numérica.
-$sql = "
+        // Ahora la tabla `usuario_proyecto` tiene `id_rol` como FK numérica.
+        $sql = "
     SELECT 
         p.id_proyecto,
         p.nombre AS proyecto,
@@ -309,34 +329,33 @@ $sql = "
     LEFT JOIN rol r ON r.id = up.id_rol
     WHERE up.id_usuario = ?
 ";
-$stmt = $cn->prepare($sql);
-$stmt->bind_param('i', $usuario->id);
-$stmt->execute();
-$res = $stmt->get_result();
+        $stmt = $cn->prepare($sql);
+        $stmt->bind_param('i', $usuario->id);
+        $stmt->execute();
+        $res = $stmt->get_result();
 
-$usuario->proyectos = [];
-while ($row = $res->fetch_assoc()) {
-    $idProyecto = (int)$row['id_proyecto'];
-    if (!isset($usuario->proyectos[$idProyecto])) {
-        $usuario->proyectos[$idProyecto] = (object)[
-            'id' => $idProyecto,
-            'nombre' => $row['proyecto'],
-            'roles' => []
-        ];
-    }
+        $usuario->proyectos = [];
+        while ($row = $res->fetch_assoc()) {
+            $idProyecto = (int)$row['id_proyecto'];
+            if (!isset($usuario->proyectos[$idProyecto])) {
+                $usuario->proyectos[$idProyecto] = (object)[
+                    'id' => $idProyecto,
+                    'nombre' => $row['proyecto'],
+                    'roles' => []
+                ];
+            }
 
-    // Agregamos el rol (si existe) a la lista del proyecto
-    if (!empty($row['id_rol']) || !empty($row['rol_name'])) {
-        $usuario->proyectos[$idProyecto]->roles[] = (object)[
-            'id' => (int)$row['id_rol'],
-            'nombre' => $row['rol_name']
-        ];
-    }
-}
-$stmt->close();
+            // Agregamos el rol (si existe) a la lista del proyecto
+            if (!empty($row['id_rol']) || !empty($row['rol_name'])) {
+                $usuario->proyectos[$idProyecto]->roles[] = (object)[
+                    'id' => (int)$row['id_rol'],
+                    'nombre' => $row['rol_name']
+                ];
+            }
+        }
+        $stmt->close();
 
-// Convertir a array indexado
-$usuario->proyectos = array_values($usuario->proyectos);
-
+        // Convertir a array indexado
+        $usuario->proyectos = array_values($usuario->proyectos);
     }
 }
