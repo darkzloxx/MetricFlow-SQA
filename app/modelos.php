@@ -1,219 +1,164 @@
 <?php
 include_once '../lib/ControlAcceso.Class.php';
 include_once '../modelo/BDConexion.Class.php';
-// Acceso: Admin/SuperAdmin SIEMPRE. De lo contrario, se requiere permiso de gestión de modelo.
-if (!ControlAcceso::esAdminGlobal() && !ControlAcceso::verificaPermiso(PermisosSistema::GESTION_MODELO_CALIDAD)) {
-    header('Location: proyectos.php?msg=' . urlencode('Acceso restringido: requiere SUPERADMIN/ADMIN o permiso Gestión de Modelo de Calidad.') . '&type=danger');
-    exit;
-}
+ControlAcceso::verificaLogin();
 
-// Proyectos accesibles
-$proyectos = [];
-if (ControlAcceso::esAdminGlobal()) {
-    $sqlP = "SELECT id_proyecto, nombre FROM proyecto ORDER BY nombre";
+$cn = BDConexion::getInstancia();
+$usr = ControlAcceso::usuarioActual();
+$esSuperAdmin = ControlAcceso::esSuperAdminGlobal();
+$esAdminGlobal = ControlAcceso::esAdminGlobal();
+
+// =====================================================
+// OBTENER PROYECTOS ASIGNADOS (o todos si es admin/superadmin)
+// =====================================================
+if ($esAdminGlobal || $esSuperAdmin) {
+    $sql = "SELECT id_proyecto, nombre, id_modelo FROM proyecto ORDER BY nombre";
+    $stmt = $cn->query($sql);
 } else {
-    $uid = (int)$_SESSION['usuario']->id;
-    $sqlP = "SELECT p.id_proyecto, p.nombre
-             FROM usuario_proyecto up
-             JOIN proyecto p ON p.id_proyecto = up.id_proyecto
-             WHERE up.id_usuario = {$uid}
-             ORDER BY p.nombre";
+    $sql = "SELECT p.id_proyecto, p.nombre, p.id_modelo 
+            FROM usuario_proyecto up
+            JOIN proyecto p ON p.id_proyecto = up.id_proyecto
+            WHERE up.id_usuario = ?
+            ORDER BY p.nombre";
+    $stmt = $cn->prepare($sql);
+    $stmt->bind_param('i', $usr->id);
+    $stmt->execute();
+    $stmt = $stmt->get_result();
 }
-$rsP = BDConexion::getInstancia()->query($sqlP);
-if ($rsP) { $proyectos = $rsP->fetch_all(MYSQLI_ASSOC); }
+$proyectos = $stmt ? $stmt->fetch_all(MYSQLI_ASSOC) : [];
 
-// Proyecto seleccionado
-$idProyectoSel = isset($_GET['id_proyecto']) ? (int)$_GET['id_proyecto'] : 0;
-if ($idProyectoSel <= 0 && !empty($proyectos)) {
-    $idProyectoSel = (int)$proyectos[0]['id_proyecto'];
-}
-
-// Validar pertenencia si no es admin
-if ($idProyectoSel > 0 && !ControlAcceso::esAdminGlobal() && !ControlAcceso::usuarioPerteneceAProyecto($idProyectoSel)) {
-    header('Location: modelos.php?msg=' . urlencode('Proyecto no autorizado.') . '&type=danger');
-    exit;
-}
-
-// Modelo actual del proyecto seleccionado
-$modeloActual = 0; $nombreModeloActual = '';
-if ($idProyectoSel > 0) {
-    $sqlM = "SELECT p.id_modelo, m.nombre AS nombre
-             FROM proyecto p
-             LEFT JOIN modelo_calidad m ON m.id_modelo = p.id_modelo
-             WHERE p.id_proyecto = {$idProyectoSel}";
-    $rsM = BDConexion::getInstancia()->query($sqlM);
-    if ($rsM && $rsM->num_rows) {
-        $r = $rsM->fetch_assoc();
-        $modeloActual = (int)($r['id_modelo'] ?? 0);
-        $nombreModeloActual = (string)($r['nombre'] ?? '');
-    }
-}
-
-// Todos los modelos disponibles
-$modelos = [];
-$rsMods = BDConexion::getInstancia()->query("SELECT id_modelo, nombre, descripcion FROM modelo_calidad ORDER BY nombre");
-if ($rsMods) { $modelos = $rsMods->fetch_all(MYSQLI_ASSOC); }
+// =====================================================
+// OBTENER MODELOS DISPONIBLES
+// =====================================================
+$modelos = $cn->query("SELECT id_modelo, nombre, descripcion FROM modelo_calidad ORDER BY nombre")->fetch_all(MYSQLI_ASSOC);
 ?>
-
 <html>
-    <head>
-        <meta charset="UTF-8">
-        <link rel="stylesheet" href="../lib/bootstrap-4.1.1-dist/css/bootstrap.css" />
-        <link rel="stylesheet" href="../lib/open-iconic-master/font/css/open-iconic-bootstrap.css" />
-        <script type="text/javascript" src="../lib/JQuery/jquery-3.3.1.js"></script>
-        <script type="text/javascript" src="../lib/bootstrap-4.1.1-dist/js/bootstrap.min.js"></script>        
-        <title><?= Constantes::NOMBRE_SISTEMA; ?> - Modelos</title>
+<head>
+    <meta charset="UTF-8">
+    <link rel="stylesheet" href="../lib/bootstrap-4.1.1-dist/css/bootstrap.css">
+    <link rel="stylesheet" href="../lib/open-iconic-master/font/css/open-iconic-bootstrap.css">
+    <script src="../lib/JQuery/jquery-3.3.1.js"></script>
+    <script src="../lib/bootstrap-4.1.1-dist/js/bootstrap.min.js"></script>
+    <title><?= Constantes::NOMBRE_SISTEMA; ?> - Modelos</title>
     <style>
-      /* Alinear estilos con usuarios.php */
-      .btn-outline-secondary {
-        border-color: #dee2e6;
-        color: #495057;
-        background-color: #fff;
-      }
-      .btn-outline-secondary:hover {
-        background-color: #f8f9fa;
-        color: #212529;
-      }
-      .btn-icon {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-      }
+        .btn-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
     </style>
-    </head>
-    <body>
+</head>
+<body>
+<?php include_once '../gui/navbar.php'; ?>
 
-        <?php include_once '../gui/navbar.php'; ?>
-
-    <div class="container">
-
-      <div class="mb-3">
-        <a id="btnVolver" href="proyectos.php" class="btn btn-outline-secondary">
-          <span class="oi oi-arrow-left mr-1"></span> Volver
-        </a>
-      </div>
-
-            <div class="card mt-3">
-        <div class="card-header">
-          <h3>Modelos</h3>
-        </div>
-                <div class="card-body">
-          <!-- Contenedor de alertas dinámicas -->
-          <div id="alertContainer">
-            <?php if (isset($_GET['msg'])): ?>
-              <div class="alert alert-<?= ($_GET['type'] ?? '') === 'success' ? 'success' : 'danger'; ?> alert-dismissible fade show" role="alert">
+<div class="container mt-4">
+    <!-- 🔔 ALERTAS -->
+    <div id="alertContainer">
+        <?php if (isset($_GET['msg'])): ?>
+            <div class="alert alert-<?= ($_GET['type'] ?? '') === 'success' ? 'success' : 'danger'; ?> alert-dismissible fade show" role="alert">
                 <?= htmlspecialchars($_GET['msg']); ?>
                 <button type="button" class="close" data-dismiss="alert" aria-label="Cerrar">
-                  <span aria-hidden="true">&times;</span>
+                    <span aria-hidden="true">&times;</span>
                 </button>
-              </div>
-              <script>
-                $('html, body').animate({ scrollTop: 0 }, 'fast');
-                setTimeout(() => $('.alert').alert('close'), 3500);
-              </script>
-            <?php endif; ?>
-          </div>
-
-          <p>
-            <a href="modelo.nuevo.php">
-              <button type="button" class="btn btn-success">
-                <span class="oi oi-plus"></span> Nuevo Modelo
-              </button>
-            </a>
-          </p>
-          <div class="form-group">
-                        <label for="id_proyecto">Proyecto</label>
-                        <select id="id_proyecto" class="form-control" onchange="location.href='modelos.php?id_proyecto='+this.value;">
-                          <?php foreach ($proyectos as $p) { $sel = ((int)$p['id_proyecto'] === (int)$idProyectoSel) ? 'selected' : ''; ?>
-                            <option value="<?= (int)$p['id_proyecto'] ?>" <?= $sel ?>><?= htmlspecialchars($p['nombre']) ?></option>
-                          <?php } ?>
-                        </select>
-                        <?php if ($idProyectoSel > 0) { ?>
-                          <small class="form-text text-muted mt-1">
-                            Modelo actual: <b><?= $nombreModeloActual ? htmlspecialchars($nombreModeloActual) : '— Sin asignar —' ?></b>
-                          </small>
-                        <?php } ?>
-                    </div>
-
-                    <?php if ($idProyectoSel <= 0) { ?>
-                        <div class="alert alert-warning mb-0">Seleccione un proyecto para gestionar su modelo de calidad.</div>
-                    <?php } else if (empty($modelos)) { ?>
-                        <div class="alert alert-info mb-0">No hay modelos de calidad cargados.</div>
-                    <?php } else { ?>
-
-          <table class="table table-hover table-sm">
-                        <thead class="table-info">
-                            <tr>
-                                <th>Modelo</th>
-                                <th>Descripción</th>
-                                <th class="text-center">Estado</th>
-                                <th style="width:220px">Opciones</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                        <?php foreach ($modelos as $m) { 
-                            $isSel = ((int)$m['id_modelo'] === (int)$modeloActual);
-                        ?>
-                          <tr>
-                            <td><?= htmlspecialchars($m['nombre']) ?></td>
-                            <td><?= htmlspecialchars($m['descripcion']) ?></td>
-                            <td class="text-center">
-                                <?php if ($isSel) { ?>
-                                  <span class="badge badge-success">Seleccionado</span>
-                                <?php } else { ?>
-                                  <span class="badge badge-secondary">Disponible</span>
-                                <?php } ?>
-                            </td>
-                            <td>
-                              <div class="btn-group" role="group" aria-label="acciones modelo">
-                <a title="Ver métricas del proyecto" href="<?= $isSel ? ('modelo.ver.php?id='.(int)$idProyectoSel) : 'javascript:void(0);' ?>" 
-                   class="btn btn-outline-info btn-icon <?= $isSel ? '' : 'disabled' ?>" aria-label="Ver métricas">
-                  <span class="oi oi-crop" aria-hidden="true"></span>
-                                </a>
-
-                      <a title="Configurar métricas (CU07)" href="<?= $isSel ? ('pantalla.alumnos.metrica.php?id='.(int)$idProyectoSel) : 'javascript:void(0);' ?>"
-                        class="btn btn-outline-warning btn-icon <?= $isSel ? '' : 'disabled' ?>" aria-label="Configurar modelo">
-                                    <span class="oi oi-wrench" aria-hidden="true"></span>
-                                </a>
-
-                                <form action="modelo.crear.procesar.php" method="post" class="d-inline" onsubmit="return confirmarCambio(<?= (int)$modeloActual ?>, <?= (int)$m['id_modelo'] ?>);">
-                                  <input type="hidden" name="proyecto" value="<?= (int)$idProyectoSel ?>" />
-                                  <input type="hidden" name="modelo" value="<?= (int)$m['id_modelo'] ?>" />
-                                  <button type="submit" class="btn btn-outline-success btn-icon" title="<?= $modeloActual ? 'Cambiar modelo' : 'Seleccionar modelo' ?>" aria-label="<?= $modeloActual ? 'Cambiar modelo' : 'Seleccionar modelo' ?>" <?= $isSel ? 'disabled' : '' ?>>
-                                    <span class="oi oi-check" aria-hidden="true"></span>
-                                  </button>
-                                </form>
-                              </div>
-                            </td>
-                          </tr>
-                        <?php } ?>
-                        </tbody>
-                    </table>
-
-                    <?php } ?>
-                </div>
             </div>
+            <script>
+                $('html, body').animate({ scrollTop: 0 }, 'fast');
+                setTimeout(() => $('.alert').alert('close'), 3000);
+            </script>
+        <?php endif; ?>
+    </div>
+
+    <div class="card mt-3">
+        <div class="card-header">
+            <h3>Modelos de Calidad</h3>
         </div>
+        <div class="card-body">
+                        <!-- Botón Nuevo Modelo -->
+                        <p>
+                                <?php if ($esAdminGlobal || $esSuperAdmin): ?>
+                                    <form action="modelo.nuevo.predeterminado.procesar.php" method="post" class="d-inline">
+                                        <button type="submit" class="btn btn-success" title="Crear modelo predeterminado (global)">
+                                            <span class="oi oi-plus"></span> Nuevo Modelo (predeterminado)
+                                        </button>
+                                    </form>
+                                <?php else: ?>
+                                    <a href="modelo.nuevo.php" class="btn btn-success" title="Crear modelo desde cero">
+                                        <span class="oi oi-plus"></span> Nuevo Modelo
+                                    </a>
+                                <?php endif; ?>
+                        </p>
 
-        <script>
-        function confirmarCambio(actual, nuevo) {
-          if (!actual || actual === nuevo) return true;
-          return confirm('Está a punto de cambiar el modelo del proyecto. Tenga en cuenta que no podrá modificarse si ya existen métricas planificadas. ¿Desea continuar?');
-        }
-        </script>
-        <script>
-          (function() {
-            if (!window.history || !window.history.replaceState) return;
-            const params = new URLSearchParams(window.location.search);
-            if (!params.has('msg')) return;
-            params.delete('msg');
-            params.delete('type');
-            const newSearch = params.toString();
-            const newUrl = window.location.pathname + (newSearch ? ('?' + newSearch) : '');
-            window.history.replaceState({}, document.title, newUrl);
-          })();
-        </script>
-        <?php include_once '../gui/footer.php'; ?>
-    </body>
+            <!-- Tabla de proyectos -->
+            <?php if (empty($proyectos)): ?>
+                <div class="card my-4 text-center" style="border:1px dashed rgba(23,162,184,0.15); background:rgba(23,162,184,0.03);">
+                    <div class="card-body p-4">
+                        <i class="oi oi-info mb-2" style="font-size:2rem; color:#17a2b8;"></i>
+                        <h5 class="text-info font-weight-bold mb-2">No tenés proyectos asignados</h5>
+                        <p class="text-muted mb-3">Aún no fuiste asignado a ningún proyecto. Si creés que esto es un error, contactá a un administrador.</p>
+                    </div>
+                </div>
+            <?php else: ?>
+                <table class="table table-hover table-sm">
+                    <thead class="table-info">
+                        <tr>
+                            <th>Proyecto</th>
+                            <th>Modelo Actual</th>
+                            <th>Tipo</th>
+                            <th>Opciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    <?php foreach ($proyectos as $p): 
+                        $modeloSel = (int)($p['id_modelo'] ?? 0);
+                        $modeloNombre = '—';
+                        $tipo = '—';
+                        if ($modeloSel) {
+                            $r = $cn->query("SELECT nombre, descripcion FROM modelo_calidad WHERE id_modelo=" . $modeloSel . " LIMIT 1")->fetch_assoc();
+                            $modeloNombre = $r ? $r['nombre'] : '—';
+                            // Si en el futuro hay una columna/flag para predeterminados, puede usarse aquí.
+                            $tipo = 'Predeterminado';
+                        }
+                    ?>
+                        <tr>
+                            <td><?= htmlspecialchars($p['nombre']); ?></td>
+                            <td>
+                              <?php if ($esAdminGlobal || $esSuperAdmin): ?>
+                                <form action="modelo.crear.procesar.php" method="post" class="m-0 p-0">
+                                  <input type="hidden" name="proyecto" value="<?= (int)$p['id_proyecto']; ?>" />
+                                  <select name="modelo" class="form-control form-control-sm" onchange="this.form.submit()">
+                                    <option value="">— Seleccionar —</option>
+                                    <?php foreach ($modelos as $m): $sel = ((int)$m['id_modelo'] === $modeloSel) ? 'selected' : ''; ?>
+                                      <option value="<?= (int)$m['id_modelo']; ?>" <?= $sel ?>><?= htmlspecialchars($m['nombre']); ?></option>
+                                    <?php endforeach; ?>
+                                  </select>
+                                </form>
+                              <?php else: ?>
+                                <?= htmlspecialchars($modeloNombre); ?>
+                              <?php endif; ?>
+                            </td>
+                            <td><span class="badge badge-<?= $tipo === 'Predeterminado' ? 'secondary' : 'info'; ?>"><?= $tipo; ?></span></td>
+                            <td>
+                                <!-- Ver métricas -->
+                                <a title="Ver métricas del modelo" href="modelo.ver.php?id=<?= (int)$p['id_proyecto']; ?>" class="btn btn-outline-info btn-icon">
+                                    <span class="oi oi-graph"></span>
+                                </a>
+
+                                <!-- Configurar -->
+                                <a title="Configurar métricas" href="pantalla.alumnos.metrica.php?id=<?= (int)$p['id_proyecto']; ?>" class="btn btn-outline-warning btn-icon">
+                                    <span class="oi oi-wrench"></span>
+                                </a>
+
+                                <!-- Acciones extra opcionales podrían agregarse aquí si hay endpoints disponibles -->
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+            <?php endif; ?>
+        </div>
+    </div>
+</div>
+
+<?php include_once '../gui/footer.php'; ?>
+</body>
 </html>
-
