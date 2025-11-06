@@ -21,6 +21,7 @@ class PermisosSistema
     public const PERMISO_USUARIOS = self::ABM_USUARIOS;
     public const PERMISO_PERMISOS = 'ABM Permisos';
     public const PERMISO_ROLES = 'ABM Roles';
+    public const REGISTRO_METRICAS = 'Registro de Métricas Ejecutadas';
 
     // Rol por defecto para auto-registro
     public const ROL_ESTANDAR = 'Espectador';

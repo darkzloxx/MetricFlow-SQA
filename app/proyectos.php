@@ -119,23 +119,6 @@ if ($sinIteraciones > 0) {
     ];
 }
 
-// Paso 5: iteraciones sin métricas planificadas
-$sinPlanif = (int)$cn->query("
-    SELECT COUNT(*) AS c FROM iteracion i
-    LEFT JOIN metrica_iteracion mi ON mi.id_iteracion=i.id_iteracion
-    WHERE mi.valor_planificado IS NULL
-")->fetch_assoc()['c'];
-if ($sinPlanif > 0) {
-    $wizard[] = [
-        'paso' => 5,
-        'texto' => "$sinPlanif iteración(es) sin métricas planificadas.",
-        'accion' => 'Planificá los valores iniciales de las métricas.',
-        'responsable' => 'Gerente de Calidad o Líder de Proyecto',
-        'icono' => 'oi-task',
-        'estado' => 'pendiente',
-    ];
-}
-
 // Si no hay pendientes, mostrar completado
 if (empty($wizard)) {
     $wizard[] = [
@@ -155,9 +138,11 @@ foreach ($proyectos as $pr) {
     $esAdminProyecto = $esSuperAdmin || ($rolLower === 'administrador');
     $esGerenteOLider = $esSuperAdmin || in_array($rolLower, ['gerente de calidad', 'líder de proyecto', 'lider de proyecto'], true);
 
-    $totalSteps = $esAdminProyecto ? 4 : 3; // Admin: 2-5; otros: 3-5
+    $totalSteps = $esAdminProyecto ? 3 : 2; // Ajustado: Admin (2,3,4) - Otros (3,4)
     $completados = 0;
     $next = null;
+    // Aseguramos que exista la variable $detalle aunque no haya detalle que mostrar
+    $detalle = '';
 
     // Paso 2 (solo admin): usuarios asignados
     if ($esAdminProyecto) {
@@ -180,59 +165,35 @@ foreach ($proyectos as $pr) {
     if ($next === null) {
         $cantIter = (int)$cn->query("SELECT COUNT(*) AS c FROM iteracion WHERE id_proyecto=$idP")->fetch_assoc()['c'];
         if ($cantIter === 0) {
-            $next = ['paso' => 4, 'texto' => 'Sin iteraciones creadas.', 'accion' => 'Definí las iteraciones del proyecto.', 'responsable' => 'Líder de Proyecto', 'icono' => 'oi-loop-circular', 'estado' => 'pendiente'];
-        } else {
-            $completados++;
-        }
-    }
-    // Paso 5: métricas planificadas
-    $detalle = '';
-    if ($next === null) {
-        $faltanMetricas = (int)$cn->query("SELECT COUNT(*) AS c FROM iteracion i LEFT JOIN metrica_iteracion mi ON mi.id_iteracion=i.id_iteracion WHERE i.id_proyecto=$idP AND mi.valor_planificado IS NULL")->fetch_assoc()['c'];
-        if ($faltanMetricas > 0) {
-            // Listado de iteraciones afectadas (nombre si existe, sino #id)
-            $sqlDet = "SELECT DISTINCT i.id_iteracion,
-                            CONCAT(COALESCE(f.nombre,'?'), ' ', i.numero_iteracion) AS etiqueta
-                        FROM iteracion i
-                        LEFT JOIN metrica_iteracion mi ON mi.id_iteracion = i.id_iteracion
-                        LEFT JOIN fase f ON f.id_fase = i.id_fase
-                        WHERE i.id_proyecto = $idP AND mi.valor_planificado IS NULL";
-            if ($rsDet = $cn->query($sqlDet)) {
-                $items = [];
-                while ($row = $rsDet->fetch_assoc()) {
-                    $items[] = $row['etiqueta'];
-                }
-                if ($items) {
-                    $max = 8;
-                    $mostrar = array_slice($items, 0, $max);
-                    $resto = count($items) - count($mostrar);
-                    $lis = '';
-                    foreach ($mostrar as $et) {
-                        $lis .= '<li>' . htmlspecialchars($et, ENT_QUOTES, 'UTF-8') . '</li>';
-                    }
-                    if ($resto > 0) {
-                        $lis .= '<li>+' . (int)$resto . ' más…</li>';
-                    }
-                    $detalle = '<strong>Iteraciones afectadas:</strong><ul class="mb-0 pl-3">' . $lis . '</ul>';
-                }
-            }
-            $next = ['paso' => 5, 'texto' => 'Iteraciones sin métricas planificadas.', 'accion' => 'Planificá valores iniciales de métricas.', 'responsable' => 'Gerente de Calidad o Líder de Proyecto', 'icono' => 'oi-task', 'estado' => 'pendiente'];
+            $next = ['paso' => 4, 'texto' => 'Sin iteraciones creadas.', 'accion' => 'Definí las iteraciones del proyecto y planificá métricas.', 'responsable' => 'Líder de Proyecto', 'icono' => 'oi-loop-circular', 'estado' => 'pendiente'];
         } else {
             $completados++;
         }
     }
 
+
     if ($next === null) {
-        $next = ['paso' => '✓', 'texto' => 'Proyecto listo.', 'accion' => 'Podés usar el dashboard de calidad.', 'responsable' => 'Todos los roles', 'icono' => 'oi-check', 'estado' => 'completo'];
+        $next = [
+            'paso' => '✓',
+            'texto' => 'Planificación finalizada.',
+            'accion' => 'Inicia la fase de ejecución y seguimiento de métricas.',
+            'responsable' => 'Todos los roles',
+            'icono' => 'oi-check',
+            'estado' => 'completo'
+        ];
     }
 
     // Link de acción según paso y permisos
     $link = null;
     if ($next['estado'] === 'completo') {
-        $link = "dashboard.php?proyecto=$idP";
+        if (ControlAcceso::verificaPermiso(PermisosSistema::REGISTRO_METRICAS)) {
+            $link = "registro_metricas.php?proyecto=$idP";
+        } else {
+            $link = "dashboard.php?proyecto=$idP";
+        }
     } else {
         switch ($next['paso']) {
-            case 2:
+            case 2: // Usuarios asignados
                 if ($esAdminProyecto) $link = "proyecto.modificar.php?id=$idP#usuarios";
                 break;
             case 3:
@@ -240,9 +201,6 @@ foreach ($proyectos as $pr) {
                 break;
             case 4:
                 if ($esGerenteOLider || $esSuperAdmin) $link = "proyecto.modificar.php?id=$idP#iteraciones";
-                break;
-            case 5:
-                if ($esSuperAdmin || $esGerenteOLider) $link = "dashboard_exclusivo.php?proyecto=$idP#planificacion";
                 break;
         }
     }
@@ -421,7 +379,7 @@ foreach ($proyectos as $pr) {
                                     <div class="d-flex align-items-center justify-content-between">
                                         <h6 class="mb-0 text-primary">
                                             <span class="oi oi-list-rich mr-1"></span>
-                                            Flujo — <?= htmlspecialchars($wiz['proyecto'], ENT_QUOTES, 'UTF-8'); ?>
+                                            Preparación
                                         </h6>
                                         <span class="small text-muted"><?= (int)$wiz['progreso']; ?>% completado</span>
                                     </div>
@@ -429,6 +387,10 @@ foreach ($proyectos as $pr) {
                                         <div class="progress-bar bg-info" role="progressbar"
                                             style="width: <?= (int)$wiz['progreso']; ?>%;" aria-valuenow="<?= (int)$wiz['progreso']; ?>"
                                             aria-valuemin="0" aria-valuemax="100"></div>
+                                    </div>
+                                    <!-- Texto explicativo sutil -->
+                                    <div class="small text-muted mt-2">
+                                        Muestra el grado de avance en la planificación y configuración del modelo de métricas del proyecto.
                                     </div>
                                 </div>
                                 <div class="wizard-step-wrapper">
