@@ -18,10 +18,27 @@ $ColeccionUsuarios = new ColeccionUsuarios();
         <script type="text/javascript" src="../lib/JQuery/jquery-3.3.1.js"></script>
         <script type="text/javascript" src="../lib/bootstrap-4.1.1-dist/js/bootstrap.min.js"></script>
         <title><?= Constantes::NOMBRE_SISTEMA; ?> - Cargar Modelo</title>
+          <style>
+        .btn-outline-secondary {
+            border-color: #dee2e6;
+            color: #495057;
+            background-color: #fff;
+        }
+
+        .btn-outline-secondary:hover {
+            background-color: #f8f9fa;
+            color: #212529;
+        }
+    </style>
     </head>
     <body>
         <?php include_once '../gui/navbar.php'; ?>
         <div class="container">
+             <div class="mb-3">
+            <a id="btnVolver" href="modelos.php" class="btn btn-outline-secondary">
+                <span class="oi oi-arrow-left mr-1"></span> Volver
+            </a>
+        </div>
             <form action="modelo.crear.procesar.php" method="post">
                 <div class="card">
                     <div class="card-header">
