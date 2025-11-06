@@ -1,32 +1,26 @@
- -- phpMyAdmin SQL Dump
+-- phpMyAdmin SQL Dump
 -- version 5.2.1
 -- https://www.phpmyadmin.net/
 --
 -- Servidor: 127.0.0.1:3306
--- Tiempo de generación: 02-11-2025 a las 22:18:57
+-- Tiempo de generación: 06-11-2025 a las 01:33:10
 -- Versión del servidor: 10.4.32-MariaDB
 -- Versión de PHP: 8.2.12
+DROP DATABASE IF EXISTS bd_codevit;
+CREATE DATABASE bd_codevit CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
+USE bd_codevit;
 
 SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
 START TRANSACTION;
 SET time_zone = "+00:00";
-CREATE DATABASE IF NOT EXISTS bd_codevit CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
-USE bd_codevit;
+
 
 /*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
 /*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
 /*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
 /*!40101 SET NAMES utf8mb4 */;
 
---
--- Base de datos: `bd_codevit`
---
 
--- --------------------------------------------------------
-
---
--- Estructura de tabla para la tabla `fase`
---
 
 CREATE TABLE `fase` (
   `id_fase` int(11) NOT NULL,
@@ -218,6 +212,17 @@ INSERT INTO `metrica_modelo_calidad` (`id_metrica`, `id_modelo`) VALUES
 -- --------------------------------------------------------
 
 --
+-- Estructura de tabla para la tabla `metrica_proyecto_modelo`
+--
+
+CREATE TABLE `metrica_proyecto_modelo` (
+  `id_metrica` int(11) NOT NULL,
+  `id_proyecto_modelo` int(11) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
 -- Estructura de tabla para la tabla `metrica_tarea`
 --
 
@@ -328,7 +333,8 @@ INSERT INTO `permiso` (`id`, `nombre`) VALUES
 (8, 'Visualización de Métricas'),
 (9, 'Exportación de Informes y Gráficos'),
 (10, 'Filtrado Avanzado de Reportes'),
-(11, 'Visualización de Dashboard Inicial');
+(11, 'Visualización de Dashboard Inicial'),
+(12, 'ABM Roles');
 
 -- --------------------------------------------------------
 
@@ -350,8 +356,7 @@ CREATE TABLE `proyecto` (
 --
 
 INSERT INTO `proyecto` (`id_proyecto`, `objetivo`, `descripcion`, `estado`, `nombre`, `id_modelo`) VALUES
-(1, 'MetricFlow SQA es un software web para registrar, seguir y analizar métricas de calidad durante las iteraciones del proyecto.', 'Permite el seguimiento de estándares de calidad mediante métricas e indicadores definidos en el plan de SQA.', 'En Progreso', 'MetricFlow-SQA', 7),
-(3, '', '', 'Registrado', 'Kairos', NULL);
+(1, 'MetricFlow SQA es un software web para registrar, seguir y analizar métricas de calidad durante las iteraciones del proyecto.', 'Permite el seguimiento de estándares de calidad mediante métricas e indicadores definidos en el plan de SQA.', 'En Progreso', 'MetricFlow-SQA', 7);
 
 -- --------------------------------------------------------
 
@@ -374,11 +379,23 @@ INSERT INTO `proyecto_fase` (`id_proyecto`, `id_fase`, `fecha_inicio`, `fecha_fi
 (1, 1, '2025-08-19', '2025-09-09'),
 (1, 2, '2025-09-10', '2025-10-10'),
 (1, 3, '2025-10-11', '2025-11-14'),
-(1, 4, '2025-11-15', '2025-11-28'),
-(3, 1, NULL, NULL),
-(3, 2, NULL, NULL),
-(3, 3, NULL, NULL),
-(3, 4, NULL, NULL);
+(1, 4, '2025-11-15', '2025-11-28');
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `proyecto_modelo_calidad`
+--
+
+CREATE TABLE `proyecto_modelo_calidad` (
+  `id_proyecto_modelo` int(11) NOT NULL,
+  `id_proyecto` int(11) NOT NULL,
+  `id_modelo_base` int(11) DEFAULT NULL,
+  `nombre` varchar(150) NOT NULL,
+  `descripcion` text DEFAULT NULL,
+  `es_personalizado` tinyint(1) DEFAULT 0,
+  `fecha_creacion` timestamp NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
 
@@ -452,7 +469,8 @@ INSERT INTO `rol_permiso` (`id_rol`, `id_permiso`) VALUES
 (6, 8),
 (6, 9),
 (6, 10),
-(6, 11);
+(6, 11),
+(6, 12);
 
 -- --------------------------------------------------------
 
@@ -511,7 +529,9 @@ INSERT INTO `usuario` (`id_usuario`, `nombre_apellido`, `email`) VALUES
 (6, 'Osiris Sofia', 'osofia@uarg.unpa.edu.ar'),
 (7, 'Karim Hallar', 'khallar@uarg.unpa.edu.ar'),
 (8, 'Esteban Gesto', 'estebangesto@gmail.com'),
-(12, 'Lorenzo Teppa', 'sistemasprexa@gmail.com');
+(12, 'Lorenzo Teppa', 'sistemasprexa@gmail.com'),
+(13, 'Silvia ailen Gariglio', 'silviagarigliosivi@gmail.com'),
+(14, 'Aylen Gariglio', 'gariglioaylen@gmail.com');
 
 -- --------------------------------------------------------
 
@@ -531,7 +551,7 @@ CREATE TABLE `usuario_proyecto` (
 
 INSERT INTO `usuario_proyecto` (`id_usuario`, `id_proyecto`, `id_rol`) VALUES
 (1, 1, 2),
-(12, 3, 2),
+(13, 1, 2),
 (4, 1, 3),
 (2, 1, 4),
 (5, 1, 4);
@@ -560,7 +580,9 @@ INSERT INTO `usuario_rol` (`id_usuario`, `id_rol`) VALUES
 (6, 1),
 (7, 1),
 (8, 1),
-(12, 2);
+(12, 2),
+(13, 2),
+(14, 2);
 
 --
 -- Índices para tablas volcadas
@@ -608,6 +630,13 @@ ALTER TABLE `metrica_modelo_calidad`
   ADD KEY `id_modelo` (`id_modelo`);
 
 --
+-- Indices de la tabla `metrica_proyecto_modelo`
+--
+ALTER TABLE `metrica_proyecto_modelo`
+  ADD PRIMARY KEY (`id_metrica`,`id_proyecto_modelo`),
+  ADD KEY `fk_mpm_proy_modelo` (`id_proyecto_modelo`);
+
+--
 -- Indices de la tabla `metrica_tarea`
 --
 ALTER TABLE `metrica_tarea`
@@ -639,6 +668,14 @@ ALTER TABLE `proyecto`
 ALTER TABLE `proyecto_fase`
   ADD PRIMARY KEY (`id_proyecto`,`id_fase`),
   ADD KEY `id_fase` (`id_fase`);
+
+--
+-- Indices de la tabla `proyecto_modelo_calidad`
+--
+ALTER TABLE `proyecto_modelo_calidad`
+  ADD PRIMARY KEY (`id_proyecto_modelo`),
+  ADD KEY `fk_proy_modelo_proyecto` (`id_proyecto`),
+  ADD KEY `fk_proy_modelo_modelo_base` (`id_modelo_base`);
 
 --
 -- Indices de la tabla `rol`
@@ -695,13 +732,13 @@ ALTER TABLE `fase`
 -- AUTO_INCREMENT de la tabla `iteracion`
 --
 ALTER TABLE `iteracion`
-  MODIFY `id_iteracion` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=10;
+  MODIFY `id_iteracion` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=37;
 
 --
 -- AUTO_INCREMENT de la tabla `metrica`
 --
 ALTER TABLE `metrica`
-  MODIFY `id_metrica` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=18;
+  MODIFY `id_metrica` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=43;
 
 --
 -- AUTO_INCREMENT de la tabla `modelo_calidad`
@@ -713,13 +750,19 @@ ALTER TABLE `modelo_calidad`
 -- AUTO_INCREMENT de la tabla `permiso`
 --
 ALTER TABLE `permiso`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=12;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=13;
 
 --
 -- AUTO_INCREMENT de la tabla `proyecto`
 --
 ALTER TABLE `proyecto`
-  MODIFY `id_proyecto` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
+  MODIFY `id_proyecto` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
+
+--
+-- AUTO_INCREMENT de la tabla `proyecto_modelo_calidad`
+--
+ALTER TABLE `proyecto_modelo_calidad`
+  MODIFY `id_proyecto_modelo` int(11) NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT de la tabla `rol`
@@ -737,7 +780,7 @@ ALTER TABLE `tarea`
 -- AUTO_INCREMENT de la tabla `usuario`
 --
 ALTER TABLE `usuario`
-  MODIFY `id_usuario` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=13;
+  MODIFY `id_usuario` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=15;
 
 --
 -- Restricciones para tablas volcadas
@@ -771,6 +814,13 @@ ALTER TABLE `metrica_modelo_calidad`
   ADD CONSTRAINT `metrica_modelo_calidad_ibfk_2` FOREIGN KEY (`id_modelo`) REFERENCES `modelo_calidad` (`id_modelo`) ON UPDATE CASCADE;
 
 --
+-- Filtros para la tabla `metrica_proyecto_modelo`
+--
+ALTER TABLE `metrica_proyecto_modelo`
+  ADD CONSTRAINT `fk_mpm_metrica` FOREIGN KEY (`id_metrica`) REFERENCES `metrica` (`id_metrica`) ON DELETE CASCADE ON UPDATE CASCADE,
+  ADD CONSTRAINT `fk_mpm_proy_modelo` FOREIGN KEY (`id_proyecto_modelo`) REFERENCES `proyecto_modelo_calidad` (`id_proyecto_modelo`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+--
 -- Filtros para la tabla `metrica_tarea`
 --
 ALTER TABLE `metrica_tarea`
@@ -789,6 +839,13 @@ ALTER TABLE `proyecto`
 ALTER TABLE `proyecto_fase`
   ADD CONSTRAINT `proyecto_fase_ibfk_1` FOREIGN KEY (`id_proyecto`) REFERENCES `proyecto` (`id_proyecto`) ON DELETE CASCADE ON UPDATE CASCADE,
   ADD CONSTRAINT `proyecto_fase_ibfk_2` FOREIGN KEY (`id_fase`) REFERENCES `fase` (`id_fase`);
+
+--
+-- Filtros para la tabla `proyecto_modelo_calidad`
+--
+ALTER TABLE `proyecto_modelo_calidad`
+  ADD CONSTRAINT `fk_proy_modelo_modelo_base` FOREIGN KEY (`id_modelo_base`) REFERENCES `modelo_calidad` (`id_modelo`) ON DELETE SET NULL ON UPDATE CASCADE,
+  ADD CONSTRAINT `fk_proy_modelo_proyecto` FOREIGN KEY (`id_proyecto`) REFERENCES `proyecto` (`id_proyecto`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 --
 -- Filtros para la tabla `rol_permiso`

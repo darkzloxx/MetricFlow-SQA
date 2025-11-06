@@ -1,9 +1,17 @@
 <?php
 include_once '../lib/ControlAcceso.class.php';
-ControlAcceso::requierePermiso(PermisosSistema::PERMISO_PERMISOS);
-include_once '../modelo/Permiso.php';
-
-$id = $_GET["id"];
+// Acceso: Admin/SuperAdmin SIEMPRE. Caso contrario: requiere permiso Gestión de Modelo y pertenecer al proyecto
+$id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
+if ($id <= 0) {
+    header('Location: modelos.php?msg=' . urlencode('Proyecto inválido.') . '&type=danger');
+    exit;
+}
+if (!ControlAcceso::esAdminGlobal()) {
+    if (!ControlAcceso::verificaPermiso(PermisosSistema::GESTION_MODELO_CALIDAD) || !ControlAcceso::usuarioPerteneceAProyecto($id)) {
+        header('Location: modelos.php?msg=' . urlencode('Acceso restringido: requiere permiso y pertenecer al proyecto.') . '&type=danger');
+        exit;
+    }
+}
 ?>
 
 
@@ -18,7 +26,7 @@ $id = $_GET["id"];
 
     </head>
     <body>
-        <?php include_once '../gui/navbarAlumnos.php'; ?>
+        <?php include_once '../gui/navbar.php'; ?>
         <div class="container">
             <p></p>
             <div class="card">
@@ -61,12 +69,12 @@ $id = $_GET["id"];
                     </table>
                 </div>
                 <div class="card-footer">
-                        <a href="pantalla.alumnos.metrica.php">
+                        <a href="pantalla.alumnos.metrica.php?id=<?= (int)$id ?>">
                             <button type="button" class="btn btn-outline-success">
                                 <span class="oi oi-check"></span> Gestionar Metricas
                             </button>
                         </a>
-                        <a href="pantalla.alumnos.modelo.php">
+                        <a href="modelos.php?id_proyecto=<?= (int)$id ?>">
                             <button type="button" class="btn btn-outline-danger">
                                 <span class="oi oi-x"></span> Volver
                             </button>

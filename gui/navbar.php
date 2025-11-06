@@ -57,14 +57,14 @@ $currentPage = isset($_SERVER['SCRIPT_NAME']) ? basename($_SERVER['SCRIPT_NAME']
                         </a>
                     </li>
                 <?php } ?>
-                <?php /*if (ControlAcceso::verificaPermiso(PermisosSistema::GESTION_MODELO_CALIDAD)) { ?>
+                <?php if (ControlAcceso::esAdminGlobal() || ControlAcceso::verificaPermiso(PermisosSistema::GESTION_MODELO_CALIDAD)) { ?>
                         <li class="nav-item">
-                            <a class="nav-link" href="#">
+                            <a class="nav-link" href="../app/modelos.php">
                                 <span class="oi oi-book" /> 
                                 Modelos
                             </a>
                         </li>
-                    <?php } */ ?>
+                    <?php } ?>
 
                 <li class="nav-item">
                     <a class="nav-link" id="btnSalir" href="../app/salir.php">
