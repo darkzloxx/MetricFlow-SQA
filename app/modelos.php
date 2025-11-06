@@ -284,7 +284,7 @@ if (!empty($proyectos)) {
                                         <a class="btn btn-outline-warning btn-icon" title="Editar modelo" href="modelo.modificar.php?id_modelo=<?= $mid; ?>">
                                             <span class="oi oi-pencil"></span>
                                         </a>
-                                        <a class="btn btn-outline-danger btn-icon" title="Eliminar modelo" href="modelo.eliminar.procesar.php?id_modelo=<?= $mid; ?>" onclick="return confirm('¿Confirma que desea eliminar este modelo? Esta acción no se puede deshacer.');">
+                                        <a class="btn btn-outline-danger btn-icon" title="Eliminar modelo" href="modelo.eliminar.procesar.php?id_modelo=<?= $mid; ?>" onclick="return confirm('¿Confirma que desea eliminar este modelo? Se eliminarán solo las métricas asociadas exclusivamente a este modelo (las que no estén vinculadas a ningún otro). Esta acción no se puede deshacer.');">
                                             <span class="oi oi-trash"></span>
                                         </a>
                                     <?php endif; ?>

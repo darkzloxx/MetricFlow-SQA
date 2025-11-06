@@ -8,10 +8,11 @@ if (!ControlAcceso::esAdminGlobal() && !ControlAcceso::verificaPermiso(PermisosS
     exit;
 }
 
+// Datos básicos del modelo
 $nombre = isset($_POST['nombre']) ? trim($_POST['nombre']) : '';
 $descripcion = isset($_POST['descripcion']) ? trim($_POST['descripcion']) : '';
 $metricas = isset($_POST['metricas']) && is_array($_POST['metricas']) ? array_map('intval', $_POST['metricas']) : [];
-// Nuevas métricas desde el modal
+// Nuevas métricas desde el modal (arrays paralelos)
 $metricasNuevasNombres = isset($_POST['metricas_nuevas']['nombre']) && is_array($_POST['metricas_nuevas']['nombre']) ? $_POST['metricas_nuevas']['nombre'] : [];
 $metricasNuevasDescs = isset($_POST['metricas_nuevas']['descripcion']) && is_array($_POST['metricas_nuevas']['descripcion']) ? $_POST['metricas_nuevas']['descripcion'] : [];
 
@@ -21,8 +22,32 @@ $esGlobal = $esAdmin && isset($_POST['global']) && (int)$_POST['global'] === 1;
 $proyectoId = isset($_POST['proyecto']) ? (int)$_POST['proyecto'] : 0;
 
 if ($nombre === '') {
-    header('Location: modelo.nuevo.php?msg=' . urlencode('El nombre del modelo es obligatorio.') . '&type=danger');
+    // Redirigir a formulario correcto según contexto (global o proyecto)
+    $redir = $esGlobal ? 'modelo.nuevo.predeterminado.php' : 'modelo.nuevo.php';
+    header('Location: ' . $redir . '?msg=' . urlencode('El nombre del modelo es obligatorio.') . '&type=danger');
     exit;
+}
+
+// Descripción obligatoria
+if ($descripcion === '') {
+    $redir = $esGlobal ? 'modelo.nuevo.predeterminado.php' : 'modelo.nuevo.php';
+    header('Location: ' . $redir . '?msg=' . urlencode('La descripción del modelo es obligatoria.') . '&type=danger');
+    exit;
+}
+
+// Validar nuevas métricas: nombre y descripción obligatorios (evitar crear métricas vacías)
+if (!empty($metricasNuevasNombres)) {
+    $errorMetrica = false;
+    foreach ($metricasNuevasNombres as $i => $nom) {
+        $nom = trim((string)$nom);
+        $des = isset($metricasNuevasDescs[$i]) ? trim((string)$metricasNuevasDescs[$i]) : '';
+        if ($nom === '' || $des === '') { $errorMetrica = true; break; }
+    }
+    if ($errorMetrica) {
+        $redir = $esGlobal ? 'modelo.nuevo.predeterminado.php' : 'modelo.nuevo.php';
+        header('Location: ' . $redir . '?msg=' . urlencode('Cada nueva métrica debe tener nombre y descripción (no vacíos).') . '&type=danger');
+        exit;
+    }
 }
 
 // Si no es admin, debe asignar a un proyecto del cual forme parte
@@ -81,12 +106,13 @@ if (!empty($metricas)) {
     }
 }
 
-// Insertar nuevas métricas y vincular
+// Insertar nuevas métricas y vincular (ya validadas arriba)
 if (!empty($metricasNuevasNombres)) {
     foreach ($metricasNuevasNombres as $i => $nom) {
         $nom = trim((string)$nom);
         $des = isset($metricasNuevasDescs[$i]) ? trim((string)$metricasNuevasDescs[$i]) : '';
-        if ($nom === '') continue;
+        // Doble chequeo defensivo
+        if ($nom === '' || $des === '') continue;
         $qM = "INSERT INTO metrica (nombre, descripcion) VALUES ('".$cn->real_escape_string($nom)."', '".$cn->real_escape_string($des)."')";
         if (!$cn->query($qM)) {
             $cn->rollback();

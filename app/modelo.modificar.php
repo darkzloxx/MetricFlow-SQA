@@ -57,7 +57,8 @@ if ($rsS = $cn->query("SELECT id_metrica FROM metrica_modelo_calidad WHERE id_mo
     <style>
         .btn-outline-secondary { border-color:#dee2e6; color:#495057; background:#fff; }
         .btn-outline-secondary:hover { background:#f8f9fa; color:#212529; }
-        .chip { display:inline-block; padding:.25rem .5rem; border-radius:16px; background:#f1f3f5; margin:.125rem .25rem; }
+        .chip { display:inline-flex; align-items:center; padding:.25rem .5rem; border-radius:16px; background:#f1f3f5; margin:.125rem .25rem; border:1px solid #ced4da; }
+        .chip .remove { border:0; background:transparent; color:#6c757d; margin-left:.25rem; cursor:pointer; }
     </style>
 </head>
 <body>
@@ -111,20 +112,15 @@ if ($rsS = $cn->query("SELECT id_metrica FROM metrica_modelo_calidad WHERE id_mo
 
                 <div class="mt-3">
                     <h6>Agregar nuevas métricas</h6>
-                    <div class="form-row">
-                        <div class="col-md-4 mb-2">
-                            <input type="text" id="newMetricName" class="form-control" placeholder="Nombre de la métrica" />
-                        </div>
-                        <div class="col-md-6 mb-2">
-                            <input type="text" id="newMetricDesc" class="form-control" placeholder="Descripción (opcional)" />
-                        </div>
-                        <div class="col-md-2 mb-2">
-                            <button type="button" id="btnAddMetric" class="btn btn-outline-primary btn-block">
-                                <span class="oi oi-plus"></span> Agregar
-                            </button>
-                        </div>
+                    <div class="mt-2 d-flex align-items-center flex-wrap">
+                        <button type="button" class="btn btn-outline-primary mr-2" data-toggle="modal" data-target="#modalNuevaMetricaMod">
+                            <span class="oi oi-plus"></span> Nueva métrica
+                        </button>
+                        <button type="button" id="btnLimpiarMetricas" class="btn btn-outline-secondary">Limpiar selección</button>
+                        <span id="metricasSeleccionadasCount" class="badge badge-info ml-3 d-none"></span>
                     </div>
-                    <div id="newMetricsList" class="mt-2"></div>
+                    <div id="metricasNuevasChips" class="mt-2"></div>
+                    <div id="metricasNuevasInputs"></div>
                 </div>
 
             </div>
@@ -139,6 +135,39 @@ if ($rsS = $cn->query("SELECT id_metrica FROM metrica_modelo_calidad WHERE id_mo
         </div>
     </form>
 </div>
+
+<!-- Modal Nueva Métrica (Modificación) -->
+<div class="modal fade" id="modalNuevaMetricaMod" tabindex="-1" role="dialog" aria-labelledby="modalNuevaMetricaModLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalNuevaMetricaModLabel">Nueva métrica</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="mnmNombre">Nombre</label>
+                    <input type="text" id="mnmNombre" class="form-control" maxlength="120" />
+                    <div class="invalid-feedback">El nombre es obligatorio.</div>
+                </div>
+                <div class="form-group">
+                    <label for="mnmDescripcion">Descripción</label>
+                    <textarea id="mnmDescripcion" class="form-control" rows="3"></textarea>
+                    <div class="invalid-feedback">La descripción es obligatoria.</div>
+                </div>
+                <div class="text-muted small">Se agregará al guardar y quedará vinculada a este modelo.</div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                <button type="button" id="btnAgregarMetricaMod" class="btn btn-primary">
+                    <span class="oi oi-check"></span> Agregar
+                </button>
+            </div>
+        </div>
+    </div>
+    </div>
 
 <script>
 (function(){
@@ -160,7 +189,15 @@ if ($rsS = $cn->query("SELECT id_metrica FROM metrica_modelo_calidad WHERE id_mo
         return m;
     })();
 
-    const nameRegex = /^[A-Za-zÁÉÍÓÚáéíóúÑñ ]+$/;
+    // Permitir letras (incl. acentos), espacios, guiones y puntos
+    const nameRegex = /^[A-Za-zÁÉÍÓÚáéíóúÑñ .-]+$/;
+    
+    // Contador dinámico de seleccionadas (existentes + nuevas)
+    function actualizarCount(){
+        var total = $('input[name="metricas[]"]:checked').length + $('input[name="new_metric_name[]"]').length;
+        var $b = $('#metricasSeleccionadasCount');
+        if (total>0){ $b.text(total+' seleccionadas').removeClass('d-none'); } else { $b.addClass('d-none').text(''); }
+    }
 
     // Handler confirmar con resumen de cambios
     $('#formEditarModelo').on('submit', function(e){
@@ -175,21 +212,21 @@ if ($rsS = $cn->query("SELECT id_metrica FROM metrica_modelo_calidad WHERE id_mo
         let valido = true;
         $('#nombreError').hide().text('');
         $('#descError').hide().text('');
-        if (!nuevoNombre) { $('#nombreError').text('El nombre es obligatorio.').show(); valido = false; }
-        else if (!nameRegex.test(nuevoNombre)) { $('#nombreError').text('El nombre solo puede contener letras y espacios.').show(); valido = false; }
-        if (!nuevaDesc) { $('#descError').text('La descripción es obligatoria.').show(); valido = false; }
-        else if (!nameRegex.test(nuevaDesc)) { $('#descError').text('La descripción solo puede contener letras y espacios.').show(); valido = false; }
+    if (!nuevoNombre) { $('#nombreError').text('El nombre es obligatorio.').show(); valido = false; }
+    else if (!nameRegex.test(nuevoNombre)) { $('#nombreError').text('El nombre solo puede contener letras, espacios, guiones y puntos.').show(); valido = false; }
+    if (!nuevaDesc) { $('#descError').text('La descripción es obligatoria.').show(); valido = false; }
+    else if (!nameRegex.test(nuevaDesc)) { $('#descError').text('La descripción solo puede contener letras, espacios, guiones y puntos.').show(); valido = false; }
 
         // Validar nuevas métricas (nombres válidos si existen)
-        for (let i=0;i<nuevosNombres.length;i++){
+        for (var i=0;i<nuevosNombres.length;i++){
             const nm = (nuevosNombres[i]||'').trim();
             if (nm && !nameRegex.test(nm)) {
-                alert('Nombre de nueva métrica inválido: "'+nm+'". Solo letras y espacios.');
+                alert('Nombre de nueva métrica inválido: "'+nm+'". Solo letras, espacios, guiones y puntos.');
                 return false;
             }
         }
 
-        const nuevasValidas = (nuevosNombres||[]).filter(n=> (n||'').trim().length>0);
+    const nuevasValidas = (nuevosNombres||[]).filter(function(n){ return (n||'').trim().length>0; });
         if ((actuales.length + nuevasValidas.length) === 0){
             alert('Debe seleccionar al menos una métrica (existente o nueva).');
             return false;
@@ -203,10 +240,10 @@ if ($rsS = $cn->query("SELECT id_metrica FROM metrica_modelo_calidad WHERE id_mo
 
         const setOrig = new Set(origChecked);
         const setAct = new Set(actuales);
-        const quitadas = [...setOrig].filter(x => !setAct.has(x));
-        const agregadas = [...setAct].filter(x => !setOrig.has(x));
+    const quitadas = Array.from(setOrig).filter(function(x){ return !setAct.has(x); });
+    const agregadas = Array.from(setAct).filter(function(x){ return !setOrig.has(x); });
         if (agregadas.length) {
-            const nombresAgregadas = agregadas.map(id => metricMap[id] || ('ID '+id));
+            const nombresAgregadas = agregadas.map(function(id){ return metricMap[id] || ('ID '+id); });
             cambios.push(`- Métricas agregadas (${agregadas.length}):\n   · ${nombresAgregadas.join('\n   · ')}`);
         }
         if (quitadas.length) cambios.push(`- Métricas quitadas: ${quitadas.length}`);
@@ -241,19 +278,34 @@ if ($rsS = $cn->query("SELECT id_metrica FROM metrica_modelo_calidad WHERE id_mo
          });
     });
 
-    $('#btnAddMetric').on('click', function(){
-        const n = ($('#newMetricName').val()||'').trim();
-        const d = ($('#newMetricDesc').val()||'').trim();
-        if (!n) { alert('Ingrese nombre de la métrica.'); return; }
-        if (!nameRegex.test(n)) { alert('El nombre de la métrica solo puede contener letras y espacios.'); return; }
-        const $chip = $('<span class="chip"></span>').text(n);
-        const $h1 = $('<input type="hidden" name="new_metric_name[]" />').val(n);
-        const $h2 = $('<input type="hidden" name="new_metric_desc[]" />').val(d);
-        const $wrap = $('<span class="mr-2"></span>').append($chip).append($h1).append($h2);
-        $('#newMetricsList').append($wrap);
-        $('#newMetricName').val('');
-        $('#newMetricDesc').val('');
+    // Modal Nueva Métrica (misma UX que en crear predeterminado)
+    function limpiarValidacionesModalMod(){
+        $('#mnmNombre').removeClass('is-invalid');
+        $('#mnmDescripcion').removeClass('is-invalid');
+    }
+    $('#btnAgregarMetricaMod').on('click', function(){
+        limpiarValidacionesModalMod();
+        const n = ($('#mnmNombre').val()||'').trim();
+        const d = ($('#mnmDescripcion').val()||'').trim();
+        if (!n) { $('#mnmNombre').addClass('is-invalid').focus(); return; }
+        if (!nameRegex.test(n)) { $('#mnmNombre').addClass('is-invalid'); alert('El nombre de la métrica solo puede contener letras, espacios, guiones y puntos.'); return; }
+        if (!d) { $('#mnmDescripcion').addClass('is-invalid').focus(); return; }
+        const $wrap = $('<span class="nm-item mr-2"></span>');
+        $wrap.append($('<input type="hidden" name="new_metric_name[]" />').val(n));
+        $wrap.append($('<input type="hidden" name="new_metric_desc[]" />').val(d));
+    const $chip = $('<span class="chip" title="'+d.replace(/\"/g,'&quot;')+'">'+n+' <button type="button" class="remove" aria-label="Quitar">&times;</button></span>');
+    $chip.find('.remove').on('click', function(){ $wrap.remove(); $chip.remove(); actualizarCount(); });
+        $('#metricasNuevasInputs').append($wrap);
+        $('#metricasNuevasChips').append($chip);
+    $('#mnmNombre').val(''); $('#mnmDescripcion').val(''); actualizarCount();
+        $('#modalNuevaMetricaMod').one('hidden.bs.modal', function(){ $('body').removeClass('modal-open'); $('.modal-backdrop').remove(); }).modal('hide');
+        setTimeout(function(){ $('body').removeClass('modal-open'); $('.modal-backdrop').remove(); }, 250);
     });
+    $('#btnLimpiarMetricas').on('click', function(){ $('input[name="metricas[]"]').prop('checked', false); actualizarCount(); });
+    $(document).on('change','input[name="metricas[]"]', actualizarCount);
+
+    // Inicializar contador al cargar
+    actualizarCount();
 
     function mostrarAlerta(mensaje, tipo){
         const $alert = $(`<div class="alert alert-${tipo} alert-dismissible fade show mt-3" role="alert">${mensaje}<button type="button" class="close" data-dismiss="alert" aria-label="Cerrar"><span aria-hidden="true">&times;</span></button></div>`);

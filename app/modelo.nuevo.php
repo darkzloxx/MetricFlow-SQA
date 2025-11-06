@@ -194,13 +194,12 @@ if (!$esAdmin && !empty($proyectos)) {
               } ?>
             </div>
             <small class="form-text text-muted">Podrá ajustar métricas luego desde Configurar modelo (CU07).</small>
-            <div class="mt-2">
-              <button type="button" class="btn btn-outline-primary" data-toggle="modal" data-target="#modalNuevaMetrica">
+            <div class="mt-2 d-flex align-items-center flex-wrap">
+              <button type="button" class="btn btn-outline-primary mr-2" data-toggle="modal" data-target="#modalNuevaMetrica">
                 <span class="oi oi-plus"></span> Nueva métrica
               </button>
-              <button type="button" id="btnLimpiarMetricas" class="btn btn-outline-secondary ml-2">
-                Limpiar selección
-              </button>
+              <button type="button" id="btnLimpiarMetricas" class="btn btn-outline-secondary">Limpiar selección</button>
+              <span id="metricasSeleccionadasCount" class="badge badge-info ml-3 d-none"></span>
             </div>
             <div id="metricasNuevasChips" class="mt-2"></div>
           </div>
@@ -209,12 +208,10 @@ if (!$esAdmin && !empty($proyectos)) {
           <button type="submit" class="btn btn-outline-success">
             <span class="oi oi-check"></span> Confirmar
           </button>
-          <a href="modelos.php"><button type="button" class="btn btn-outline-danger">
+          <a href="modelos.php" onclick="return confirm('¿Cancelar la creación del modelo? Se perderán los cambios no guardados.');"><button type="button" class="btn btn-outline-danger">
               <span class="oi oi-x"></span> Cancelar
             </button></a>
-          <?php if ($esAdmin) { ?>
-            <a href="modelo.nuevo.predeterminado.procesar.php" class="btn btn-link">Crear rápido un modelo predeterminado</a>
-          <?php } ?>
+          
           <!-- inputs ocultos donde agregamos las nuevas métricas -->
           <div id="metricasNuevasInputs"></div>
         </div>
@@ -254,6 +251,13 @@ if (!$esAdmin && !empty($proyectos)) {
   <script>
     // Si es admin, alternar campo proyecto según el check de global
     $(function() {
+      // Contador dinámico: checkeadas existentes + nuevas agregadas por modal
+      function actualizarCount(){
+        var total = $('input[name="metricas[]"]:checked').length + $('input[name="metricas_nuevas[nombre][]"]').length;
+        var $b = $('#metricasSeleccionadasCount');
+        if (total>0){ $b.text(total+' seleccionadas').removeClass('d-none'); } else { $b.addClass('d-none').text(''); }
+      }
+
       var ES_ADMIN = <?= $esAdmin ? 'true' : 'false' ?>;
       var $global = $('#global');
       var $proy = $('#proyecto');
@@ -286,12 +290,14 @@ if (!$esAdmin && !empty($proyectos)) {
           var i = $chip.index();
           $('#metricasNuevasInputs .nm-item').eq(i).remove();
           $chip.remove();
+          actualizarCount();
         });
         $('#metricasNuevasChips').append($chip);
 
         // limpiar y cerrar
         $('#nmNombre').val('');
         $('#nmDescripcion').val('');
+        actualizarCount();
         $('#modalNuevaMetrica').modal('hide');
       });
 
@@ -332,11 +338,16 @@ if (!$esAdmin && !empty($proyectos)) {
                 var idm = parseInt(m.id_metrica) || 0;
                 if (idm) $('#m' + idm).prop('checked', true);
               });
+              actualizarCount();
             });
         });
-        $('#btnLimpiarBase').on('click', function(){ limpiarModeloBase(); });
+        $('#btnLimpiarBase').on('click', function(){ limpiarModeloBase(); actualizarCount(); });
       }
-      $('#btnLimpiarMetricas').on('click', function(){ $('input[name="metricas[]"]').prop('checked', false); });
+      $('#btnLimpiarMetricas').on('click', function(){ $('input[name="metricas[]"]').prop('checked', false); actualizarCount(); });
+      $(document).on('change','input[name="metricas[]"]', actualizarCount);
+
+      // Inicializar contador al cargar
+      actualizarCount();
     });
   </script>
   <?php include_once '../gui/footer.php'; ?>
