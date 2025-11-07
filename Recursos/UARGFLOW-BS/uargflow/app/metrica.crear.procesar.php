@@ -16,7 +16,7 @@ $consulta = BDConexion::getInstancia()->query($query);
 
 if ($consulta->num_rows > 0){
 	$resultado = false;
-	$mensaje = "Ya existe una metrica con el nombre ingresado";
+	$mensaje = "Ya existe una métrica con el nombre ingresado";
 } else {
 
 $query = "INSERT INTO metrica "
@@ -44,7 +44,7 @@ foreach ($DatosFormulario["permiso"] as $idPermiso) {
 BDConexion::getInstancia()->commit();
 BDConexion::getInstancia()->autocommit(true);
 $resultado = true;
-$mensaje = "Operacion Realizada con Exito";
+$mensaje = "Operación Realizada con Éxito";
 }
 ?>
 <html>
@@ -54,7 +54,7 @@ $mensaje = "Operacion Realizada con Exito";
         <link rel="stylesheet" href="../lib/open-iconic-master/font/css/open-iconic-bootstrap.css" />
         <script type="text/javascript" src="../lib/JQuery/jquery-3.3.1.js"></script>
         <script type="text/javascript" src="../lib/bootstrap-4.1.1-dist/js/bootstrap.min.js"></script>
-        <title><?= Constantes::NOMBRE_SISTEMA; ?> - Crear Metrica</title>
+        <title><?= Constantes::NOMBRE_SISTEMA; ?> - Crear Métrica</title>
     </head>
     <body>
         <?php include_once '../gui/navbar.php'; ?>
@@ -63,7 +63,7 @@ $mensaje = "Operacion Realizada con Exito";
             <p></p>
             <div class="card">
                 <div class="card-header">
-                    <h3>Crear Metrica</h3>
+                    <h3>Crear Métrica</h3>
                 </div>
                 <div class="card-body">
                     <?php if ($resultado) { ?>

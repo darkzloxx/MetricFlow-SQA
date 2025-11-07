@@ -3,9 +3,7 @@ include_once '../lib/ControlAcceso.class.php';
 ControlAcceso::requierePermiso(PermisosSistema::PERMISO_PERMISOS);
 include_once '../modelo/Permiso.php';
 $id = $_GET["id"];
-$porciones = explode(",", $id);
-$idMetrica = $porciones[0]; 
-$idIteracion = $porciones[1];
+
 ?>
 <html>
     <head>
@@ -14,34 +12,35 @@ $idIteracion = $porciones[1];
         <link rel="stylesheet" href="../lib/open-iconic-master/font/css/open-iconic-bootstrap.css" />
         <script type="text/javascript" src="../lib/JQuery/jquery-3.3.1.js"></script>
         <script type="text/javascript" src="../lib/bootstrap-4.1.1-dist/js/bootstrap.min.js"></script>
-        <title><?php echo Constantes::NOMBRE_SISTEMA; ?> - Eliminar Métrica</title>
+        <title><?php echo Constantes::NOMBRE_SISTEMA; ?> - Eliminar Iteración</title>
     </head>
     <body>
-        <?php include_once '../gui/navbarAlumnos.php'; ?>
+        <?php include_once '../gui/navbar.php'; ?>
         <div class="container">
-            <form action="pantalla.alumnos.metrica.eliminar.procesar.php" method="post">
+            <form action="iteracion.eliminar.procesar.php" method="post">
                 <div class="card">
                     <div class="card-header">
-                        <h3>Eliminar Métrica</h3>
+                        <h3>Eliminar Iteración</h3>
                     </div>
                     <div class="card-body">
                         <p class="alert alert-warning ">
                             <span class="oi oi-warning"></span> ATENCI&Oacute;N. Esta operaci&oacute;n no puede deshacerse.
                         </p>
-                        <?php $proyectos = "SELECT * FROM metrica where id_metrica = ". $idMetrica; 
+                        <?php $proyectos = "SELECT i.*,f.nombre FROM iteracion i join fase f on i.id_fase = f.id_fase
+                            where id_iteracion = ". $id . " ORDER BY i.id_fase asc"; 
                             $proyectos=BDConexion::getInstancia()->query($proyectos);
                             //$proyecto = mysqli_fetch_array($proyectos); 
                             $proyecto = $proyectos->fetch_all(MYSQLI_ASSOC);
                             foreach ($proyecto as $Proyec) { ?>
-                        <p>¿Est&aacute; seguro que desea eliminar la Métrica <b><?= $Proyec['nombre']; ?></b>?</p>
+                        <p>¿Est&aacute; seguro que desea eliminar la Iteración Numero: <b><?= $Proyec['numero_iteracion']; ?></b> de la fase: <b><?= $Proyec['nombre']; ?></b>?</p>
                         <?php } ?>
                     </div>
                     <div class="card-footer">
-                        <input type="hidden" name="id" class="form-control" id="id" value="<?= $idMetrica ?>,<?= $idIteracion?>" >
+                        <input type="hidden" name="id" class="form-control" id="id" value="<?= $_GET["id"]; ?>" >
                         <button type="submit" class="btn btn-outline-success">
                             <span class="oi oi-check"></span> Sí, deseo eliminar
                         </button>
-                        <a href="pantalla.alumnos.metricas.php">
+                        <a href="iteracion.php">
                             <button type="button" class="btn btn-outline-danger">
                                 <span class="oi oi-x"></span> NO (Salir de esta pantalla)
                             </button>

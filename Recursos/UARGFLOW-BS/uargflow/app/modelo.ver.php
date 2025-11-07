@@ -14,7 +14,7 @@ $id = $_GET["id"];
         <link rel="stylesheet" href="../lib/open-iconic-master/font/css/open-iconic-bootstrap.css" />
         <script type="text/javascript" src="../lib/JQuery/jquery-3.3.1.js"></script>
         <script type="text/javascript" src="../lib/bootstrap-4.1.1-dist/js/bootstrap.min.js"></script>
-       <title><?php echo Constantes::NOMBRE_SISTEMA; ?> - Propiedades de la métrica</title>
+       <title><?php echo Constantes::NOMBRE_SISTEMA; ?> - Propiedades del Modelo</title>
 
     </head>
     <body>
@@ -23,14 +23,14 @@ $id = $_GET["id"];
             <p></p>
             <div class="card">
                 <div class="card-header">
-                    <h3>Propiedades de la métrica</h3>
+                    <h3>Propiedades del Modelo</h3>
                 </div>
                 <div class="card-body">
                     <table class="table table-hover table-sm">
                         <tr class="table-info">
+                            <th>Modelo</th>
                             <th>Métrica</th>
                             <th>Descripción</th>
-                            <th>Modelo Asociado</th>
                         </tr>
                         <tr>
                             <?php 
@@ -41,16 +41,16 @@ $id = $_GET["id"];
                                         FROM metrica_modelo_calidad mmc
                                         JOIN modelo_calidad mo ON mmc.id_modelo = mo.id_modelo
                                         JOIN metrica m ON mmc.id_metrica = m.id_metrica
-                                        WHERE m.id_metrica = ".$id."
+                                        WHERE mo.id_modelo = ".$id."
                                         ORDER BY mo.nombre"; 
                             $proyectos=BDConexion::getInstancia()->query($proyectos);
                             $tiene = 0;
                             $proyecto = $proyectos->fetch_all(MYSQLI_ASSOC); 
                             foreach ($proyecto as $Proyec) { 
                                 $tiene = 1;?>
+                                <td><?= $Proyec['modelo_calidad']; ?></td>
                                 <td><?= $Proyec['metrica']; ?></td>
                                 <td><?= $Proyec['descripcion']; ?></td>
-                                <td><?= $Proyec['modelo_calidad']; ?></td>
                             </tr>
                         <?php } 
                         if($tiene == 0){
@@ -61,6 +61,11 @@ $id = $_GET["id"];
                 </div>
                 <div class="card-footer">
                         <a href="metricas.php">
+                            <button type="button" class="btn btn-outline-success">
+                                <span class="oi oi-check"></span> Gestionar Métricas
+                            </button>
+                        </a>
+                        <a href="modelos.php">
                             <button type="button" class="btn btn-outline-danger">
                                 <span class="oi oi-x"></span> Volver
                             </button>

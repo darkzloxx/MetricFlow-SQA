@@ -1,8 +1,9 @@
 <?php
-include_once '../lib/ControlAcceso.Class.php';
-ControlAcceso::requierePermiso(PermisosSistema::PERMISO_USUARIOS);
-include_once '../modelo/ColeccionRoles.php';
-$Roles = new ColeccionRoles();
+include_once '../lib/ControlAcceso.class.php';
+ControlAcceso::requierePermiso(PermisosSistema::PERMISO_PERMISOS);
+include_once '../modelo/Permiso.php';
+$id = $_GET["id"];
+
 ?>
 <html>
     <head>
@@ -11,15 +12,16 @@ $Roles = new ColeccionRoles();
         <link rel="stylesheet" href="../lib/open-iconic-master/font/css/open-iconic-bootstrap.css" />
         <script type="text/javascript" src="../lib/JQuery/jquery-3.3.1.js"></script>
         <script type="text/javascript" src="../lib/bootstrap-4.1.1-dist/js/bootstrap.min.js"></script>
-        <title><?= Constantes::NOMBRE_SISTEMA; ?> - Crear Proyecto</title>
+        <title><?php echo Constantes::NOMBRE_SISTEMA; ?> - Actualizar Modelo</title>
+
     </head>
     <body>
         <?php include_once '../gui/navbar.php'; ?>
         <div class="container">
-            <form action="proyecto.crear.procesar.php" method="post">
+            <form action="modelo.modificar.procesar.php" method="post">
                 <div class="card">
                     <div class="card-header">
-                        <h3>Crear Proyecto</h3>
+                        <h3>Actualizar Modelo</h3>
                         <p>
                             Complete los campos a continuaci&oacute;n. 
                             Luego, presione el bot&oacute;n <b>Confirmar</b>.<br />
@@ -27,25 +29,29 @@ $Roles = new ColeccionRoles();
                         </p>
                     </div>
                     <div class="card-body">
-                        <h4>Propiedades</h4>
                         <div class="form-group">
                             <label for="inputNombre">Nombre</label>
-                            <input type="text" name="nombre" class="form-control" id="inputNombre" placeholder="Ingrese el nombre del Proyecto" required="">
+                            <?php $proyectos = "SELECT * FROM modelo_calidad where id_modelo = ". $_GET["id"]; 
+                            $proyectos=BDConexion::getInstancia()->query($proyectos);
+                            //$proyecto = mysqli_fetch_array($proyectos); 
+                            $proyecto = $proyectos->fetch_all(MYSQLI_ASSOC);
+                            foreach ($proyecto as $Proyec) { ?>
+                            <input type="text" name="nombre" class="form-control" id="inputNombre" value="<?= $Proyec['nombre']; ?>" placeholder="Ingrese el nombre del Modelo" required="">
                         </div>
-                        <div class="form-group">
-                            <label for="inputMail">Descripción</label>
+                        <label for="inputMail">Descripción</label>
                             <br>
                             <textarea class="form-control" name="descripcion" id="inputDescripcion" placeholder="Ingrese una breve Descripción" rows="5" cols="40">
-                                
+                                <?= $Proyec['descripcion']; ?>
                                 </textarea>
-                        </div>
-                        <hr />
+                       
+                        <?php } ?>
+                        <input type="hidden" name="id" class="form-control" id="id" value="<?= $_GET["id"]; ?>" >
                     </div>
                     <div class="card-footer">
                         <button type="submit" class="btn btn-outline-success">
                             <span class="oi oi-check"></span> Confirmar
                         </button>
-                        <a href="proyectos.php">
+                        <a href="modelos.php">
                             <button type="button" class="btn btn-outline-danger">
                                 <span class="oi oi-x"></span> Cancelar
                             </button>

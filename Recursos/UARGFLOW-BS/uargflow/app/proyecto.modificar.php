@@ -38,9 +38,9 @@ $id = $_GET["id"];
                             foreach ($proyecto as $Proyec) { ?>
                             <input type="text" name="nombre" class="form-control" id="inputNombre" value="<?= $Proyec['nombre']; ?>" placeholder="Ingrese el nombre del Proyecto" required="">
                         </div>
-                        <label for="inputMail">Descripcion</label>
+                        <label for="inputMail">Descripción</label>
                             <br>
-                            <textarea class="form-control" name="descripcion" id="inputDescripcion" placeholder="Ingrese una breve Descripcion" rows="5" cols="40">
+                            <textarea class="form-control" name="descripcion" id="inputDescripcion" placeholder="Ingrese una breve Descripción" rows="5" cols="40">
                                 <?= $Proyec['descripcion']; ?>
                                 </textarea>
                        

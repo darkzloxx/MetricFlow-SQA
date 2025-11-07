@@ -14,7 +14,7 @@ $idIteracion = $porciones[1];
         <link rel="stylesheet" href="../lib/open-iconic-master/font/css/open-iconic-bootstrap.css" />
         <script type="text/javascript" src="../lib/JQuery/jquery-3.3.1.js"></script>
         <script type="text/javascript" src="../lib/bootstrap-4.1.1-dist/js/bootstrap.min.js"></script>
-        <title><?php echo Constantes::NOMBRE_SISTEMA; ?> - Actualizar Metrica</title>
+        <title><?php echo Constantes::NOMBRE_SISTEMA; ?> - Actualizar Métrica</title>
 
     </head>
     <body>
@@ -23,7 +23,7 @@ $idIteracion = $porciones[1];
             <form action="pantalla.alumnos.metrica.modificar.procesar.php" method="post">
                 <div class="card">
                     <div class="card-header">
-                        <h3>Actualizar Metrica</h3>
+                        <h3>Actualizar Métrica</h3>
                         <p>
                             Complete los campos a continuaci&oacute;n. 
                             Luego, presione el bot&oacute;n <b>Confirmar</b>.<br />
@@ -43,7 +43,7 @@ $idIteracion = $porciones[1];
                             <label for="inputNombre">Valor Ejecutado</label>
                             <input type="number" name="ejecutado" class="form-control" id="inputNombre" value="<?= $Proyec['valor_ejecutado']; ?>" placeholder="Ingrese el nombre de la Metrica" required="">
                             <br>
-                            <label for="inputNombre">Umbral de Desviacion</label>
+                            <label for="inputNombre">Umbral de Desviación</label>
                             <input type="number" name="umbral" class="form-control" id="inputNombre" value="<?= $Proyec['umbral_desviacion']; ?>" placeholder="Ingrese el nombre de la Metrica" required="">
                             <br>
                            

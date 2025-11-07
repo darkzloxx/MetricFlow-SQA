@@ -3,13 +3,9 @@ include_once '../lib/ControlAcceso.class.php';
 ControlAcceso::requierePermiso(PermisosSistema::PERMISO_PERMISOS);
 include_once '../modelo/BDConexion.Class.php';
 $DatosFormulario = $_POST;
-$id = $DatosFormulario["id"];
-$porciones = explode(",", $id);
-$idMetrica = $porciones[0]; 
-$idIteracion = $porciones[1];
-$query = "UPDATE metrica_iteracion "
-        . "SET valor_planificado = {$DatosFormulario["planificado"]},  valor_ejecutado = {$DatosFormulario["ejecutado"]},  umbral_desviacion = {$DatosFormulario["umbral"]}  "
-        . "WHERE id_metrica = {$idMetrica} and id_iteracion = {$idIteracion}";
+$query = "UPDATE metrica "
+        . "SET nombre = '{$DatosFormulario["nombre"]}',  descripcion = '{$DatosFormulario["descripcion"]}'  "
+        . "WHERE id_metrica = {$DatosFormulario["id"]}";
 $consulta = BDConexion::getInstancia()->query($query);
 ?>
 <html>
@@ -22,7 +18,7 @@ $consulta = BDConexion::getInstancia()->query($query);
         <title><?php echo Constantes::NOMBRE_SISTEMA; ?> - Actualizar Métrica</title>
     </head>
     <body>
-        <?php include_once '../gui/navbarAlumnos.php'; ?>
+        <?php include_once '../gui/navbar.php'; ?>
         <div class="container">
             <p></p>
             <div class="card">
@@ -42,7 +38,7 @@ $consulta = BDConexion::getInstancia()->query($query);
                     <?php } ?>
                     <hr />
                     <h5 class="card-text">Opciones</h5>
-                    <a href="pantalla.alumnos.metricas.php">
+                    <a href="metricas.php">
                         <button type="button" class="btn btn-primary">
                             <span class="oi oi-account-logout"></span> Salir
                         </button>

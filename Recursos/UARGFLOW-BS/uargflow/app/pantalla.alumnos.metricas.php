@@ -12,7 +12,7 @@ $ColeccionPermisos = new ColeccionPermisos();
         <link rel="stylesheet" href="../lib/open-iconic-master/font/css/open-iconic-bootstrap.css" />
         <script type="text/javascript" src="../lib/JQuery/jquery-3.3.1.js"></script>
         <script type="text/javascript" src="../lib/bootstrap-4.1.1-dist/js/bootstrap.min.js"></script>        
-        <title><?php echo Constantes::NOMBRE_SISTEMA; ?> - Metricas</title>
+        <title><?php echo Constantes::NOMBRE_SISTEMA; ?> - Métricas</title>
 
     </head>
     <body>
@@ -23,13 +23,13 @@ $ColeccionPermisos = new ColeccionPermisos();
             <div class="card">
                 <div class="card-header">
 
-                    <h3>Metricas</h3>
+                    <h3>Métricas</h3>
                 </div>
                 <div class="card-body">
                     <p>
                         <a href="pantalla.alumnos.metrica.crear.php">
                             <button type="button" class="btn btn-success">
-                                <span class="oi oi-plus"></span> Nueva Metrica
+                                <span class="oi oi-plus"></span> Nueva Métrica
                             </button>
                         </a>
                     </p>
