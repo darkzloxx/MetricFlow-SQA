@@ -140,7 +140,15 @@ if ($esAdminGlobal || $esSuperAdmin) {
                                     <a title="Ver" href="metrica.ver.php?id=<?= (int)$m['id_metrica']; ?>" class="btn btn-outline-primary btn-icon">
                                         <span class="oi oi-eye"></span>
                                     </a>
-                                    <!-- Para futuras acciones (editar/eliminar) validar reglas; base podría bloquear eliminación si está en uso -->
+                                    <a class="btn btn-outline-warning btn-icon" title="Editar" href="metrica.modificar.php?id=<?= (int)$m['id_metrica']; ?>">
+                                        <span class="oi oi-pencil"></span>
+                                    </a>
+                                    <form action="metrica.eliminar.procesar.php" method="post" class="d-inline" onsubmit="return confirm('¿Eliminar la métrica? Esta acción no se puede deshacer.');">
+                                        <input type="hidden" name="id" value="<?= (int)$m['id_metrica']; ?>" />
+                                        <button type="submit" class="btn btn-outline-danger btn-icon" title="Eliminar">
+                                            <span class="oi oi-trash"></span>
+                                        </button>
+                                    </form>
                                 </td>
                             </tr>
                         <?php endforeach; ?>
@@ -199,13 +207,9 @@ if ($esAdminGlobal || $esSuperAdmin) {
                                             <span class="oi oi-eye"></span>
                                         </a>
                                         <?php if (!$isBase && $tienePermGestionMetricas): ?>
-                                            <!-- Botones futuros para editar/eliminar métricas personalizadas -->
-                                            <!-- <a class="btn btn-outline-warning btn-icon" title="Editar" href="metrica.modificar.php?id=<?= (int)$m['id_metrica']; ?>">
+                                            <a class="btn btn-outline-warning btn-icon" title="Editar" href="metrica.modificar.php?id=<?= (int)$m['id_metrica']; ?>">
                                                 <span class="oi oi-pencil"></span>
-                                            </a> -->
-                                            <!-- <a class="btn btn-outline-danger btn-icon" title="Eliminar" href="metrica.eliminar.php?id=<?= (int)$m['id_metrica']; ?>">
-                                                <span class="oi oi-trash"></span>
-                                            </a> -->
+                                            </a>
                                         <?php else: ?>
                                             <?php if ($isBase): ?>
                                                 <button class="btn btn-outline-secondary btn-icon" disabled title="Métrica base - solo lectura">

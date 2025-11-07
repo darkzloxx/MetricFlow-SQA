@@ -1,12 +1,46 @@
 <?php
 include_once '../lib/ControlAcceso.Class.php';
-// Permiso correcto para gestionar métricas
-ControlAcceso::requierePermiso(PermisosSistema::GESTION_METRICAS);
 include_once '../modelo/BDConexion.Class.php';
 include_once '../modelo/ColeccionRoles.php';
+
+// Acceso: Admin/SuperAdmin SIEMPRE; caso contrario requiere permiso de Gestión de Métricas
+ControlAcceso::verificaLogin();
+$esAdmin = ControlAcceso::esAdminGlobal() || ControlAcceso::esSuperAdminGlobal();
+if (!$esAdmin && !ControlAcceso::verificaPermiso(PermisosSistema::GESTION_METRICAS)) {
+    http_response_code(403);
+    echo 'Acceso denegado';
+    exit;
+}
+
+// Cargar modelos según el rol
+$cn = BDConexion::getInstancia();
+$modelosGlobales = [];
+$modelosProyecto = [];
+if ($esAdmin) {
+    // Admin/SuperAdmin: todos los modelos globales
+    if ($rs = $cn->query("SELECT id_modelo, nombre, descripcion FROM modelo_calidad ORDER BY nombre")) {
+        $modelosGlobales = $rs->fetch_all(MYSQLI_ASSOC);
+    }
+} else {
+    // No admin: sólo modelos personalizados por proyecto a los que pertenece el usuario
+    $usr = ControlAcceso::usuarioActual();
+    $sql = "SELECT pmc.id_proyecto_modelo, pmc.nombre, pmc.descripcion, p.nombre AS proyecto
+            FROM proyecto_modelo_calidad pmc
+            JOIN proyecto p ON p.id_proyecto = pmc.id_proyecto
+            JOIN usuario_proyecto up ON up.id_proyecto = p.id_proyecto
+            WHERE up.id_usuario = ? AND IFNULL(pmc.es_personalizado,1) = 1
+            ORDER BY p.nombre, pmc.nombre";
+    if ($stmt = $cn->prepare($sql)) {
+        $uid = (int)$usr->id;
+        $stmt->bind_param('i', $uid);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        $modelosProyecto = $res ? $res->fetch_all(MYSQLI_ASSOC) : [];
+        $stmt->close();
+    }
+}
+
 $Roles = new ColeccionRoles();
-
-
 ?>
 <html>
     <head>
@@ -42,20 +76,32 @@ $Roles = new ColeccionRoles();
                             <input type="text" name="descripcion" class="form-control" pattern="[a-zA-Z\s]+" id="inputDescripcion" placeholder="Ingrese una breve Descripcion" required="">
                         </div>
                         <div class="form-group">
-                            <label for="inputMail">Modelo asociado</label>
+                            <label>Asociar a modelo</label>
                             <br>
-                            <?php 
-                            $proyectos = "SELECT * FROM modelo_calidad"; 
-                            $proyectos=BDConexion::getInstancia()->query($proyectos);
-                            $proyecto = $proyectos->fetch_all(MYSQLI_ASSOC); 
-                            foreach ($proyecto as $Proyec) { ?>
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" value="<?= (int)$Proyec['id_modelo']; ?>" id="permiso[<?= (int)$Proyec['id_modelo']; ?>]" name="permiso[<?= (int)$Proyec['id_modelo']; ?>]" />
-                                <label class="form-check-label" for="permiso[<?= (int)$Proyec['id_modelo']; ?>]">
-                                    <?= htmlspecialchars($Proyec['nombre']); ?>
-                                </label>
-                            </div>
-                        <?php } ?>
+                            <?php if ($esAdmin): ?>
+                                <?php if (empty($modelosGlobales)): ?>
+                                    <div class="text-muted">No hay modelos disponibles.</div>
+                                <?php else: foreach ($modelosGlobales as $m): ?>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" value="<?= (int)$m['id_modelo']; ?>" id="modg<?= (int)$m['id_modelo']; ?>" name="modelos_globales[]" />
+                                        <label class="form-check-label" for="modg<?= (int)$m['id_modelo']; ?>">
+                                            <?= htmlspecialchars($m['nombre']); ?>
+                                        </label>
+                                    </div>
+                                <?php endforeach; endif; ?>
+                            <?php else: ?>
+                                <?php if (empty($modelosProyecto)): ?>
+                                    <div class="text-muted">No tenés modelos personalizados de tus proyectos.</div>
+                                <?php else: foreach ($modelosProyecto as $mp): ?>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" value="<?= (int)$mp['id_proyecto_modelo']; ?>" id="modp<?= (int)$mp['id_proyecto_modelo']; ?>" name="modelos_proyecto[]" />
+                                        <label class="form-check-label" for="modp<?= (int)$mp['id_proyecto_modelo']; ?>">
+                                            <?= htmlspecialchars($mp['proyecto'] . ' — ' . $mp['nombre']); ?>
+                                        </label>
+                                    </div>
+                                <?php endforeach; endif; ?>
+                                <small class="form-text text-muted">Solo se permiten modelos personalizados (no predeterminados) de proyectos a los que pertenecés.</small>
+                            <?php endif; ?>
                         </div>
                         <hr />
                     </div>

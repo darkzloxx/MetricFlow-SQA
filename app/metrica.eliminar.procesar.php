@@ -1,7 +1,15 @@
 <?php
-include_once '../lib/ControlAcceso.class.php';
-ControlAcceso::requierePermiso(PermisosSistema::PERMISO_PERMISOS);
+include_once '../lib/ControlAcceso.Class.php';
 include_once '../modelo/BDConexion.Class.php';
+
+// Acceso: Admin/SuperAdmin bypass; otros requieren permiso Gestión de Métricas
+ControlAcceso::verificaLogin();
+$esAdmin = ControlAcceso::esAdminGlobal() || ControlAcceso::esSuperAdminGlobal();
+if (!$esAdmin && !ControlAcceso::verificaPermiso(PermisosSistema::GESTION_METRICAS)) {
+    http_response_code(403);
+    echo 'Acceso denegado';
+    exit;
+}
 
 $id = isset($_POST['id']) ? (int)$_POST['id'] : 0;
 if ($id <= 0) {
@@ -13,17 +21,27 @@ $cn = BDConexion::getInstancia();
 $cn->autocommit(false);
 $cn->begin_transaction();
 
-// Obtener tipo de métrica
-$tipo = null;
-$rsTipo = $cn->query('SELECT tipo FROM metrica WHERE id_metrica = ' . $id . ' LIMIT 1');
-if ($rsTipo && $rsTipo->num_rows) {
-    $rowT = $rsTipo->fetch_assoc();
-    $tipo = $rowT ? ($rowT['tipo'] ?? null) : null;
+// Detectar si existe la columna 'tipo' y obtener tipo si aplica
+$tipo = null; $hasTipo = false;
+try { if ($rsC = $cn->query("SHOW COLUMNS FROM metrica LIKE 'tipo'")) { $hasTipo = (bool)$rsC->num_rows; } } catch (Throwable $e) { $hasTipo = false; }
+if ($hasTipo) {
+    $rsTipo = $cn->query('SELECT tipo FROM metrica WHERE id_metrica = ' . $id . ' LIMIT 1');
+    if ($rsTipo && $rsTipo->num_rows) {
+        $rowT = $rsTipo->fetch_assoc();
+        $tipo = $rowT ? ($rowT['tipo'] ?? null) : null;
+    } else {
+        $cn->rollback();
+        $cn->autocommit(true);
+        header('Location: metricas.php?msg=' . urlencode('La métrica no existe.') . '&type=danger');
+        exit;
+    }
 }
-if (!$tipo) {
+
+// Si no admin y la métrica es base (o no se conoce el tipo) => bloquear
+if (!$esAdmin && (is_null($tipo) || strtolower((string)$tipo) === 'base')) {
     $cn->rollback();
     $cn->autocommit(true);
-    header('Location: metricas.php?msg=' . urlencode('La métrica no existe.') . '&type=danger');
+    header('Location: metricas.php?msg=' . urlencode('No está autorizado a eliminar métricas base.') . '&type=danger');
     exit;
 }
 
@@ -51,6 +69,8 @@ try {
     }
 
     // Eliminar relaciones y la métrica
+    // Relaciones con modelos de proyecto (si existieran)
+    $cn->query('DELETE FROM metrica_proyecto_modelo WHERE id_metrica = ' . $id);
     if (!$cn->query('DELETE FROM metrica_modelo_calidad WHERE id_metrica = ' . $id)) {
         throw new Exception('Error eliminando relaciones del modelo: ' . $cn->error);
     }

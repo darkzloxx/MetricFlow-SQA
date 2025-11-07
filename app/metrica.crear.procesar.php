@@ -1,58 +1,113 @@
 <?php
 include_once '../lib/ControlAcceso.Class.php';
-// Permiso de gestión de métricas en lugar de ABM_USUARIOS
-ControlAcceso::requierePermiso(PermisosSistema::GESTION_METRICAS);
 include_once '../modelo/BDConexion.Class.php';
-$DatosFormulario = $_POST;
-BDConexion::getInstancia()->autocommit(false);
-BDConexion::getInstancia()->begin_transaction();
 
-$nombre = $DatosFormulario["nombre"];
+// Acceso: Admin/SuperAdmin bypass; otros requieren permiso Gestión de Métricas
+ControlAcceso::verificaLogin();
+$esAdmin = ControlAcceso::esAdminGlobal() || ControlAcceso::esSuperAdminGlobal();
+if (!$esAdmin && !ControlAcceso::verificaPermiso(PermisosSistema::GESTION_METRICAS)) {
+    http_response_code(403);
+    echo 'Acceso denegado';
+    exit;
+}
+
+$DatosFormulario = $_POST;
+$cn = BDConexion::getInstancia();
+$cn->autocommit(false);
+$cn->begin_transaction();
+
+$nombre = trim((string)($DatosFormulario["nombre"] ?? ''));
+$descripcion = trim((string)($DatosFormulario["descripcion"] ?? ''));
 
 $resultado = "";
 $mensaje = "Ha ocurrido un error.";
 
-$nombreEsc = BDConexion::getInstancia()->real_escape_string($nombre);
-$query = "SELECT * FROM metrica WHERE nombre = '{$nombreEsc}'";
-$consulta = BDConexion::getInstancia()->query($query);
+if ($nombre === '') {
+    http_response_code(400);
+    echo 'El nombre es obligatorio';
+    exit;
+}
 
-if ($consulta->num_rows > 0){
-	$resultado = false;
-	$mensaje = "Ya existe una metrica con el nombre ingresado";
+$nombreEsc = $cn->real_escape_string($nombre);
+$qDup = "SELECT 1 FROM metrica WHERE nombre = '{$nombreEsc}' LIMIT 1";
+$rsDup = $cn->query($qDup);
+if ($rsDup && $rsDup->num_rows > 0){
+    $resultado = false;
+    $mensaje = "Ya existe una métrica con el nombre ingresado";
 } else {
 
-$esAdmin = ControlAcceso::esAdminGlobal() || ControlAcceso::esSuperAdminGlobal();
-// Si es admin se considera 'base', caso contrario 'personalizada'
-$tipo = $esAdmin ? 'base' : 'personalizada';
-$descEsc = BDConexion::getInstancia()->real_escape_string($DatosFormulario["descripcion"]);
-$tipoEsc = BDConexion::getInstancia()->real_escape_string($tipo);
-$query = "INSERT INTO metrica (nombre, descripcion, tipo) VALUES ('{$nombreEsc}', '{$descEsc}', '{$tipoEsc}')";
-$consulta = BDConexion::getInstancia()->query($query);
-if (!$consulta) {
-    BDConexion::getInstancia()->rollback();
-    //arrojar una excepcion
-    die(BDConexion::getInstancia()->errno);
-}
+    // Detectar si existe columna 'tipo'
+    $hasTipo = false;
+    try {
+        if ($rsCols = $cn->query("SHOW COLUMNS FROM metrica LIKE 'tipo'")) {
+            $hasTipo = (bool)$rsCols->num_rows;
+        }
+    } catch (Throwable $e) { $hasTipo = false; }
 
-$idMetrica = BDConexion::getInstancia()->insert_id;
+    $tipo = $esAdmin ? 'base' : 'personalizada';
+    $descEsc = $cn->real_escape_string($descripcion);
+    if ($hasTipo) {
+        $tipoEsc = $cn->real_escape_string($tipo);
+        $query = "INSERT INTO metrica (nombre, descripcion, tipo) VALUES ('{$nombreEsc}', '{$descEsc}', '{$tipoEsc}')";
+    } else {
+        $query = "INSERT INTO metrica (nombre, descripcion) VALUES ('{$nombreEsc}', '{$descEsc}')";
+    }
+    $okIns = $cn->query($query);
+    if (!$okIns) {
+        $cn->rollback();
+        $cn->autocommit(true);
+        die($cn->errno);
+    }
 
-if (isset($DatosFormulario['permiso']) && is_array($DatosFormulario['permiso'])) {
-    foreach ($DatosFormulario["permiso"] as $idPermiso) {
-        $idPermiso = (int)$idPermiso;
-        if ($idPermiso <= 0) { continue; }
-        $query = "INSERT INTO metrica_modelo_calidad VALUES ({$idMetrica}, {$idPermiso})";
-        $consulta = BDConexion::getInstancia()->query($query);
-        if (!$consulta) {
-            BDConexion::getInstancia()->rollback();
-            die(BDConexion::getInstancia()->errno);
+    $idMetrica = (int)$cn->insert_id;
+
+    if ($esAdmin) {
+        // Asociar a modelos globales seleccionados
+        $sel = isset($DatosFormulario['modelos_globales']) && is_array($DatosFormulario['modelos_globales']) ? $DatosFormulario['modelos_globales'] : [];
+        foreach ($sel as $idMod) {
+            $id = (int)$idMod; if ($id <= 0) continue;
+            $qL = "INSERT INTO metrica_modelo_calidad (id_metrica, id_modelo) VALUES ({$idMetrica}, {$id})";
+            if (!$cn->query($qL)) {
+                $cn->rollback();
+                $cn->autocommit(true);
+                die($cn->errno);
+            }
+        }
+    } else {
+        // Asociar a modelos personalizados de proyecto seleccionados
+        $sel = isset($DatosFormulario['modelos_proyecto']) && is_array($DatosFormulario['modelos_proyecto']) ? $DatosFormulario['modelos_proyecto'] : [];
+        if (!empty($sel)) {
+            // Validar que pertenecen al usuario
+            $usr = ControlAcceso::usuarioActual();
+            $ids = array_map('intval', $sel);
+            $ids = array_filter($ids, function($v){ return $v>0;});
+            if (!empty($ids)) {
+                $in = implode(',', $ids);
+                $sqlCheck = "SELECT pmc.id_proyecto_modelo
+                             FROM proyecto_modelo_calidad pmc
+                             JOIN usuario_proyecto up ON up.id_proyecto = pmc.id_proyecto
+                             WHERE up.id_usuario = ".(int)$usr->id." AND pmc.id_proyecto_modelo IN ($in)";
+                $valid = [];
+                if ($rsV = $cn->query($sqlCheck)) {
+                    while ($r = $rsV->fetch_assoc()) { $valid[] = (int)$r['id_proyecto_modelo']; }
+                }
+                foreach ($ids as $idpm) {
+                    if (!in_array($idpm, $valid, true)) continue;
+                    $qLp = "INSERT INTO metrica_proyecto_modelo (id_metrica, id_proyecto_modelo) VALUES ({$idMetrica}, {$idpm})";
+                    if (!$cn->query($qLp)) {
+                        $cn->rollback();
+                        $cn->autocommit(true);
+                        die($cn->errno);
+                    }
+                }
+            }
         }
     }
-}
 
-BDConexion::getInstancia()->commit();
-BDConexion::getInstancia()->autocommit(true);
-$resultado = true;
-$mensaje = "Operacion Realizada con Exito";
+    $cn->commit();
+    $cn->autocommit(true);
+    $resultado = true;
+    $mensaje = "Operación realizada con éxito";
 }
 ?>
 <html>
