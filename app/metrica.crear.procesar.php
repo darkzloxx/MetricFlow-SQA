@@ -1,6 +1,7 @@
 <?php
 include_once '../lib/ControlAcceso.Class.php';
-ControlAcceso::requierePermiso(PermisosSistema::PERMISO_USUARIOS);
+// Permiso de gestión de métricas en lugar de ABM_USUARIOS
+ControlAcceso::requierePermiso(PermisosSistema::GESTION_METRICAS);
 include_once '../modelo/BDConexion.Class.php';
 $DatosFormulario = $_POST;
 BDConexion::getInstancia()->autocommit(false);
@@ -11,7 +12,8 @@ $nombre = $DatosFormulario["nombre"];
 $resultado = "";
 $mensaje = "Ha ocurrido un error.";
 
-$query = "select * from metrica where nombre = '{$nombre}'";
+$nombreEsc = BDConexion::getInstancia()->real_escape_string($nombre);
+$query = "SELECT * FROM metrica WHERE nombre = '{$nombreEsc}'";
 $consulta = BDConexion::getInstancia()->query($query);
 
 if ($consulta->num_rows > 0){
@@ -20,8 +22,8 @@ if ($consulta->num_rows > 0){
 } else {
 
 $esAdmin = ControlAcceso::esAdminGlobal() || ControlAcceso::esSuperAdminGlobal();
+// Si es admin se considera 'base', caso contrario 'personalizada'
 $tipo = $esAdmin ? 'base' : 'personalizada';
-$nombreEsc = BDConexion::getInstancia()->real_escape_string($DatosFormulario["nombre"]);
 $descEsc = BDConexion::getInstancia()->real_escape_string($DatosFormulario["descripcion"]);
 $tipoEsc = BDConexion::getInstancia()->real_escape_string($tipo);
 $query = "INSERT INTO metrica (nombre, descripcion, tipo) VALUES ('{$nombreEsc}', '{$descEsc}', '{$tipoEsc}')";
@@ -34,14 +36,16 @@ if (!$consulta) {
 
 $idMetrica = BDConexion::getInstancia()->insert_id;
 
-foreach ($DatosFormulario["permiso"] as $idPermiso) {
-    $query = "INSERT INTO metrica_modelo_calidad "
-            . "VALUES ({$idMetrica}, {$idPermiso})";
-    $consulta = BDConexion::getInstancia()->query($query);
-    if (!$consulta) {
-        BDConexion::getInstancia()->rollback();
-        //arrojar una excepcion
-        die(BDConexion::getInstancia()->errno);
+if (isset($DatosFormulario['permiso']) && is_array($DatosFormulario['permiso'])) {
+    foreach ($DatosFormulario["permiso"] as $idPermiso) {
+        $idPermiso = (int)$idPermiso;
+        if ($idPermiso <= 0) { continue; }
+        $query = "INSERT INTO metrica_modelo_calidad VALUES ({$idMetrica}, {$idPermiso})";
+        $consulta = BDConexion::getInstancia()->query($query);
+        if (!$consulta) {
+            BDConexion::getInstancia()->rollback();
+            die(BDConexion::getInstancia()->errno);
+        }
     }
 }
 

@@ -1,6 +1,8 @@
 <?php
 include_once '../lib/ControlAcceso.Class.php';
-ControlAcceso::requierePermiso(PermisosSistema::PERMISO_USUARIOS);
+// Permiso correcto para gestionar métricas
+ControlAcceso::requierePermiso(PermisosSistema::GESTION_METRICAS);
+include_once '../modelo/BDConexion.Class.php';
 include_once '../modelo/ColeccionRoles.php';
 $Roles = new ColeccionRoles();
 
@@ -48,9 +50,9 @@ $Roles = new ColeccionRoles();
                             $proyecto = $proyectos->fetch_all(MYSQLI_ASSOC); 
                             foreach ($proyecto as $Proyec) { ?>
                             <div class="form-check">
-                                <input class="form-check-input" type="checkbox" value="<?= $Proyec['id_modelo']; ?>" id="rol[<?= $$Proyec['id_modelo']; ?>]" name="permiso[<?= $Proyec['id_modelo']; ?>]" />
-                                <label class="form-check-label" for="permiso">
-                                    <?= $Proyec['nombre']; ?>
+                                <input class="form-check-input" type="checkbox" value="<?= (int)$Proyec['id_modelo']; ?>" id="permiso[<?= (int)$Proyec['id_modelo']; ?>]" name="permiso[<?= (int)$Proyec['id_modelo']; ?>]" />
+                                <label class="form-check-label" for="permiso[<?= (int)$Proyec['id_modelo']; ?>]">
+                                    <?= htmlspecialchars($Proyec['nombre']); ?>
                                 </label>
                             </div>
                         <?php } ?>
