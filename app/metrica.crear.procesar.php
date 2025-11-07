@@ -19,8 +19,12 @@ if ($consulta->num_rows > 0){
 	$mensaje = "Ya existe una metrica con el nombre ingresado";
 } else {
 
-$query = "INSERT INTO metrica "
-        . "VALUES (null,'{$DatosFormulario["nombre"]}','{$DatosFormulario["descripcion"]}')";
+$esAdmin = ControlAcceso::esAdminGlobal() || ControlAcceso::esSuperAdminGlobal();
+$tipo = $esAdmin ? 'base' : 'personalizada';
+$nombreEsc = BDConexion::getInstancia()->real_escape_string($DatosFormulario["nombre"]);
+$descEsc = BDConexion::getInstancia()->real_escape_string($DatosFormulario["descripcion"]);
+$tipoEsc = BDConexion::getInstancia()->real_escape_string($tipo);
+$query = "INSERT INTO metrica (nombre, descripcion, tipo) VALUES ('{$nombreEsc}', '{$descEsc}', '{$tipoEsc}')";
 $consulta = BDConexion::getInstancia()->query($query);
 if (!$consulta) {
     BDConexion::getInstancia()->rollback();

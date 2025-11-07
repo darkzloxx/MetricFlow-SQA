@@ -46,6 +46,7 @@ $ColeccionPermisos = new ColeccionPermisos();
                         <!-- <tr style="background-color: #bf2c08;"> -->
                         <tr>
                             <?php 
+                            // Listar métricas planificadas/ejecutadas por proyectos del usuario (incluye base y personalizadas)
                             $proyectos = "SELECT 
                                         p.nombre AS proyecto,
                                         m.nombre AS metrica,
@@ -55,14 +56,13 @@ $ColeccionPermisos = new ColeccionPermisos();
                                         mi.umbral_desviacion,
                                         mi.id_metrica,
                                         mi.id_iteracion
-                                        FROM metrica_modelo_calidad mmc
-                                        JOIN modelo_calidad mo ON mmc.id_modelo = mo.id_modelo
-                                        JOIN metrica m ON mmc.id_metrica = m.id_metrica
-                                        JOIN metrica_iteracion mi ON mi.id_metrica = mmc.id_metrica
-                                        JOIN proyecto p ON mo.id_modelo = p.id_modelo
+                                        FROM metrica_iteracion mi
+                                        JOIN iteracion i ON i.id_iteracion = mi.id_iteracion
+                                        JOIN proyecto p ON p.id_proyecto = i.id_proyecto
                                         JOIN usuario_proyecto u ON u.id_proyecto = p.id_proyecto
-                                        where u.id_usuario = ".$_SESSION['usuario']->id."
-                                        ORDER BY mo.nombre"; 
+                                        JOIN metrica m ON m.id_metrica = mi.id_metrica
+                                        WHERE u.id_usuario = ".$_SESSION['usuario']->id."
+                                        ORDER BY p.nombre, m.nombre"; 
                             $proyectos=BDConexion::getInstancia()->query($proyectos);
                             //$proyecto = mysqli_fetch_array($proyectos); 
                             $proyecto = $proyectos->fetch_all(MYSQLI_ASSOC); 

@@ -53,15 +53,13 @@ $idIteracion = $porciones[1];
                                         i.numero_iteracion,
                                         i.fecha_inicio,
                                         i.fecha_fin
-                                        FROM metrica_modelo_calidad mmc
-                                        JOIN modelo_calidad mo ON mmc.id_modelo = mo.id_modelo
-                                        JOIN metrica m ON mmc.id_metrica = m.id_metrica
-                                        JOIN metrica_iteracion mi ON mi.id_metrica = mmc.id_metrica
+                                        FROM metrica_iteracion mi
                                         JOIN iteracion i ON i.id_iteracion = mi.id_iteracion
                                         JOIN fase f ON i.id_fase = f.id_fase
-                                        JOIN proyecto p ON mo.id_modelo = p.id_modelo
+                                        JOIN proyecto p ON p.id_proyecto = i.id_proyecto
                                         JOIN usuario_proyecto u ON u.id_proyecto = p.id_proyecto
-                                        where mi.id_metrica = ".$idMetrica." and mi.id_iteracion = ".$idIteracion." and u.id_usuario = ".$_SESSION['usuario']->id; 
+                                        JOIN metrica m ON m.id_metrica = mi.id_metrica
+                                        WHERE mi.id_metrica = ".$idMetrica." AND mi.id_iteracion = ".$idIteracion." AND u.id_usuario = ".$_SESSION['usuario']->id; 
                             $proyectos=BDConexion::getInstancia()->query($proyectos);
                             $tiene = 0;
                             $proyecto = $proyectos->fetch_all(MYSQLI_ASSOC); 

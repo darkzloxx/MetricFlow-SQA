@@ -86,31 +86,32 @@ CREATE TABLE `iteracion_tarea` (
 CREATE TABLE `metrica` (
   `id_metrica` int(11) NOT NULL,
   `nombre` varchar(100) NOT NULL,
-  `descripcion` text DEFAULT NULL
+  `descripcion` text DEFAULT NULL,
+  `tipo` enum('base','personalizada') NOT NULL DEFAULT 'base'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Volcado de datos para la tabla `metrica`
 --
 
-INSERT INTO `metrica` (`id_metrica`, `nombre`, `descripcion`) VALUES
-(1, 'Revisiones de documentos', 'Cantidad de documentos revisados frente a los planificados.'),
-(2, 'Revisiones técnicas formales (RTF)', 'Número de revisiones técnicas realizadas.'),
-(3, 'Reuniones de equipo', 'Número total de reuniones efectuadas en la iteración.'),
-(4, 'Tasa de corrección de defectos', 'Defectos corregidos frente a defectos reportados.'),
-(5, 'Horas trabajadas por iteración', 'Cantidad total de horas registradas en la iteración.'),
-(6, 'Cumplimiento de actividades previstas', 'Número de actividades completadas frente a las planificadas.'),
-(7, 'Cobertura de pruebas', 'Cantidad de pruebas ejecutadas frente a las planificadas.'),
-(8, 'Defectos detectados', 'Número total de defectos encontrados durante pruebas o revisión.'),
-(9, 'Defectos corregidos', 'Cantidad de defectos corregidos durante la iteración.'),
-(10, 'Requisitos implementados', 'Número de requisitos implementados durante la iteración.'),
-(11, 'Retrabajos realizados', 'Cantidad de tareas repetidas por errores o ajustes.'),
-(12, 'Incidencias reportadas', 'Número total de incidencias registradas.'),
-(13, 'Iteraciones completadas', 'Cantidad de iteraciones finalizadas dentro del proyecto.'),
-(14, 'Revisiones realizadas', 'Número total de revisiones completadas en el ciclo.'),
-(15, 'Casos de prueba ejecutados', 'Cantidad total de casos de prueba efectivamente ejecutados.'),
-(16, 'Casos de prueba exitosos', 'Número de casos de prueba que pasaron exitosamente.'),
-(17, 'Defectos postentrega', 'Cantidad de defectos reportados después de la entrega.');
+INSERT INTO `metrica` (`id_metrica`, `nombre`, `descripcion`, `tipo`) VALUES
+(1, 'Revisiones de documentos', 'Cantidad de documentos revisados frente a los planificados.','base'),
+(2, 'Revisiones técnicas formales (RTF)', 'Número de revisiones técnicas realizadas.','base'),
+(3, 'Reuniones de equipo', 'Número total de reuniones efectuadas en la iteración.','base'),
+(4, 'Tasa de corrección de defectos', 'Defectos corregidos frente a defectos reportados.','base'),
+(5, 'Horas trabajadas por iteración', 'Cantidad total de horas registradas en la iteración.','base'),
+(6, 'Cumplimiento de actividades previstas', 'Número de actividades completadas frente a las planificadas.','base'),
+(7, 'Cobertura de pruebas', 'Cantidad de pruebas ejecutadas frente a las planificadas.','base'),
+(8, 'Defectos detectados', 'Número total de defectos encontrados durante pruebas o revisión.','base'),
+(9, 'Defectos corregidos', 'Cantidad de defectos corregidos durante la iteración.','base'),
+(10, 'Requisitos implementados', 'Número de requisitos implementados durante la iteración.','base'),
+(11, 'Retrabajos realizados', 'Cantidad de tareas repetidas por errores o ajustes.','base'),
+(12, 'Incidencias reportadas', 'Número total de incidencias registradas.','base'),
+(13, 'Iteraciones completadas', 'Cantidad de iteraciones finalizadas dentro del proyecto.','base'),
+(14, 'Revisiones realizadas', 'Número total de revisiones completadas en el ciclo.','base'),
+(15, 'Casos de prueba ejecutados', 'Cantidad total de casos de prueba efectivamente ejecutados.','base'),
+(16, 'Casos de prueba exitosos', 'Número de casos de prueba que pasaron exitosamente.','base'),
+(17, 'Defectos postentrega', 'Cantidad de defectos reportados después de la entrega.','base');
 
 -- --------------------------------------------------------
 

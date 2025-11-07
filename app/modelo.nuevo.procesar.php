@@ -92,6 +92,29 @@ if (!$ok) {
 
 $idModelo = (int)$cn->insert_id;
 
+// Si es creación para un proyecto (no admin global), aseguramos entrada en proyecto_modelo_calidad
+// para poder vincular métricas personalizadas de manera aislada al proyecto
+$idProyectoModelo = null;
+if (!$esAdmin && $proyectoId > 0) {
+    // Buscar si ya existe
+    $sqlFindPM = "SELECT id_proyecto_modelo FROM proyecto_modelo_calidad WHERE id_proyecto = {$proyectoId} AND id_modelo_base = {$idModelo} LIMIT 1";
+    $rsPM = $cn->query($sqlFindPM);
+    if ($rsPM && $rsPM->num_rows > 0) {
+        $rowPM = $rsPM->fetch_assoc();
+        $idProyectoModelo = (int)$rowPM['id_proyecto_modelo'];
+    } else {
+        $nomPM = $cn->real_escape_string($nombre);
+        $desPM = $cn->real_escape_string($descripcion);
+        $sqlInsPM = "INSERT INTO proyecto_modelo_calidad (id_proyecto, id_modelo_base, nombre, descripcion, es_personalizado) VALUES ({$proyectoId}, {$idModelo}, '{$nomPM}', '{$desPM}', 1)";
+        if (!$cn->query($sqlInsPM)) {
+            $cn->rollback();
+            $cn->autocommit(true);
+            die($cn->errno);
+        }
+        $idProyectoModelo = (int)$cn->insert_id;
+    }
+}
+
 // Insertar vínculos con métricas seleccionadas
 if (!empty($metricas)) {
     foreach ($metricas as $idMet) {
@@ -113,18 +136,36 @@ if (!empty($metricasNuevasNombres)) {
         $des = isset($metricasNuevasDescs[$i]) ? trim((string)$metricasNuevasDescs[$i]) : '';
         // Doble chequeo defensivo
         if ($nom === '' || $des === '') continue;
-        $qM = "INSERT INTO metrica (nombre, descripcion) VALUES ('".$cn->real_escape_string($nom)."', '".$cn->real_escape_string($des)."')";
+        // Tipo según rol: Admin/SuperAdmin => base, caso contrario => personalizada
+        $tipo = $esAdmin ? 'base' : 'personalizada';
+        $qM = "INSERT INTO metrica (nombre, descripcion, tipo) VALUES ('".$cn->real_escape_string($nom)."', '".$cn->real_escape_string($des)."', '".$cn->real_escape_string($tipo)."')";
         if (!$cn->query($qM)) {
             $cn->rollback();
             $cn->autocommit(true);
             die($cn->errno);
         }
         $newId = (int)$cn->insert_id;
-        $qL = "INSERT INTO metrica_modelo_calidad (id_modelo, id_metrica) VALUES ({$idModelo}, {$newId})";
-        if (!$cn->query($qL)) {
-            $cn->rollback();
-            $cn->autocommit(true);
-            die($cn->errno);
+        if ($esAdmin) {
+            // Admin: métrica base se asocia al modelo global
+            $qL = "INSERT INTO metrica_modelo_calidad (id_modelo, id_metrica) VALUES ({$idModelo}, {$newId})";
+            if (!$cn->query($qL)) {
+                $cn->rollback();
+                $cn->autocommit(true);
+                die($cn->errno);
+            }
+        } else {
+            // No admin: métrica personalizada se asocia solo al modelo del proyecto
+            if (!$idProyectoModelo) {
+                $cn->rollback();
+                $cn->autocommit(true);
+                die('No se pudo determinar el modelo del proyecto para asociar la métrica personalizada.');
+            }
+            $qLp = "INSERT INTO metrica_proyecto_modelo (id_metrica, id_proyecto_modelo) VALUES ({$newId}, {$idProyectoModelo})";
+            if (!$cn->query($qLp)) {
+                $cn->rollback();
+                $cn->autocommit(true);
+                die($cn->errno);
+            }
         }
     }
 }

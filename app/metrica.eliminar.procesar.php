@@ -2,37 +2,71 @@
 include_once '../lib/ControlAcceso.class.php';
 ControlAcceso::requierePermiso(PermisosSistema::PERMISO_PERMISOS);
 include_once '../modelo/BDConexion.Class.php';
-$DatosFormulario = $_POST;
 
-BDConexion::getInstancia()->autocommit(false);
-BDConexion::getInstancia()->begin_transaction();
-
-$query = "DELETE FROM metrica_modelo_calidad "
-        . "WHERE id_metrica = {$DatosFormulario["id"]}";
-
-$consulta = BDConexion::getInstancia()->query($query);
-
-if (!$consulta) {
-    BDConexion::getInstancia()->rollback();
-    //arrojar una excepcion
-    die(BDConexion::getInstancia()->errno);
+$id = isset($_POST['id']) ? (int)$_POST['id'] : 0;
+if ($id <= 0) {
+    header('Location: metricas.php?msg=' . urlencode('Métrica inválida.') . '&type=danger');
+    exit;
 }
 
-$query = "DELETE FROM metrica "
-        . "WHERE id_metrica = {$DatosFormulario["id"]}";
+$cn = BDConexion::getInstancia();
+$cn->autocommit(false);
+$cn->begin_transaction();
 
-$consulta = BDConexion::getInstancia()->query($query);
-
-if (!$consulta) {
-    BDConexion::getInstancia()->rollback();
-    //arrojar una excepcion
-    die(BDConexion::getInstancia()->errno);
+// Obtener tipo de métrica
+$tipo = null;
+$rsTipo = $cn->query('SELECT tipo FROM metrica WHERE id_metrica = ' . $id . ' LIMIT 1');
+if ($rsTipo && $rsTipo->num_rows) {
+    $rowT = $rsTipo->fetch_assoc();
+    $tipo = $rowT ? ($rowT['tipo'] ?? null) : null;
+}
+if (!$tipo) {
+    $cn->rollback();
+    $cn->autocommit(true);
+    header('Location: metricas.php?msg=' . urlencode('La métrica no existe.') . '&type=danger');
+    exit;
 }
 
+// Regla de integridad: bloquear eliminación según uso
+try {
+    // Siempre bloquear si tiene valores planificados o ejecutados
+    $rsUsoVals = $cn->query('SELECT COUNT(*) c FROM metrica_iteracion WHERE id_metrica = ' . $id . ' AND (valor_planificado IS NOT NULL OR valor_ejecutado IS NOT NULL)');
+    $rowUV = $rsUsoVals ? $rsUsoVals->fetch_assoc() : ['c' => 0];
+    if ((int)$rowUV['c'] > 0) {
+        throw new Exception('No se puede eliminar: la métrica tiene valores planificados o ejecutados en iteraciones.');
+    }
 
+    if ($tipo === 'base') {
+        // Para métricas base, también bloquear si está asociada a algún modelo o usada en iteraciones (aunque sin valores)
+        $rsRel = $cn->query('SELECT COUNT(*) c FROM metrica_modelo_calidad WHERE id_metrica = ' . $id);
+        $rowRel = $rsRel ? $rsRel->fetch_assoc() : ['c' => 0];
+        if ((int)$rowRel['c'] > 0) {
+            throw new Exception('No se puede eliminar: la métrica base está asociada a uno o más modelos.');
+        }
+        $rsIter = $cn->query('SELECT COUNT(*) c FROM metrica_iteracion WHERE id_metrica = ' . $id);
+        $rowIter = $rsIter ? $rsIter->fetch_assoc() : ['c' => 0];
+        if ((int)$rowIter['c'] > 0) {
+            throw new Exception('No se puede eliminar: la métrica base está vinculada a iteraciones.');
+        }
+    }
 
-BDConexion::getInstancia()->commit();
-BDConexion::getInstancia()->autocommit(true);
+    // Eliminar relaciones y la métrica
+    if (!$cn->query('DELETE FROM metrica_modelo_calidad WHERE id_metrica = ' . $id)) {
+        throw new Exception('Error eliminando relaciones del modelo: ' . $cn->error);
+    }
+    if (!$cn->query('DELETE FROM metrica WHERE id_metrica = ' . $id . ' LIMIT 1')) {
+        throw new Exception('Error eliminando la métrica: ' . $cn->error);
+    }
+
+    $cn->commit();
+    $cn->autocommit(true);
+    $consulta = true;
+} catch (Exception $e) {
+    $cn->rollback();
+    $cn->autocommit(true);
+    $consulta = false;
+    $mensajeError = $e->getMessage();
+}
 ?>
 <html>
     <head>
@@ -60,7 +94,7 @@ BDConexion::getInstancia()->autocommit(true);
                     <?php } ?>   
                     <?php if (!$consulta) { ?>
                         <div class="alert alert-danger" role="alert">
-                            Ha ocurrido un error.
+                            <?= isset($mensajeError) ? htmlspecialchars($mensajeError) : 'Ha ocurrido un error.'; ?>
                         </div>
                     <?php } ?>
                     <hr />

@@ -67,7 +67,8 @@ try {
     // Validar nuevas métricas (nombres válidos)
     $validNew = [];
     if (is_array($newNames) && count($newNames)) {
-        $stmtIns = $cn->prepare('INSERT INTO metrica (nombre, descripcion) VALUES (?, ?)');
+        // Solo administradores llegan aquí: nuevas métricas creadas son de tipo base
+        $stmtIns = $cn->prepare('INSERT INTO metrica (nombre, descripcion, tipo) VALUES (?, ?, ?)');
         if (!$stmtIns) throw new Exception('Error preparando INSERT metrica: ' . $cn->error);
         foreach ($newNames as $idx => $nm) {
             $nm = trim((string)$nm);
@@ -76,7 +77,8 @@ try {
             if (!preg_match($nameRegex, $nm)) {
                 throw new Exception('Nombre de nueva métrica inválido: "' . $nm . '". Use solo letras, espacios, guiones y puntos.');
             }
-            $stmtIns->bind_param('ss', $nm, $ds);
+            $tipo = 'base';
+            $stmtIns->bind_param('sss', $nm, $ds, $tipo);
             if (!$stmtIns->execute()) throw new Exception('Error insertando métrica: ' . $stmtIns->error);
             $metricIds[] = (int)$cn->insert_id;
             $validNew[] = $nm;
