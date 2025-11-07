@@ -13,7 +13,7 @@ $Roles = new ColeccionRoles();
         <link rel="stylesheet" href="../lib/open-iconic-master/font/css/open-iconic-bootstrap.css" />
         <script type="text/javascript" src="../lib/JQuery/jquery-3.3.1.js"></script>
         <script type="text/javascript" src="../lib/bootstrap-4.1.1-dist/js/bootstrap.min.js"></script>
-        <title><?= Constantes::NOMBRE_SISTEMA; ?> - Crear Metrica</title>
+        <title><?= Constantes::NOMBRE_SISTEMA; ?> - Crear Métrica</title>
     </head>
     <body>
         <?php include_once '../gui/navbarAlumnos.php'; ?>
@@ -21,7 +21,7 @@ $Roles = new ColeccionRoles();
             <form action="pantalla.alumnos.metrica.crear.procesar.php" method="post">
                 <div class="card">
                     <div class="card-header">
-                        <h3>Crear Metrica</h3>
+                        <h3>Crear Métrica</h3>
                         <p>
                             Complete los campos a continuaci&oacute;n. 
                             Luego, presione el bot&oacute;n <b>Confirmar</b>.<br />
@@ -31,8 +31,8 @@ $Roles = new ColeccionRoles();
                     <div class="card-body">
                         <h4>Propiedades</h4>
                         <div class="form-group">
-                            <label for="inputNombre">Iteracion - fase</label>
-                             <select id="iteracion" name="iteracion" class="form-control">
+                            <label for="inputNombre">Iteración - fase</label>
+                            <select id="iteracion" name="iteracion" class="form-control">
                             <?php 
                             $proyectos = "SELECT i.*, f.nombre, f.id_fase FROM iteracion i JOIN fase f on i.id_fase = f.id_fase"; 
                             $proyectos=BDConexion::getInstancia()->query($proyectos);
@@ -43,7 +43,7 @@ $Roles = new ColeccionRoles();
                             </select>
                         </div>
                         <div class="form-group">
-                            <label for="inputMail">Metrica</label>
+                            <label for="inputMail">Métrica</label>
                             <br>
                             <select id="metrica" name="metrica" class="form-control">
                             <?php 
@@ -64,7 +64,7 @@ $Roles = new ColeccionRoles();
                             <input type="number" name="ejecutado" class="form-control" id="inputNombre" placeholder="Ingrese el valor ejecutado">
                         </div>
                         <div class="form-group">
-                            <label for="inputNombre">Umbral de Desviacion</label>
+                            <label for="inputNombre">Umbral de Desviación</label>
                             <input type="number" name="umbral" class="form-control"  id="inputNombre" placeholder="Ingrese el umbral de desviacion" required="">
                         </div>
                         <hr />

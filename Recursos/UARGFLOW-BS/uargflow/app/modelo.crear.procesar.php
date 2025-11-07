@@ -6,20 +6,20 @@ $DatosFormulario = $_POST;
 BDConexion::getInstancia()->autocommit(false);
 BDConexion::getInstancia()->begin_transaction();
 
-$proyecto = $DatosFormulario["proyecto"];
-$modelo = $DatosFormulario["modelo"];
+$nombre = $DatosFormulario["nombre"];
 
 $resultado = "";
 $mensaje = "Ha ocurrido un error.";
 
-$query = "select * from proyecto where id_modelo is not null and id_proyecto = '{$proyecto}'";
+$query = "select * from modelo_calidad where nombre = '{$nombre}'";
 $consulta = BDConexion::getInstancia()->query($query);
 
 if ($consulta->num_rows > 0){
 	$resultado = false;
-	$mensaje = "Ya existe un modelo cargado para el proyecto";
+	$mensaje = "Ya existe un modelo con el nombre ingresado";
 } else {
-		$query = "UPDATE proyecto SET id_modelo = {$modelo} where id_proyecto =  {$proyecto}";
+		$query = "INSERT INTO MODELO_CALIDAD "
+				. "VALUES (null,'{$DatosFormulario["nombre"]}','{$DatosFormulario["descripcion"]}')";
 		$consulta = BDConexion::getInstancia()->query($query);
 		if (!$consulta) {
 			BDConexion::getInstancia()->rollback();
@@ -43,16 +43,16 @@ if ($consulta->num_rows > 0){
         <link rel="stylesheet" href="../lib/open-iconic-master/font/css/open-iconic-bootstrap.css" />
         <script type="text/javascript" src="../lib/JQuery/jquery-3.3.1.js"></script>
         <script type="text/javascript" src="../lib/bootstrap-4.1.1-dist/js/bootstrap.min.js"></script>
-        <title><?= Constantes::NOMBRE_SISTEMA; ?> - Cargar Modelo</title>
+        <title><?= Constantes::NOMBRE_SISTEMA; ?> - Crear Modelo</title>
     </head>
     <body>
-        <?php include_once '../gui/navbarAlumnos.php'; ?>
+        <?php include_once '../gui/navbar.php'; ?>
 
         <div class="container">
             <p></p>
             <div class="card">
                 <div class="card-header">
-                    <h3>Cargar Modelo</h3>
+                    <h3>Crear Modelo</h3>
                 </div>
                 <div class="card-body">
                     <?php if ($resultado) { ?>
@@ -67,12 +67,7 @@ if ($consulta->num_rows > 0){
                     <?php } ?>
                     <hr />
                     <h5 class="card-text">Opciones</h5>
-                    <a href="pantalla.alumnos.metricas.php">
-                            <button type="button" class="btn btn-outline-success">
-                                <span class="oi oi-check"></span> Gestionar Metricas
-                            </button>
-                        </a>
-                    <a href="pantalla.alumnos.modelo.php">
+                    <a href="modelos.php">
                         <button type="button" class="btn btn-primary">
                             <span class="oi oi-account-logout"></span> Salir
                         </button>

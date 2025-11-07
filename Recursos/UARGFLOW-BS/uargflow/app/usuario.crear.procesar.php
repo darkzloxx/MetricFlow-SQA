@@ -65,7 +65,7 @@ if ($consulta->num_rows > 0){
 		BDConexion::getInstancia()->commit();
 		BDConexion::getInstancia()->autocommit(true);
 		$resultado = true;
-		$mensaje = "Operacion Realizada con Exito";
+		$mensaje = "Operación Realizada con Éxito";
 	}
 }
 ?>

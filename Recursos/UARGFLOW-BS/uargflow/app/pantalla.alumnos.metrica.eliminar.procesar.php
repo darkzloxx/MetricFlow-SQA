@@ -31,7 +31,7 @@ BDConexion::getInstancia()->autocommit(true);
         <link rel="stylesheet" href="../lib/open-iconic-master/font/css/open-iconic-bootstrap.css" />
         <script type="text/javascript" src="../lib/JQuery/jquery-3.3.1.js"></script>
         <script type="text/javascript" src="../lib/bootstrap-4.1.1-dist/js/bootstrap.min.js"></script>
-        <title><?php echo Constantes::NOMBRE_SISTEMA; ?> - Eliminar Metrica</title>
+        <title><?php echo Constantes::NOMBRE_SISTEMA; ?> - Eliminar Métrica</title>
 
     </head>
     <body>
@@ -40,7 +40,7 @@ BDConexion::getInstancia()->autocommit(true);
             <p></p>
             <div class="card">
                 <div class="card-header">
-                    <h3>Baja de Metrica</h3>
+                    <h3>Baja de Métrica</h3>
                 </div>
                 <div class="card-body">
                     <?php if ($consulta) { ?>

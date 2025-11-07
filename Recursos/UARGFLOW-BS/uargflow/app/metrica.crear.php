@@ -13,7 +13,7 @@ $Roles = new ColeccionRoles();
         <link rel="stylesheet" href="../lib/open-iconic-master/font/css/open-iconic-bootstrap.css" />
         <script type="text/javascript" src="../lib/JQuery/jquery-3.3.1.js"></script>
         <script type="text/javascript" src="../lib/bootstrap-4.1.1-dist/js/bootstrap.min.js"></script>
-        <title><?= Constantes::NOMBRE_SISTEMA; ?> - Crear Metrica</title>
+        <title><?= Constantes::NOMBRE_SISTEMA; ?> - Crear Métrica</title>
     </head>
     <body>
         <?php include_once '../gui/navbar.php'; ?>
@@ -21,7 +21,7 @@ $Roles = new ColeccionRoles();
             <form action="metrica.crear.procesar.php" method="post">
                 <div class="card">
                     <div class="card-header">
-                        <h3>Crear Metrica</h3>
+                        <h3>Crear Métrica</h3>
                         <p>
                             Complete los campos a continuaci&oacute;n. 
                             Luego, presione el bot&oacute;n <b>Confirmar</b>.<br />
@@ -32,12 +32,12 @@ $Roles = new ColeccionRoles();
                         <h4>Propiedades</h4>
                         <div class="form-group">
                             <label for="inputNombre">Nombre</label>
-                            <input type="text" name="nombre" class="form-control" pattern="[a-zA-Z\s]+" id="inputNombre" placeholder="Ingrese el nombre de la Metrica" required="">
+                            <input type="text" name="nombre" class="form-control" pattern="[a-zA-Z\s]+" id="inputNombre" placeholder="Ingrese el nombre de la Métrica" required="">
                         </div>
                         <div class="form-group">
-                            <label for="inputMail">Descripcion</label>
+                            <label for="inputMail">Descripción</label>
                             <br>
-                            <input type="text" name="descripcion" class="form-control" pattern="[a-zA-Z\s]+" id="inputDescripcion" placeholder="Ingrese una breve Descripcion" required="">
+                            <input type="text" name="descripcion" class="form-control" pattern="[a-zA-Z\s]+" id="inputDescripcion" placeholder="Ingrese una breve Descripción" required="">
                         </div>
                         <div class="form-group">
                             <label for="inputMail">Modelo asociado</label>

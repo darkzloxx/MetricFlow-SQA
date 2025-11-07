@@ -3,13 +3,12 @@ include_once '../lib/ControlAcceso.class.php';
 ControlAcceso::requierePermiso(PermisosSistema::PERMISO_PERMISOS);
 include_once '../modelo/BDConexion.Class.php';
 $DatosFormulario = $_POST;
-$id = $DatosFormulario["id"];
-$porciones = explode(",", $id);
-$idMetrica = $porciones[0]; 
-$idIteracion = $porciones[1];
-$query = "UPDATE metrica_iteracion "
-        . "SET valor_planificado = {$DatosFormulario["planificado"]},  valor_ejecutado = {$DatosFormulario["ejecutado"]},  umbral_desviacion = {$DatosFormulario["umbral"]}  "
-        . "WHERE id_metrica = {$idMetrica} and id_iteracion = {$idIteracion}";
+
+
+$query = "UPDATE iteracion "
+        . "SET numero_iteracion = {$DatosFormulario["nombre"]},  objetivo = '{$DatosFormulario["objetivo"]}',fecha_inicio = '{$DatosFormulario["fecha_inicio"]}',
+        fecha_fin = '{$DatosFormulario["fecha_fin"]}',id_fase = {$DatosFormulario["fase"]}  "
+        . "WHERE id_iteracion = {$DatosFormulario["id"]}";
 $consulta = BDConexion::getInstancia()->query($query);
 ?>
 <html>
@@ -19,15 +18,15 @@ $consulta = BDConexion::getInstancia()->query($query);
         <link rel="stylesheet" href="../lib/open-iconic-master/font/css/open-iconic-bootstrap.css" />
         <script type="text/javascript" src="../lib/JQuery/jquery-3.3.1.js"></script>
         <script type="text/javascript" src="../lib/bootstrap-4.1.1-dist/js/bootstrap.min.js"></script>
-        <title><?php echo Constantes::NOMBRE_SISTEMA; ?> - Actualizar Métrica</title>
+        <title><?php echo Constantes::NOMBRE_SISTEMA; ?> - Actualizar Iteración</title>
     </head>
     <body>
-        <?php include_once '../gui/navbarAlumnos.php'; ?>
+        <?php include_once '../gui/navbar.php'; ?>
         <div class="container">
             <p></p>
             <div class="card">
                 <div class="card-header">
-                    <h3>Actualizar Métrica</h3>
+                    <h3>Actualizar Iteración</h3>
                 </div>
                 <div class="card-body">
                     <?php if ($consulta) { ?>
@@ -42,7 +41,7 @@ $consulta = BDConexion::getInstancia()->query($query);
                     <?php } ?>
                     <hr />
                     <h5 class="card-text">Opciones</h5>
-                    <a href="pantalla.alumnos.metricas.php">
+                    <a href="iteracion.php">
                         <button type="button" class="btn btn-primary">
                             <span class="oi oi-account-logout"></span> Salir
                         </button>
