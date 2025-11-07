@@ -6,6 +6,10 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
 if (!class_exists('ControlAcceso')) {
     require_once __DIR__ . '/../lib/ControlAcceso.Class.php';
 }
+// Conexión a BD si se necesita consultar proyectos asignados
+if (!class_exists('BDConexion')) {
+    @require_once __DIR__ . '/../modelo/BDConexion.Class.php';
+}
 // Página actual (basename) para poder adaptar la UI según la vista
 $currentPage = isset($_SERVER['SCRIPT_NAME']) ? basename($_SERVER['SCRIPT_NAME']) : '';
 ?>
@@ -58,13 +62,57 @@ $currentPage = isset($_SERVER['SCRIPT_NAME']) ? basename($_SERVER['SCRIPT_NAME']
                     </li>
                 <?php } ?>
                 <?php if (ControlAcceso::esAdminGlobal() || ControlAcceso::verificaPermiso(PermisosSistema::GESTION_MODELO_CALIDAD)) { ?>
-                        <li class="nav-item">
-                            <a class="nav-link" href="../app/modelos.php">
-                                <span class="oi oi-book" /> 
-                                Modelos
-                            </a>
-                        </li>
-                    <?php } ?>
+                    <li class="nav-item">
+                        <a class="nav-link" href="../app/modelos.php">
+                            <span class="oi oi-book" />
+                            Modelos
+                        </a>
+                    </li>
+                <?php } ?>
+                <?php
+                // Lógica para mostrar "Métricas":
+                // 1. Si es Admin Global -> siempre se muestra (ve todas las métricas aunque no tenga proyectos asignados)
+                // 2. Si NO es Admin Global -> debe tener el permiso GESTION_METRICAS Y al menos un proyecto asignado con modelo
+                $mostrarMetricas = false;
+                if (ControlAcceso::esAdminGlobal()) {
+                    $mostrarMetricas = true;
+                } else {
+                    $tienePermisoMetricas = false;
+                    try {
+                        $tienePermisoMetricas = ControlAcceso::verificaPermiso(PermisosSistema::GESTION_METRICAS);
+                    } catch (Throwable $e) {
+                        $tienePermisoMetricas = false;
+                    }
+                    if ($tienePermisoMetricas && class_exists('BDConexion')) {
+                        try {
+                            $usrActual = method_exists('ControlAcceso', 'usuarioActual') ? ControlAcceso::usuarioActual() : ($_SESSION['usuario'] ?? null);
+                            $idUsr = is_object($usrActual) && isset($usrActual->id) ? (int)$usrActual->id : 0;
+                            if ($idUsr > 0) {
+                                $cnm = BDConexion::getInstancia();
+                                $sqlMet = "SELECT 1\n                                           FROM proyecto p\n                                           INNER JOIN usuario_proyecto up ON up.id_proyecto = p.id_proyecto\n                                           WHERE up.id_usuario = ? AND p.id_modelo IS NOT NULL\n                                           LIMIT 1";
+                                if ($stmtMet = $cnm->prepare($sqlMet)) {
+                                    $stmtMet->bind_param('i', $idUsr);
+                                    $stmtMet->execute();
+                                    $stmtMet->store_result();
+                                    if ($stmtMet->num_rows > 0) {
+                                        $mostrarMetricas = true;
+                                    }
+                                    $stmtMet->close();
+                                }
+                            }
+                        } catch (Throwable $e) {
+                            // Silenciar errores
+                        }
+                    }
+                }
+                if ($mostrarMetricas) { ?>
+                    <li class="nav-item">
+                        <a class="nav-link" href="../app/metricas.php">
+                            <span class="oi oi-book" />
+                            Métricas
+                        </a>
+                    </li>
+                <?php } ?>
 
                 <li class="nav-item">
                     <a class="nav-link" id="btnSalir" href="../app/salir.php">
