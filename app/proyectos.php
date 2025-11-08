@@ -286,6 +286,96 @@ foreach ($proyectos as $pr) {
             flex-wrap: wrap;
         }
 
+        /* ===============================
+   📋 Nombre de proyecto (tabla)
+   =============================== */
+        .table td.nombre-proyecto {
+            max-width: 180px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            vertical-align: middle;
+            font-weight: 500;
+        }
+
+        .table td.nombre-proyecto:hover {
+            position: relative;
+            white-space: normal;
+            word-break: break-word;
+            overflow: visible;
+            z-index: 2;
+            background: #f8f9fa;
+            border-radius: .25rem;
+            padding: .1rem .2rem;
+        }
+
+        .wizard-card .card-header .header-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: .5rem;
+            flex-wrap: nowrap;
+            min-width: 0;
+            /* ✅ NECESARIO para que text-overflow funcione dentro del flex */
+        }
+
+
+        /* ============================================
+📌 Título del proyecto (con truncado y hover)
+=============================================== */
+        .wizard-card .project-title {
+            display: flex;
+            align-items: center;
+            gap: .4rem;
+            flex: 1 1 0%;
+            flex-shrink: 1; /* fuerza al título a respetar su límite */
+            min-width: 0;   /* permite truncado dentro de flex */
+            max-width: 210px; /* define límite visible */
+            font-weight: 600;
+            color: #007bff;
+            font-size: 0.9rem;
+            line-height: 1.3;
+        }
+
+        /* Texto del título con ellipsis en una sola línea */
+        .wizard-card .project-title-text {
+            flex: 1 1 auto;
+            min-width: 0;            /* imprescindible para ellipsis en flex */
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis; /* … */
+        }
+
+
+        .wizard-card .project-title .oi {
+            flex-shrink: 0;
+            margin-right: .4rem;
+            color: #17a2b8;
+        }
+
+        /* Hover: mostrar todo el texto (expande sobre el card) */
+        .wizard-card .project-title:hover .project-title-text {
+            position: relative;
+            white-space: normal;
+            word-break: break-word;
+            overflow: visible;
+            z-index: 5;
+            background: rgba(248, 249, 250, 0.95);
+            border-radius: .25rem;
+            padding: .15rem .3rem;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+        }
+
+
+        /* Porcentaje completado */
+        .wizard-card .progress-label {
+            flex-shrink: 0;
+            white-space: nowrap;
+            color: #6c757d;
+            font-size: .8rem;
+            margin-left: auto;
+        }
+
         .wizard-step .titulo-paso .chevron {
             color: #17a2b8;
             font-weight: 700;
@@ -329,6 +419,21 @@ foreach ($proyectos as $pr) {
         .tooltip-inner {
             max-width: 360px;
             text-align: left;
+        }
+
+        @media (max-width: 480px) {
+            .wizard-card .card-header .header-row {
+                flex-wrap: wrap;
+            }
+
+            .wizard-card .project-title {
+                width: 100%;
+            }
+
+            .wizard-card .project-title-toggle,
+            .wizard-card .progress-label {
+                margin-top: .25rem;
+            }
         }
     </style>
 </head>
@@ -376,13 +481,15 @@ foreach ($proyectos as $pr) {
                         <?php foreach ($wizardsPorProyecto as $idP => $wiz): $w = $wiz['step']; ?>
                             <div class="card shadow-sm border-0 mb-3 wizard-card">
                                 <div class="card-header bg-white border-bottom-0 py-3">
-                                    <div class="d-flex align-items-center justify-content-between">
-                                        <h6 class="mb-0 text-primary">
-                                            <span class="oi oi-list-rich mr-1"></span>
-                                            Preparación
-                                        </h6>
-                                        <span class="small text-muted"><?= (int)$wiz['progreso']; ?>% completado</span>
+                                    <div class="header-row">
+                                        <div class="project-title" title="<?= htmlspecialchars($wiz['proyecto']); ?>">
+                                            <span class="oi oi-list-rich"></span>
+                                            <span class="project-title-text"><?= htmlspecialchars($wiz['proyecto']); ?></span>
+                                        </div>
+                                        <span class="progress-label"><?= (int)$wiz['progreso']; ?>% completado</span>
                                     </div>
+
+
                                     <div class="progress mt-2" style="height: 6px;">
                                         <div class="progress-bar bg-info" role="progressbar"
                                             style="width: <?= (int)$wiz['progreso']; ?>%;" aria-valuenow="<?= (int)$wiz['progreso']; ?>"
@@ -400,6 +507,7 @@ foreach ($proyectos as $pr) {
                                             <div class="contenido-paso">
                                                 <div class="titulo-paso">
                                                     <strong><?= $w['paso'] === '✓' ? 'Completado' : ('Paso ' . htmlspecialchars((string)$w['paso'])); ?> — <?= htmlspecialchars($w['texto']); ?></strong>
+
                                                     <?php if (!empty($wiz['detalle'])): ?>
                                                         <span class="ml-2 text-secondary wiz-info" data-toggle="tooltip" data-html="true" title="<?= htmlspecialchars($wiz['detalle'], ENT_QUOTES, 'UTF-8'); ?>" aria-label="Más información"><span class="oi oi-info"></span></span>
                                                         <span class="chevron ml-2">›</span>
@@ -473,7 +581,9 @@ foreach ($proyectos as $pr) {
                                 </tr>
                                 <?php foreach ($proyectos as $Proyec): ?>
                                     <tr>
-                                        <td><?= htmlspecialchars($Proyec['nombre'], ENT_QUOTES, 'UTF-8'); ?></td>
+                                        <td class="nombre-proyecto" title="<?= htmlspecialchars($Proyec['nombre'], ENT_QUOTES, 'UTF-8'); ?>">
+                                            <?= htmlspecialchars($Proyec['nombre'], ENT_QUOTES, 'UTF-8'); ?>
+                                        </td>
                                         <td>2025</td>
                                         <td><?= htmlspecialchars($Proyec['estado'], ENT_QUOTES, 'UTF-8'); ?></td>
                                         <td>
@@ -535,6 +645,8 @@ foreach ($proyectos as $pr) {
     </div>
     <?php include_once '../gui/footer.php'; ?>
     <script>
+        // Dynamic expand/collapse for long project names
+
         (function($) {
             // Inicializar tooltips (incluye los de info en cada wizard)
             $('[data-toggle="tooltip"]').tooltip();

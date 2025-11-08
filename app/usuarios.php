@@ -30,6 +30,9 @@ $ColeccionUsuarios = new ColeccionUsuarios();
             background-color: #f8f9fa;
             color: #212529;
         }
+        /* celdas con texto largo truncado */
+        .cell-ellipsis{ max-width:320px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; vertical-align:middle; }
+        .cell-ellipsis:hover{ position:relative; white-space:normal; word-break:break-word; overflow:visible; z-index:2; background:#f8f9fa; border-radius:.25rem; padding:.1rem .2rem; }
     </style>
 </head>
 
@@ -82,7 +85,8 @@ $ColeccionUsuarios = new ColeccionUsuarios();
                     </tr>
                     <?php foreach ($ColeccionUsuarios->getUsuarios() as $Usuario): ?>
                         <tr>
-                            <td><?= $Usuario->getNombre(); ?><br /><?= $Usuario->getEmail(); ?></td>
+                            <?php $__txt = $Usuario->getNombre() . ' — ' . $Usuario->getEmail(); ?>
+                            <td class="cell-ellipsis" title="<?= htmlspecialchars($__txt, ENT_QUOTES, 'UTF-8'); ?>"><?= htmlspecialchars($__txt, ENT_QUOTES, 'UTF-8'); ?></td>
                             <td>
                                 <a title="Ver detalle" href="usuario.ver.php?id=<?= $Usuario->getId(); ?>"
                                     class="btn btn-outline-info" role="button" aria-label="Ver usuario <?= htmlspecialchars($Usuario->getNombre(), ENT_QUOTES, 'UTF-8'); ?>">

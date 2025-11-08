@@ -13,6 +13,10 @@ $ColeccionPermisos = new ColeccionPermisos();
         <script type="text/javascript" src="../lib/JQuery/jquery-3.3.1.js"></script>
         <script type="text/javascript" src="../lib/bootstrap-4.1.1-dist/js/bootstrap.min.js"></script>        
         <title><?php echo Constantes::NOMBRE_SISTEMA; ?> - Iteración</title>
+        <style>
+            .cell-ellipsis{ max-width:160px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+            .cell-ellipsis:hover{ position:relative; white-space:normal; word-break:break-word; overflow:visible; z-index:2; background:#f8f9fa; border-radius:.25rem; padding:.1rem .2rem; }
+        </style>
 
     </head>
     <body>
@@ -50,10 +54,10 @@ $ColeccionPermisos = new ColeccionPermisos();
                             //$proyecto = mysqli_fetch_array($proyectos); 
                             $proyecto = $proyectos->fetch_all(MYSQLI_ASSOC); 
                             foreach ($proyecto as $Proyec) { ?>
-                                <td><?= $Proyec['numero_iteracion']; ?></td>
-                                <td><?= $Proyec['fecha_inicio']; ?></td>
-                                <td><?= $Proyec['fecha_fin']; ?></td>
-                                <td><?= $Proyec['nombre']; ?></td>
+                                <td class="cell-ellipsis" title="<?= htmlspecialchars($Proyec['numero_iteracion'], ENT_QUOTES, 'UTF-8'); ?>"><?= htmlspecialchars($Proyec['numero_iteracion']); ?></td>
+                                <td class="cell-ellipsis" title="<?= htmlspecialchars($Proyec['fecha_inicio'], ENT_QUOTES, 'UTF-8'); ?>"><?= htmlspecialchars($Proyec['fecha_inicio']); ?></td>
+                                <td class="cell-ellipsis" title="<?= htmlspecialchars($Proyec['fecha_fin'], ENT_QUOTES, 'UTF-8'); ?>"><?= htmlspecialchars($Proyec['fecha_fin']); ?></td>
+                                <td class="cell-ellipsis" title="<?= htmlspecialchars($Proyec['nombre'], ENT_QUOTES, 'UTF-8'); ?>"><?= htmlspecialchars($Proyec['nombre']); ?></td>
                                 <td>
                                     <a title="Ver detalle" href="iteracion.ver.php?id=<?= $Proyec['id_iteracion']; ?>">
                                         <button type="button" class="btn btn-outline-info">

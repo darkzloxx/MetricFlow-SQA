@@ -112,6 +112,12 @@ if (!empty($proyectos)) {
             background-color: #f8f9fa;
             color: #212529;
         }
+        /* celdas largas con ellipsis + expand hover */
+        .cell-ellipsis{ max-width:240px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .cell-ellipsis.large{ max-width:520px; }
+        .cell-ellipsis:hover{ position:relative; white-space:normal; word-break:break-word; overflow:visible; z-index:3; background:#f8f9fa; border-radius:.25rem; padding:.1rem .2rem; }
+        .badge-list .badge{ max-width:140px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .badge-list .badge:hover{ position:relative; white-space:normal; word-break:break-word; overflow:visible; z-index:4; }
         /* Asegurar mismo ancho para botones con solo ícono */
         .btn-icon {
             display: inline-flex;
@@ -249,10 +255,10 @@ if (!empty($proyectos)) {
                         ?>
                             <tr>
                                 <td>
-                                    <div class="font-weight-bold"><?= htmlspecialchars($m['nombre']); ?></div>
-                                    <div class="text-muted small"><?= htmlspecialchars(mb_strimwidth($m['descripcion'] ?? '', 0, 120, '…', 'UTF-8')); ?></div>
+                                    <div class="font-weight-bold cell-ellipsis" title="<?= htmlspecialchars($m['nombre'], ENT_QUOTES, 'UTF-8'); ?>"><?= htmlspecialchars($m['nombre']); ?></div>
+                                    <div class="text-muted small cell-ellipsis" title="<?= htmlspecialchars($m['descripcion'] ?? '', ENT_QUOTES, 'UTF-8'); ?>"><?= htmlspecialchars($m['descripcion'] ?? ''); ?></div>
                                 </td>
-                                <td style="max-width: 520px;">
+                                <td class="cell-ellipsis large" title="<?= $cant>0? htmlspecialchars($cant.' proyecto(s)', ENT_QUOTES, 'UTF-8'): 'Sin uso'; ?>">
                                     <?php if ($cant === 0): ?>
                                         <span class="badge badge-secondary">Nadie</span>
                                     <?php elseif ($cant === 1): ?>
@@ -260,9 +266,9 @@ if (!empty($proyectos)) {
                                     <?php else: ?>
                                         <span class="badge badge-info mr-2"><?= $cant; ?> proyectos</span>
                                         <button class="btn btn-sm btn-outline-secondary" type="button" data-toggle="collapse" data-target="#<?= $collapseId; ?>" aria-expanded="false" aria-controls="<?= $collapseId; ?>">Ver lista</button>
-                                        <div class="collapse mt-2" id="<?= $collapseId; ?>">
+                                        <div class="collapse mt-2 badge-list" id="<?= $collapseId; ?>">
                                             <?php foreach ($usos as $u): ?>
-                                                <span class="badge badge-light mr-1 mb-1" title="ID <?= (int)$u['id']; ?>"><?= htmlspecialchars($u['proyecto']); ?></span>
+                                                <span class="badge badge-light mr-1 mb-1" title="ID <?= (int)$u['id']; ?> | <?= htmlspecialchars($u['proyecto'], ENT_QUOTES, 'UTF-8'); ?>"><?= htmlspecialchars($u['proyecto']); ?></span>
                                             <?php endforeach; ?>
                                         </div>
                                     <?php endif; ?>
