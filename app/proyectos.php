@@ -81,7 +81,7 @@ if ($existenProyectos > 0 && $proySinUsuarios > 0) {
         'paso' => 2,
         'texto' => "$proySinUsuarios proyecto(s) sin usuarios asignados.",
         'accion' => 'Asigná usuarios a cada proyecto creado.',
-        'responsable' => 'Administrador o SuperAdmin',
+        'responsable' => 'Administrador',
         'icono' => 'oi-people',
         'estado' => 'pendiente',
     ];
@@ -140,15 +140,21 @@ foreach ($proyectos as $pr) {
     // Aseguramos que exista la variable $detalle aunque no haya detalle que mostrar
     $detalle = '';
 
-    // Paso 2 (solo admin): usuarios asignados
-    if ($esAdminProyecto) {
-        $cantUsuarios = (int)$cn->query("SELECT COUNT(*) AS c FROM usuario_proyecto WHERE id_proyecto=$idP")->fetch_assoc()['c'];
-        if ($cantUsuarios === 0) {
-            $next = ['paso' => 2, 'texto' => 'Sin usuarios asignados.', 'accion' => 'Asigná usuarios al proyecto.', 'responsable' => 'Administrador o SuperAdmin', 'icono' => 'oi-people', 'estado' => 'pendiente'];
-        } else {
-            $completados++;
-        }
+    // Paso 2: usuarios asignados (debe evaluarse siempre, no solo para administradores del proyecto)
+    $cantUsuarios = (int)$cn->query("SELECT COUNT(*) AS c FROM usuario_proyecto WHERE id_proyecto=$idP")->fetch_assoc()['c'];
+    if ($cantUsuarios === 0) {
+        $next = [
+            'paso' => 2,
+            'texto' => 'Sin usuarios asignados.',
+            'accion' => 'Asigná usuarios al proyecto.',
+            'responsable' => 'Administrador',
+            'icono' => 'oi-people',
+            'estado' => 'pendiente'
+        ];
+    } else {
+        $completados++;
     }
+
     // Paso 3: modelo
     if ($next === null) {
         if (empty($pr['id_modelo'])) {
@@ -185,7 +191,9 @@ foreach ($proyectos as $pr) {
         $totalMetricas = $totalMetricasBase + $totalMetricasPers;
 
         // Detectar iteración ACTUAL (hoy dentro del rango)
-        $iterActualId = 0; $iterActualFase = ''; $iterActualNumero = '';
+        $iterActualId = 0;
+        $iterActualFase = '';
+        $iterActualNumero = '';
         $sqlAct = "SELECT i.id_iteracion, i.numero_iteracion, f.nombre AS fase_nombre
                    FROM iteracion i
                    LEFT JOIN fase f ON f.id_fase = i.id_fase
@@ -283,10 +291,10 @@ foreach ($proyectos as $pr) {
             case 2: // Usuarios asignados
                 if ($esAdminProyecto) $link = "usuarios.php";
                 break;
-            case 3:// Modelo de calidad
+            case 3: // Modelo de calidad
                 if ($esGerenteOLider) $link = "modelos.php";
                 break;
-            case 4:// Iteraciones (solo líder de proyecto)
+            case 4: // Iteraciones (solo líder de proyecto)
                 if ($esLiderProyecto) $link = "iteraciones.php";
                 break;
             case 5:
@@ -419,9 +427,12 @@ foreach ($proyectos as $pr) {
             align-items: center;
             gap: .4rem;
             flex: 1 1 0%;
-            flex-shrink: 1; /* fuerza al título a respetar su límite */
-            min-width: 0;   /* permite truncado dentro de flex */
-            max-width: 210px; /* define límite visible */
+            flex-shrink: 1;
+            /* fuerza al título a respetar su límite */
+            min-width: 0;
+            /* permite truncado dentro de flex */
+            max-width: 210px;
+            /* define límite visible */
             font-weight: 600;
             color: #007bff;
             font-size: 0.9rem;
@@ -431,10 +442,12 @@ foreach ($proyectos as $pr) {
         /* Texto del título con ellipsis en una sola línea */
         .wizard-card .project-title-text {
             flex: 1 1 auto;
-            min-width: 0;            /* imprescindible para ellipsis en flex */
+            min-width: 0;
+            /* imprescindible para ellipsis en flex */
             white-space: nowrap;
             overflow: hidden;
-            text-overflow: ellipsis; /* … */
+            text-overflow: ellipsis;
+            /* … */
         }
 
 
@@ -570,7 +583,7 @@ foreach ($proyectos as $pr) {
                 <div id="wizardFlujo">
                     <?php if (!empty($wizardsPorProyecto)): ?>
                         <?php foreach ($wizardsPorProyecto as $idP => $wiz): $w = $wiz['step']; ?>
-                            <div class="card shadow-sm border-0 mb-3 wizard-card">
+                            <div class="card shadow-sm border-0 mb-3 wizard-card" data-id-proyecto="<?= (int)$idP ?>">
                                 <div class="card-header bg-white border-bottom-0 py-3">
                                     <div class="header-row">
                                         <div class="project-title" title="<?= htmlspecialchars($wiz['proyecto']); ?>">
@@ -747,8 +760,52 @@ foreach ($proyectos as $pr) {
         </div> <!-- row -->
     </div>
     <?php include_once '../gui/footer.php'; ?>
+
     <script>
-        // Dynamic expand/collapse for long project names
+        // Actualiza visualmente el wizard de un proyecto según el JSON recibido
+        function actualizarWizardVisual(idProyecto, data) {
+            var $card = $('.wizard-card[data-id-proyecto="' + idProyecto + '"]');
+            if ($card.length === 0) return;
+            // Actualizar porcentaje
+            $card.find('.progress-bar').css('width', (parseInt(data.progreso) || 0) + '%').attr('aria-valuenow', (parseInt(data.progreso) || 0));
+            $card.find('.progress-label').text((parseInt(data.progreso) || 0) + '% completado');
+            // Actualizar icono y texto del paso
+            var $step = $card.find('.wizard-step');
+            var $contenido = $step.find('.contenido-paso');
+            $step.removeClass('disabled');
+            $step.find('.icono-paso').attr('class', 'oi ' + data.icono + ' text-info mr-3 mt-1 icono-paso');
+            $contenido.find('.titulo-paso strong').html((data.paso === '✓' ? 'Completado' : ('Paso ' + data.paso)) + ' — ' + data.texto);
+            $contenido.find('.descripcion-paso').text(data.accion);
+            $contenido.find('.responsable-paso').text('👤 ' + data.responsable);
+            // Detalle/tooltip
+            $contenido.find('.wiz-info').remove();
+            if (data.detalle && data.detalle.length > 0) {
+                var $info = $('<span class="ml-2 text-secondary wiz-info" data-toggle="tooltip" data-html="true" title="' + data.detalle + '" aria-label="Más información"><span class="oi oi-info"></span></span>');
+                $contenido.find('.titulo-paso').append($info);
+                $info.tooltip();
+            }
+            // Link de acción
+            if (data.link && data.link.length > 0 && data.estado !== 'completo') {
+                // Si no es completo, el paso es clickable
+                if (!$step.is('a')) {
+                    // Reemplazar div por <a>
+                    var $newStep = $('<a href="' + data.link + '" class="wizard-step d-flex align-items-start"></a>');
+                    $newStep.append($contenido);
+                    $step.replaceWith($newStep);
+                } else {
+                    $step.attr('href', data.link);
+                }
+            } else {
+                // Si es completo o no hay link, el paso es div y disabled
+                if (!$step.is('div')) {
+                    var $newStep = $('<div class="wizard-step d-flex align-items-start disabled"></div>');
+                    $newStep.append($contenido);
+                    $step.replaceWith($newStep);
+                } else {
+                    $step.addClass('disabled');
+                }
+            }
+        }
 
         (function($) {
             // Inicializar tooltips (incluye los de info en cada wizard)
@@ -784,6 +841,18 @@ foreach ($proyectos as $pr) {
                                 $(this).remove();
                             });
                             mostrarAlerta(json.message || 'Proyecto eliminado correctamente.', 'success');
+                            // Actualizar wizard visual
+                            $.get('wizard_estado.php', {
+                                id_proyecto: id
+                            }, function(data) {
+                                if (data && !data.error) {
+                                    actualizarWizardVisual(id, data);
+                                } else {
+                                    alert('Error al actualizar wizard');
+                                }
+                            }, 'json').fail(function() {
+                                alert('Error al actualizar wizard');
+                            });
                         } else {
                             mostrarAlerta(json.message || 'No se pudo eliminar el proyecto.', 'danger');
                         }
@@ -795,13 +864,13 @@ foreach ($proyectos as $pr) {
 
             function mostrarAlerta(mensaje, tipo) {
                 const $alert = $(`
-                    <div class="alert alert-${tipo} alert-dismissible fade show mt-3" role="alert">
-                        ${mensaje}
-                        <button type="button" class="close" data-dismiss="alert" aria-label="Cerrar">
-                            <span aria-hidden="true">&times;</span>
-                        </button>
-                    </div>
-                `);
+                <div class="alert alert-${tipo} alert-dismissible fade show mt-3" role="alert">
+                    ${mensaje}
+                    <button type="button" class="close" data-dismiss="alert" aria-label="Cerrar">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+            `);
                 $('#alertContainer').html($alert);
                 $('html, body').animate({
                     scrollTop: 0
