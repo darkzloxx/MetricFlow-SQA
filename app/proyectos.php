@@ -88,36 +88,25 @@ if ($existenProyectos > 0 && $proySinUsuarios > 0) {
 }
 
 // Paso 3: proyectos sin modelo de calidad seleccionado
+$idUsuario = (int)$usr->id;
+
 $proySinModelo = (int)$cn->query("
-    SELECT COUNT(*) AS c FROM proyecto WHERE id_modelo IS NULL
+    SELECT COUNT(*) AS c
+    FROM proyecto p
+    JOIN usuario_proyecto up ON up.id_proyecto = p.id_proyecto
+    WHERE up.id_usuario = $idUsuario
+      AND p.id_modelo IS NULL
 ")->fetch_assoc()['c'];
-if ($proySinModelo > 0) {
-    $wizard[] = [
-        'paso' => 3,
-        'texto' => "$proySinModelo proyecto(s) sin modelo de calidad asignado.",
-        'accion' => 'Seleccioná o creá un modelo personalizado para cada proyecto.',
-        'responsable' => 'Gerente de Calidad o Líder de Proyecto',
-        'icono' => 'oi-layers',
-        'estado' => 'pendiente',
-    ];
-}
 
 // Paso 4: proyectos sin iteraciones
 $sinIteraciones = (int)$cn->query("
-    SELECT COUNT(*) AS c FROM proyecto p
-    LEFT JOIN iteracion i ON i.id_proyecto=p.id_proyecto
-    WHERE i.id_iteracion IS NULL
+    SELECT COUNT(*) AS c
+    FROM proyecto p
+    JOIN usuario_proyecto up ON up.id_proyecto = p.id_proyecto
+    LEFT JOIN iteracion i ON i.id_proyecto = p.id_proyecto
+    WHERE up.id_usuario = $idUsuario
+      AND i.id_iteracion IS NULL
 ")->fetch_assoc()['c'];
-if ($sinIteraciones > 0) {
-    $wizard[] = [
-        'paso' => 4,
-        'texto' => "$sinIteraciones proyecto(s) sin iteraciones creadas.",
-        'accion' => 'Definí las iteraciones del proyecto.',
-        'responsable' => 'Líder de Proyecto',
-        'icono' => 'oi-loop-circular',
-        'estado' => 'pendiente',
-    ];
-}
 
 // Si no hay pendientes, mostrar completado
 if (empty($wizard)) {
@@ -135,8 +124,8 @@ foreach ($proyectos as $pr) {
     $nombreP = $pr['nombre'];
     $rolProyecto = $esSuperAdmin ? 'SuperAdmin' : (getRolUsuarioEnProyecto($cn, (int)$usr->id, $idP) ?? '');
     $rolLower = mb_strtolower($rolProyecto, 'UTF-8');
-    $esAdminProyecto = $esSuperAdmin || ($rolLower === 'administrador');
-    $esGerenteOLider = $esSuperAdmin || in_array($rolLower, ['gerente de calidad', 'líder de proyecto', 'lider de proyecto'], true);
+    $esAdminProyecto =  ($rolLower === 'administrador');
+    $esGerenteOLider =  in_array($rolLower, ['gerente de calidad', 'líder de proyecto', 'lider de proyecto'], true);
     // Para planificación/ejecución de métricas: solo Gerente/Líder (excluye Admin y SuperAdmin)
     $esGerenteOLiderSolo = in_array($rolLower, ['gerente de calidad', 'líder de proyecto', 'lider de proyecto'], true);
     // Solo líder (sin gerente, sin superadmin) para acceso a edición de iteraciones
@@ -295,7 +284,7 @@ foreach ($proyectos as $pr) {
                 if ($esAdminProyecto) $link = "usuarios.php";
                 break;
             case 3:// Modelo de calidad
-                if ($esGerenteOLider || $esSuperAdmin) $link = "modelos.php";
+                if ($esGerenteOLider) $link = "modelos.php";
                 break;
             case 4:// Iteraciones (solo líder de proyecto)
                 if ($esLiderProyecto) $link = "iteraciones.php";

@@ -1,14 +1,20 @@
 <?php
 include_once '../lib/ControlAcceso.Class.php';
 ControlAcceso::requierePermiso(PermisosSistema::PERMISO_USUARIOS);
+
 // Restringir exclusivamente a roles ADMINISTRADOR o SUPERADMIN
 if (!ControlAcceso::esAdminGlobal()) {
     header('Location: proyectos.php?msg=' . urlencode('Acceso restringido a administradores.') . '&type=danger');
     exit;
 }
+
+include_once '../modelo/BDConexion.Class.php';  
+$cn = BDConexion::getInstancia();               
+
 include_once '../modelo/ColeccionUsuarios.php';
 $ColeccionUsuarios = new ColeccionUsuarios();
 ?>
+
 
 <html>
 
@@ -30,9 +36,26 @@ $ColeccionUsuarios = new ColeccionUsuarios();
             background-color: #f8f9fa;
             color: #212529;
         }
+
         /* celdas con texto largo truncado */
-        .cell-ellipsis{ max-width:320px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; vertical-align:middle; }
-        .cell-ellipsis:hover{ position:relative; white-space:normal; word-break:break-word; overflow:visible; z-index:2; background:#f8f9fa; border-radius:.25rem; padding:.1rem .2rem; }
+        .cell-ellipsis {
+            max-width: 320px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            vertical-align: middle;
+        }
+
+        .cell-ellipsis:hover {
+            position: relative;
+            white-space: normal;
+            word-break: break-word;
+            overflow: visible;
+            z-index: 2;
+            background: #f8f9fa;
+            border-radius: .25rem;
+            padding: .1rem .2rem;
+        }
     </style>
 </head>
 
@@ -104,7 +127,33 @@ $ColeccionUsuarios = new ColeccionUsuarios();
                                     <span class="oi oi-trash" aria-hidden="true"></span>
                                 </a>
 
+                                <?php if (ControlAcceso::esSuperAdminGlobal()): ?>
+                                    <?php
+                                    // 🔎 Verificar si el usuario NO tiene proyectos asignados
+                                    $idU = (int)$Usuario->getId();
+                                    $tieneProyectos = (int)$cn->query("SELECT COUNT(*) AS c FROM usuario_proyecto WHERE id_usuario = $idU")->fetch_assoc()['c'];
+                                    // Obtener el rol actual del usuario desde la base (igual que usuario.ascender.php)
+                                    $rolU = strtolower(trim($cn->query("SELECT r.nombre FROM usuario_rol ur JOIN rol r ON ur.id_rol = r.id WHERE ur.id_usuario = $idU")->fetch_assoc()['nombre'] ?? ''));
+                                    $puedeAscender = ($tieneProyectos === 0 && !in_array($rolU, ['administrador', 'superadmin']));
+                                    ?>
+
+                                    <?php if ($puedeAscender): ?>
+                                        <a title="Ascender a Administrador"
+                                            href="usuario.ascender.php?id=<?= $Usuario->getId(); ?>"
+                                            class="btn btn-outline-primary"
+                                            role="button"
+                                            aria-label="Ascender usuario <?= htmlspecialchars($Usuario->getNombre(), ENT_QUOTES, 'UTF-8'); ?>">
+                                            <span class="oi oi-star" aria-hidden="true"></span>
+                                        </a>
+                                    <?php else: ?>
+                                        <button class="btn btn-outline-secondary" disabled
+                                            title="<?= $tieneProyectos > 0 ? 'El usuario tiene proyectos asignados' : 'Ya es administrador o superadmin'; ?>">
+                                            <span class="oi oi-star" aria-hidden="true"></span>
+                                        </button>
+                                    <?php endif; ?>
+                                <?php endif; ?>
                             </td>
+
                         </tr>
                     <?php endforeach; ?>
                 </table>
