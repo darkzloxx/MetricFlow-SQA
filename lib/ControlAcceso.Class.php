@@ -16,7 +16,7 @@ class PermisosSistema
     // Permiso para ver las métricas individuales / dashboard exclusivo
     public const VISUALIZACION_METRICAS = 'Visualización de Métricas';
     public const GESTION_MODELO_CALIDAD = 'Gestión de Modelo de Calidad';
-    public const GESTION_METRICAS = 'Gestión de Métricas';
+    public const GESTION_METRICAS = 'Gestión de Métricas de Calidad';
     // Alias de compatibilidad con código antiguo
     public const PERMISO_USUARIOS = self::ABM_USUARIOS;
     public const PERMISO_PERMISOS = 'ABM Permisos';

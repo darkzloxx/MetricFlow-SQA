@@ -244,8 +244,8 @@ if ($esAdminGlobal || $esSuperAdmin) {
                             <tbody>
                                 <?php foreach ($metricsBase as $m): ?>
                                     <tr>
-                                        <td class="cell-ellipsis" title="<?= htmlspecialchars($m['nombre'], ENT_QUOTES, 'UTF-8'); ?>"><?= htmlspecialchars($m['nombre']); ?></td>
-                                        <td class="cell-ellipsis" title="<?= htmlspecialchars($m['descripcion'] ?? '', ENT_QUOTES, 'UTF-8'); ?>"><?= htmlspecialchars($m['descripcion'] ?? ''); ?></td>
+                                         <td class="cell-ellipsis" ><?= htmlspecialchars($m['nombre']); ?></td>
+                                        <td class="cell-ellipsis"><?= htmlspecialchars($m['descripcion'] ?? ''); ?></td>
                                         <td><span class="badge badge-secondary">Base</span></td>
                                         <td>
                                             <a title="Ver" href="metrica.ver.php?id=<?= (int)$m['id_metrica']; ?>" class="btn btn-outline-primary btn-icon">

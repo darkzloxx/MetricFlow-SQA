@@ -25,9 +25,18 @@ $currentPage = isset($_SERVER['SCRIPT_NAME']) ? basename($_SERVER['SCRIPT_NAME']
         <span class="navbar-toggler-icon"></span>
     </button>
     <div class="collapse navbar-collapse" id="navbarSupportedContent">
-        <?php if ($currentPage !== 'index.php' && $currentPage !== 'salir.php') { ?>
+        <?php
+        // Solo mostrar menú si es admin, superadmin o tiene proyectos asignados
+        $esAdmin = ControlAcceso::esAdminGlobal();
+        $esSuperAdmin = ControlAcceso::esSuperAdminGlobal();
+        $tieneProyectos = false;
+        try {
+            $tieneProyectos = !empty(ControlAcceso::proyectosAsignadosDelUsuario());
+        } catch (Throwable $e) {
+            $tieneProyectos = false;
+        }
+        if ($esAdmin || $esSuperAdmin || $tieneProyectos) { ?>
             <ul class="navbar-nav mr-auto">
-
                 <?php if (ControlAcceso::verificaPermiso(PermisosSistema::ABM_USUARIOS)) { ?>
                     <li class="nav-item">
                         <a class="nav-link" href="../app/usuarios.php">
@@ -36,7 +45,7 @@ $currentPage = isset($_SERVER['SCRIPT_NAME']) ? basename($_SERVER['SCRIPT_NAME']
                         </a>
                     </li>
                 <?php } ?>
-                <?php if (ControlAcceso::esSuperAdminGlobal()) { ?>
+                <?php if ($esSuperAdmin) { ?>
                     <li class="nav-item">
                         <a class="nav-link" href="../app/roles.php">
                             <span class="oi oi-graph" />
@@ -61,7 +70,7 @@ $currentPage = isset($_SERVER['SCRIPT_NAME']) ? basename($_SERVER['SCRIPT_NAME']
                         </a>
                     </li>
                 <?php } ?>
-                <?php if (ControlAcceso::esAdminGlobal() || ControlAcceso::verificaPermiso(PermisosSistema::GESTION_MODELO_CALIDAD)) { ?>
+                <?php if ($esAdmin || $esSuperAdmin || ControlAcceso::verificaPermiso(PermisosSistema::GESTION_MODELO_CALIDAD)) { ?>
                     <li class="nav-item">
                         <a class="nav-link" href="../app/modelos.php">
                             <span class="oi oi-book" />
@@ -70,11 +79,8 @@ $currentPage = isset($_SERVER['SCRIPT_NAME']) ? basename($_SERVER['SCRIPT_NAME']
                     </li>
                 <?php } ?>
                 <?php
-                // Lógica para mostrar "Métricas":
-                // 1. Si es Admin Global -> siempre se muestra (ve todas las métricas aunque no tenga proyectos asignados)
-                // 2. Si NO es Admin Global -> debe tener el permiso GESTION_METRICAS Y al menos un proyecto asignado con modelo
                 $mostrarMetricas = false;
-                if (ControlAcceso::esAdminGlobal()) {
+                if ($esAdmin) {
                     $mostrarMetricas = true;
                 } else {
                     $tienePermisoMetricas = false;
@@ -113,7 +119,15 @@ $currentPage = isset($_SERVER['SCRIPT_NAME']) ? basename($_SERVER['SCRIPT_NAME']
                         </a>
                     </li>
                 <?php } ?>
-
+                <li class="nav-item">
+                    <a class="nav-link" id="btnSalir" href="../app/salir.php">
+                        <span class="oi oi-account-logout" />
+                        Salir
+                    </a>
+                </li>
+            </ul>
+        <?php } else { ?>
+            <ul class="navbar-nav mr-auto">
                 <li class="nav-item">
                     <a class="nav-link" id="btnSalir" href="../app/salir.php">
                         <span class="oi oi-account-logout" />

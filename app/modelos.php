@@ -41,7 +41,7 @@ if (!empty($proyectos)) {
     $ids = array_filter($ids, function ($v) {
         return $v > 0;
     });
-    if (!empty($ids)) {
+    if (!empty($ids)) {//aca se obtienen los proyectos bloqueados porque tienen metricas planificadas
         $in = implode(',', $ids);
         $sqlB = "SELECT DISTINCT i.id_proyecto AS id
                  FROM metrica_iteracion mi
@@ -176,16 +176,6 @@ if (!empty($proyectos)) {
             max-width: 520px;
         }
 
-        .cell-ellipsis:hover {
-            position: relative;
-            white-space: normal;
-            word-break: break-word;
-            overflow: visible;
-            z-index: 3;
-            background: #f8f9fa;
-            border-radius: .25rem;
-            padding: .1rem .2rem;
-        }
 
         .badge-list .badge {
             max-width: 140px;
@@ -381,19 +371,8 @@ if (!empty($proyectos)) {
                                                 <?php
                                                     $proysBloq = $modelosPlanificadosProyectos[$mid] ?? [];
                                                     $cantProysBloq = count($proysBloq);
-                                                    $tituloBloq = 'Bloqueado: métricas planificadas en ' . $cantProysBloq . ' proyecto(s)';
-                                                    $listaProys = '';
-                                                    if ($cantProysBloq > 0) {
-                                                        // Limitar a primeros 6 para no desbordar tooltip
-                                                        $maxMostrar = 6;
-                                                        $slice = array_slice($proysBloq, 0, $maxMostrar);
-                                                        $listaProys = implode(', ', array_map(function($n){ return htmlspecialchars($n, ENT_QUOTES, 'UTF-8'); }, $slice));
-                                                        if ($cantProysBloq > $maxMostrar) { $listaProys .= '…'; }
-                                                    }
-                                                    $detalleBloq = 'Para editar o eliminar el modelo, eliminá/ajustá la planificación (valor planificado) de sus métricas en esos proyectos o desvinculalo.';
+                                                    $tituloBloq = 'No se puede editar ni eliminar porque uno o más proyectos tienen métricas de este modelo con valores planificados.';
                                                     $tooltipBloq = htmlspecialchars($tituloBloq, ENT_QUOTES, 'UTF-8');
-                                                    if ($listaProys !== '') { $tooltipBloq .= htmlspecialchars('<br><b>Proyectos:</b> ' . $listaProys, ENT_QUOTES, 'UTF-8'); }
-                                                    $tooltipBloq .= htmlspecialchars('<br>' . $detalleBloq, ENT_QUOTES, 'UTF-8');
                                                 ?>
                                                 <button class="btn btn-outline-warning btn-icon btn-locked" disabled data-toggle="tooltip" data-html="true" title="<?= $tooltipBloq; ?>" aria-label="Editar bloqueado">
                                                     <span class="oi oi-lock-locked" aria-hidden="true"></span>
