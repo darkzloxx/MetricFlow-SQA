@@ -298,7 +298,13 @@ if (!$esAdmin && !empty($proyectos)) {
         $('#nmNombre').val('');
         $('#nmDescripcion').val('');
         actualizarCount();
-        $('#modalNuevaMetrica').modal('hide');
+        // Cerrar el modal limpiamente (a veces queda el backdrop si no se fuerza)
+        $('#modalNuevaMetrica').one('hidden.bs.modal', function(){
+          $('body').removeClass('modal-open');
+          $('.modal-backdrop').remove();
+        }).modal('hide');
+        // Fallback por si algún tema/JS impide el evento anterior
+        setTimeout(function(){ $('body').removeClass('modal-open'); $('.modal-backdrop').remove(); }, 250);
       });
 
       // UI: seleccionar modelo base y pre-chequear métricas

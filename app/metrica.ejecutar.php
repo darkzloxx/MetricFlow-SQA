@@ -25,16 +25,33 @@ $met = $rsMet->fetch_assoc();
 $tipo = $hasTipo ? strtolower(trim($met['tipo'] ?? '')) : 'personalizada';
 if ($tipo === 'base') { header('Location: metricas.php?msg='.urlencode('No se puede ejecutar una métrica base.').'&type=warning'); exit; }
 
-// Debe estar planificada para permitir ejecución (toma la primera planificación encontrada)
-$rsPlan = $cn->query('SELECT id_iteracion, valor_planificado, valor_ejecutado, umbral_desviacion FROM metrica_iteracion WHERE id_metrica='.$id.' ORDER BY id_iteracion LIMIT 1');
+// Debe estar planificada en la iteración ACTUAL (hoy dentro del rango)
 $planificado = false; $ejecutado = false; $valPlan = null; $valEjec = null; $umbral = null; $idIter = null;
-if ($rsPlan && $fila = $rsPlan->fetch_assoc()) {
-  $idIter = (int)$fila['id_iteracion'];
-  $planificado = $fila['valor_planificado'] !== null;
-  $ejecutado = $fila['valor_ejecutado'] !== null;
-  $valPlan = $fila['valor_planificado'];
-  $valEjec = $fila['valor_ejecutado'];
-  $umbral = $fila['umbral_desviacion'];
+// Buscar iteración activa del usuario para esta métrica (a través del proyecto)
+$sqlAct = "SELECT i.id_iteracion, i.fecha_inicio, i.fecha_fin
+           FROM iteracion i
+           JOIN usuario_proyecto up ON up.id_proyecto = i.id_proyecto
+           WHERE up.id_usuario = " . (int)$usr->id . "
+           ORDER BY i.fecha_inicio";
+if ($rsI = $cn->query($sqlAct)) {
+  $hoy = new DateTime('today');
+  while ($row = $rsI->fetch_assoc()) {
+    try {
+      $ini = new DateTime($row['fecha_inicio']);
+      $fin = new DateTime($row['fecha_fin']);
+      if ($hoy >= $ini && $hoy <= $fin) { $idIter = (int)$row['id_iteracion']; break; }
+    } catch (Throwable $e) { /* ignorar parseo */ }
+  }
+}
+if ($idIter) {
+  $rsPlan = $cn->query('SELECT valor_planificado, valor_ejecutado, umbral_desviacion FROM metrica_iteracion WHERE id_metrica='.(int)$id.' AND id_iteracion='.(int)$idIter.' LIMIT 1');
+  if ($rsPlan && $fila = $rsPlan->fetch_assoc()) {
+    $planificado = $fila['valor_planificado'] !== null;
+    $ejecutado = $fila['valor_ejecutado'] !== null;
+    $valPlan = $fila['valor_planificado'];
+    $valEjec = $fila['valor_ejecutado'];
+    $umbral = $fila['umbral_desviacion'];
+  }
 }
 ?>
 <html>

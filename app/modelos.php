@@ -35,8 +35,12 @@ $proyectos = $stmt ? $stmt->fetch_all(MYSQLI_ASSOC) : [];
 // =====================================================
 $bloqueados = [];
 if (!empty($proyectos)) {
-    $ids = array_map(function($r){ return (int)$r['id_proyecto']; }, $proyectos);
-    $ids = array_filter($ids, function($v){ return $v > 0; });
+    $ids = array_map(function ($r) {
+        return (int)$r['id_proyecto'];
+    }, $proyectos);
+    $ids = array_filter($ids, function ($v) {
+        return $v > 0;
+    });
     if (!empty($ids)) {
         $in = implode(',', $ids);
         $sqlB = "SELECT DISTINCT i.id_proyecto AS id
@@ -44,7 +48,9 @@ if (!empty($proyectos)) {
                  JOIN iteracion i ON i.id_iteracion = mi.id_iteracion
                  WHERE i.id_proyecto IN ($in)";
         if ($rsB = $cn->query($sqlB)) {
-            while ($row = $rsB->fetch_assoc()) { $bloqueados[(int)$row['id']] = true; }
+            while ($row = $rsB->fetch_assoc()) {
+                $bloqueados[(int)$row['id']] = true;
+            }
         }
     }
 }
@@ -59,8 +65,10 @@ $rsUsos = $cn->query("SELECT p.id_modelo, p.id_proyecto, p.nombre AS proyecto FR
 if ($rsUsos) {
     while ($row = $rsUsos->fetch_assoc()) {
         $mid = (int)$row['id_modelo'];
-        if (!isset($usosModelos[$mid])) { $usosModelos[$mid] = []; }
-        $usosModelos[$mid][] = [ 'id' => (int)$row['id_proyecto'], 'proyecto' => $row['proyecto'] ];
+        if (!isset($usosModelos[$mid])) {
+            $usosModelos[$mid] = [];
+        }
+        $usosModelos[$mid][] = ['id' => (int)$row['id_proyecto'], 'proyecto' => $row['proyecto']];
     }
 }
 
@@ -71,8 +79,12 @@ if ($rsUsos) {
 $mapPlanificados = [];
 $hayElegiblePersonalizado = false;
 if (!empty($proyectos)) {
-    $idsAll = array_map(function($r){ return (int)$r['id_proyecto']; }, $proyectos);
-    $idsAll = array_filter($idsAll, function($v){ return $v > 0; });
+    $idsAll = array_map(function ($r) {
+        return (int)$r['id_proyecto'];
+    }, $proyectos);
+    $idsAll = array_filter($idsAll, function ($v) {
+        return $v > 0;
+    });
     if (!empty($idsAll)) {
         $inAll = implode(',', $idsAll);
         $sqlPlan = "SELECT i.id_proyecto AS id, COUNT(*) AS c
@@ -81,14 +93,19 @@ if (!empty($proyectos)) {
                      WHERE mi.valor_planificado IS NOT NULL AND i.id_proyecto IN ($inAll)
                      GROUP BY i.id_proyecto";
         if ($rsPlan = $cn->query($sqlPlan)) {
-            while ($row = $rsPlan->fetch_assoc()) { $mapPlanificados[(int)$row['id']] = (int)$row['c']; }
+            while ($row = $rsPlan->fetch_assoc()) {
+                $mapPlanificados[(int)$row['id']] = (int)$row['c'];
+            }
         }
     }
     // Elegible si el proyecto NO tiene métricas planificadas (independiente de si tiene modelo o no)
     foreach ($proyectos as $pp) {
         $pid = (int)$pp['id_proyecto'];
         $hasPlanned = !empty($mapPlanificados[$pid]);
-        if (!$hasPlanned) { $hayElegiblePersonalizado = true; break; }
+        if (!$hasPlanned) {
+            $hayElegiblePersonalizado = true;
+            break;
+        }
     }
 }
 ?>
@@ -112,12 +129,45 @@ if (!empty($proyectos)) {
             background-color: #f8f9fa;
             color: #212529;
         }
+
         /* celdas largas con ellipsis + expand hover */
-        .cell-ellipsis{ max-width:240px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-        .cell-ellipsis.large{ max-width:520px; }
-        .cell-ellipsis:hover{ position:relative; white-space:normal; word-break:break-word; overflow:visible; z-index:3; background:#f8f9fa; border-radius:.25rem; padding:.1rem .2rem; }
-        .badge-list .badge{ max-width:140px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-        .badge-list .badge:hover{ position:relative; white-space:normal; word-break:break-word; overflow:visible; z-index:4; }
+        .cell-ellipsis {
+            max-width: 240px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .cell-ellipsis.large {
+            max-width: 520px;
+        }
+
+        .cell-ellipsis:hover {
+            position: relative;
+            white-space: normal;
+            word-break: break-word;
+            overflow: visible;
+            z-index: 3;
+            background: #f8f9fa;
+            border-radius: .25rem;
+            padding: .1rem .2rem;
+        }
+
+        .badge-list .badge {
+            max-width: 140px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .badge-list .badge:hover {
+            position: relative;
+            white-space: normal;
+            word-break: break-word;
+            overflow: visible;
+            z-index: 4;
+        }
+
         /* Asegurar mismo ancho para botones con solo ícono */
         .btn-icon {
             display: inline-flex;
@@ -236,70 +286,70 @@ if (!empty($proyectos)) {
                 <?php endif; ?>
 
                 <?php if ($esAdminGlobal || $esSuperAdmin): ?>
-                <hr />
-                <?php if (empty($modelos)): ?>
-                    <div class="text-muted">No hay modelos registrados.</div>
-                <?php else: ?>
-                    <table class="table table-hover table-sm">
-                        <tr class="table-info">
-                            <th>Modelo</th>
-                            <th>Usado por</th>
-                            <th>Acciones</th>
-                        </tr>
-                        <tbody>
-                        <?php foreach ($modelos as $m):
-                            $mid = (int)$m['id_modelo'];
-                            $usos = $usosModelos[$mid] ?? [];
-                            $cant = count($usos);
-                            $collapseId = 'usos-' . $mid;
-                        ?>
-                            <tr>
-                                <td>
-                                    <div class="font-weight-bold cell-ellipsis" title="<?= htmlspecialchars($m['nombre'], ENT_QUOTES, 'UTF-8'); ?>"><?= htmlspecialchars($m['nombre']); ?></div>
-                                    <div class="text-muted small cell-ellipsis" title="<?= htmlspecialchars($m['descripcion'] ?? '', ENT_QUOTES, 'UTF-8'); ?>"><?= htmlspecialchars($m['descripcion'] ?? ''); ?></div>
-                                </td>
-                                <td class="cell-ellipsis large" title="<?= $cant>0? htmlspecialchars($cant.' proyecto(s)', ENT_QUOTES, 'UTF-8'): 'Sin uso'; ?>">
-                                    <?php if ($cant === 0): ?>
-                                        <span class="badge badge-secondary">Nadie</span>
-                                    <?php elseif ($cant === 1): ?>
-                                        <?= htmlspecialchars($usos[0]['proyecto']); ?>
-                                    <?php else: ?>
-                                        <span class="badge badge-info mr-2"><?= $cant; ?> proyectos</span>
-                                        <button class="btn btn-sm btn-outline-secondary" type="button" data-toggle="collapse" data-target="#<?= $collapseId; ?>" aria-expanded="false" aria-controls="<?= $collapseId; ?>">Ver lista</button>
-                                        <div class="collapse mt-2 badge-list" id="<?= $collapseId; ?>">
-                                            <?php foreach ($usos as $u): ?>
-                                                <span class="badge badge-light mr-1 mb-1" title="ID <?= (int)$u['id']; ?> | <?= htmlspecialchars($u['proyecto'], ENT_QUOTES, 'UTF-8'); ?>"><?= htmlspecialchars($u['proyecto']); ?></span>
-                                            <?php endforeach; ?>
-                                        </div>
-                                    <?php endif; ?>
-                                </td>
-                                <td>
-                                    <!-- Ver (siempre disponible) -->
-                                    <a title="Ver modelo" href="modelo.catalogo.ver.php?id_modelo=<?= $mid; ?>" class="btn btn-outline-primary btn-icon">
-                                        <span class="oi oi-eye" aria-hidden="true"></span>
-                                    </a>
-                                    <!-- Acciones: si el modelo está en uso, no permitir modificar/eliminar -->
-                                    <?php if ($cant > 0): ?>
-                                        <button class="btn btn-outline-primary btn-icon" disabled title="Bloqueado: el modelo está siendo utilizado">
-                                            <span class="oi oi-lock-locked"></span> 
-                                        </button>
-                                        <button class="btn btn-outline-primary btn-icon" disabled title="Bloqueado: el modelo está siendo utilizado">
-                                            <span class="oi oi-lock-locked"></span>
-                                        </button>
-                                    <?php else: ?>
-                                        <a class="btn btn-outline-warning btn-icon" title="Editar modelo" href="modelo.modificar.php?id_modelo=<?= $mid; ?>">
-                                            <span class="oi oi-pencil"></span>
-                                        </a>
-                                        <a class="btn btn-outline-danger btn-icon" title="Eliminar modelo" href="modelo.eliminar.procesar.php?id_modelo=<?= $mid; ?>" onclick="return confirm('¿Confirma que desea eliminar este modelo? Se eliminarán solo las métricas asociadas exclusivamente a este modelo (las que no estén vinculadas a ningún otro). Esta acción no se puede deshacer.');">
-                                            <span class="oi oi-trash"></span>
-                                        </a>
-                                    <?php endif; ?>
-                                </td>
+                    <hr />
+                    <?php if (empty($modelos)): ?>
+                        <div class="text-muted">No hay modelos registrados.</div>
+                    <?php else: ?>
+                        <table class="table table-hover table-sm">
+                            <tr class="table-info">
+                                <th>Modelo</th>
+                                <th>Usado por</th>
+                                <th>Acciones</th>
                             </tr>
-                        <?php endforeach; ?>
-                        </tbody>
-                    </table>
-                <?php endif; ?>
+                            <tbody>
+                                <?php foreach ($modelos as $m):
+                                    $mid = (int)$m['id_modelo'];
+                                    $usos = $usosModelos[$mid] ?? [];
+                                    $cant = count($usos);
+                                    $collapseId = 'usos-' . $mid;
+                                ?>
+                                    <tr>
+                                        <td>
+                                            <div class="font-weight-bold cell-ellipsis" title="<?= htmlspecialchars($m['nombre'], ENT_QUOTES, 'UTF-8'); ?>"><?= htmlspecialchars($m['nombre']); ?></div>
+                                            <div class="text-muted small cell-ellipsis" title="<?= htmlspecialchars($m['descripcion'] ?? '', ENT_QUOTES, 'UTF-8'); ?>"><?= htmlspecialchars($m['descripcion'] ?? ''); ?></div>
+                                        </td>
+                                        <td class="cell-ellipsis large" title="<?= $cant > 0 ? htmlspecialchars($cant . ' proyecto(s)', ENT_QUOTES, 'UTF-8') : 'Sin uso'; ?>">
+                                            <?php if ($cant === 0): ?>
+                                                <span class="badge badge-secondary">Nadie</span>
+                                            <?php elseif ($cant === 1): ?>
+                                                <?= htmlspecialchars($usos[0]['proyecto']); ?>
+                                            <?php else: ?>
+                                                <span class="badge badge-info mr-2"><?= $cant; ?> proyectos</span>
+                                                <button class="btn btn-sm btn-outline-secondary" type="button" data-toggle="collapse" data-target="#<?= $collapseId; ?>" aria-expanded="false" aria-controls="<?= $collapseId; ?>">Ver lista</button>
+                                                <div class="collapse mt-2 badge-list" id="<?= $collapseId; ?>">
+                                                    <?php foreach ($usos as $u): ?>
+                                                        <span class="badge badge-light mr-1 mb-1" title="ID <?= (int)$u['id']; ?> | <?= htmlspecialchars($u['proyecto'], ENT_QUOTES, 'UTF-8'); ?>"><?= htmlspecialchars($u['proyecto']); ?></span>
+                                                    <?php endforeach; ?>
+                                                </div>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td>
+                                            <!-- Ver (siempre disponible) -->
+                                            <a title="Ver modelo" href="modelo.catalogo.ver.php?id_modelo=<?= $mid; ?>" class="btn btn-outline-primary btn-icon">
+                                                <span class="oi oi-eye" aria-hidden="true"></span>
+                                            </a>
+                                            <!-- Acciones: si el modelo está en uso, no permitir modificar/eliminar -->
+                                            <?php if ($cant > 0): ?>
+                                                <button class="btn btn-outline-primary btn-icon" disabled title="Bloqueado: el modelo está siendo utilizado">
+                                                    <span class="oi oi-lock-locked"></span>
+                                                </button>
+                                                <button class="btn btn-outline-primary btn-icon" disabled title="Bloqueado: el modelo está siendo utilizado">
+                                                    <span class="oi oi-lock-locked"></span>
+                                                </button>
+                                            <?php else: ?>
+                                                <a class="btn btn-outline-warning btn-icon" title="Editar modelo" href="modelo.modificar.php?id_modelo=<?= $mid; ?>">
+                                                    <span class="oi oi-pencil"></span>
+                                                </a>
+                                                <a class="btn btn-outline-danger btn-icon" title="Eliminar modelo" href="modelo.eliminar.procesar.php?id_modelo=<?= $mid; ?>" onclick="return confirm('¿Confirma que desea eliminar este modelo? Se eliminarán solo las métricas asociadas exclusivamente a este modelo (las que no estén vinculadas a ningún otro). Esta acción no se puede deshacer.');">
+                                                    <span class="oi oi-trash"></span>
+                                                </a>
+                                            <?php endif; ?>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    <?php endif; ?>
                 <?php endif; ?>
             </div>
         </div>

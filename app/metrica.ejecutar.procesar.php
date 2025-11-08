@@ -9,12 +9,13 @@ if ($esAdmin || !ControlAcceso::verificaPermiso(PermisosSistema::GESTION_METRICA
 }
 $cn = BDConexion::getInstancia();
 $idMetrica = isset($_POST['id_metrica']) ? (int)$_POST['id_metrica'] : 0;
+// La iteración llega oculta desde la pantalla (iteración ACTUAL)
 $idIter = isset($_POST['id_iteracion']) ? (int)$_POST['id_iteracion'] : 0;
 $valEjec = isset($_POST['valor_ejecutado']) ? trim((string)$_POST['valor_ejecutado']) : '';
 
 $errores = [];
 if ($idMetrica <= 0) { $errores[] = 'Métrica inválida.'; }
-if ($idIter <= 0) { $errores[] = 'Iteración inválida.'; }
+if ($idIter <= 0) { $errores[] = 'No hay iteración activa para registrar ejecución.'; }
 if ($valEjec === '' || !is_numeric($valEjec)) { $errores[] = 'El valor ejecutado es obligatorio y debe ser numérico.'; }
 
 // Validar que iteración pertenece al usuario

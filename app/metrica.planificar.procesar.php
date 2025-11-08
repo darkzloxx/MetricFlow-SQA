@@ -10,13 +10,14 @@ if ($esAdmin || !ControlAcceso::verificaPermiso(PermisosSistema::GESTION_METRICA
 
 $cn = BDConexion::getInstancia();
 $idMetrica = isset($_POST['id_metrica']) ? (int)$_POST['id_metrica'] : 0;
+// La iteración llega oculta desde la pantalla (iteración ACTUAL);
 $idIter = isset($_POST['id_iteracion']) ? (int)$_POST['id_iteracion'] : 0;
 $valPlan = isset($_POST['valor_planificado']) ? trim((string)$_POST['valor_planificado']) : '';
 $umbral = isset($_POST['umbral']) ? trim((string)$_POST['umbral']) : '';
 
 $errores = [];
 if ($idMetrica <= 0) { $errores[] = 'Métrica inválida.'; }
-if ($idIter <= 0) { $errores[] = 'Debe seleccionar una iteración.'; }
+if ($idIter <= 0) { $errores[] = 'No hay iteración activa para registrar planificación.'; }
 if ($valPlan === '' || !is_numeric($valPlan)) { $errores[] = 'El valor planificado es obligatorio y debe ser numérico.'; }
 if ($umbral === '' || !is_numeric($umbral)) { $errores[] = 'El umbral de desviación es obligatorio y debe ser numérico.'; }
 

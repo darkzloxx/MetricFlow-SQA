@@ -27,20 +27,30 @@ if ($tipo === 'base') { header('Location: metricas.php?msg='.urlencode('No se pu
 
 // Comprobar si ya está planificada
 // Cargar iteraciones de proyectos del usuario
+// Iteraciones del usuario para determinar la iteración ACTUAL (hoy dentro del rango)
 $iteraciones = [];
+$iteracionActual = null; // guardará arreglo de la iteración activa
 if ($usr) {
-  $sqlI = "SELECT i.id_iteracion, i.numero_iteracion, i.fecha_inicio, i.fecha_fin, p.nombre AS proyecto
-       FROM iteracion i
-       JOIN proyecto p ON p.id_proyecto = i.id_proyecto
-       JOIN usuario_proyecto up ON up.id_proyecto = p.id_proyecto
-       WHERE up.id_usuario = ?
-       ORDER BY p.nombre, i.fecha_inicio";
+  $sqlI = "SELECT i.id_iteracion, i.numero_iteracion, i.fecha_inicio, i.fecha_fin, p.nombre AS proyecto, p.id_proyecto
+           FROM iteracion i
+           JOIN proyecto p ON p.id_proyecto = i.id_proyecto
+           JOIN usuario_proyecto up ON up.id_proyecto = p.id_proyecto
+           WHERE up.id_usuario = ?
+           ORDER BY p.nombre, i.fecha_inicio";
   if ($stI = $cn->prepare($sqlI)) {
     $stI->bind_param('i', $usr->id);
     $stI->execute();
     $resI = $stI->get_result();
     $iteraciones = $resI ? $resI->fetch_all(MYSQLI_ASSOC) : [];
     $stI->close();
+  }
+  $hoy = new DateTime('today');
+  foreach ($iteraciones as $it) {
+      try {
+          $ini = new DateTime($it['fecha_inicio']);
+          $fin = new DateTime($it['fecha_fin']);
+          if ($hoy >= $ini && $hoy <= $fin) { $iteracionActual = $it; break; }
+      } catch (Throwable $e) { /* ignorar errores de fecha */ }
   }
 }
 
@@ -73,19 +83,16 @@ $yaPlanificada = (bool)($rsPlan && $rsPlan->num_rows);
 
           <?php if (empty($iteraciones)): ?>
             <div class="alert alert-warning">No tenés iteraciones disponibles en tus proyectos.</div>
+          <?php elseif (!$iteracionActual): ?>
+            <div class="alert alert-warning">No hay una iteración activa (hoy no cae dentro de ningún rango de fechas). No se puede planificar.</div>
           <?php else: ?>
             <form method="post" action="metrica.planificar.procesar.php" class="mt-2">
               <input type="hidden" name="id_metrica" value="<?= (int)$met['id_metrica']; ?>" />
+              <input type="hidden" name="id_iteracion" value="<?= (int)$iteracionActual['id_iteracion']; ?>" />
               <div class="form-group">
-                <label for="iteracion">Iteración</label>
-                <select id="iteracion" name="id_iteracion" class="form-control" required>
-                  <option value="">Seleccione una iteración…</option>
-                  <?php foreach ($iteraciones as $it): ?>
-                  <option value="<?= (int)$it['id_iteracion']; ?>">
-                    <?= htmlspecialchars($it['proyecto']); ?> — Iteración <?= (int)$it['numero_iteracion']; ?> (<?= htmlspecialchars($it['fecha_inicio']); ?> a <?= htmlspecialchars($it['fecha_fin']); ?>)
-                  </option>
-                  <?php endforeach; ?>
-                </select>
+                <label>Iteración actual</label>
+                <input type="text" class="form-control" readonly value="<?= htmlspecialchars($iteracionActual['proyecto']); ?> — Iteración <?= (int)$iteracionActual['numero_iteracion']; ?> (<?= htmlspecialchars($iteracionActual['fecha_inicio']); ?> a <?= htmlspecialchars($iteracionActual['fecha_fin']); ?>)" />
+                <small class="form-text text-muted">La planificación se registra siempre sobre la iteración activa según la fecha de hoy.</small>
               </div>
               <div class="form-group">
                 <label for="valor_planificado">Valor planificado</label>
