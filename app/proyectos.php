@@ -139,6 +139,8 @@ foreach ($proyectos as $pr) {
     $esGerenteOLider = $esSuperAdmin || in_array($rolLower, ['gerente de calidad', 'líder de proyecto', 'lider de proyecto'], true);
     // Para planificación/ejecución de métricas: solo Gerente/Líder (excluye Admin y SuperAdmin)
     $esGerenteOLiderSolo = in_array($rolLower, ['gerente de calidad', 'líder de proyecto', 'lider de proyecto'], true);
+    // Solo líder (sin gerente, sin superadmin) para acceso a edición de iteraciones
+    $esLiderProyecto = in_array($rolLower, ['líder de proyecto', 'lider de proyecto'], true);
 
     // Total de pasos esperados del flujo:
     // Admin proyecto: 2 (usuarios) + 3 (modelo) + 4 (iteraciones) + 5 (planificar métricas) = 4
@@ -176,11 +178,8 @@ foreach ($proyectos as $pr) {
         }
     }
 
-    // Paso 5: planificación de métricas (TODAS las métricas de TODAS las iteraciones deben tener valor planificado)
+    // Paso 5: planificación de métricas (Sólo se evalúa la ITERACIÓN ACTUAL: debe tener TODAS sus métricas planificadas)
     if ($next === null) {
-        // Iteraciones del proyecto
-        $iterCount = (int)$cn->query("SELECT COUNT(*) AS c FROM iteracion WHERE id_proyecto=$idP")->fetch_assoc()['c'];
-
         // Total de métricas del proyecto = base del modelo + personalizadas asociadas al proyecto
         $totalMetricasBase = 0;
         if (!empty($pr['id_modelo'])) {
@@ -211,49 +210,20 @@ foreach ($proyectos as $pr) {
             }
         }
 
-        // Combinaciones esperadas métrica x iteración
-        $esperadas = $totalMetricas * $iterCount;
+        // Cantidad efectivamente planificada sólo para la iteración actual
+        $planificadasActual = 0;
+        if ($iterActualId) {
+            $planificadasActual = (int)$cn->query(
+                "SELECT COUNT(*) AS c FROM metrica_iteracion WHERE id_iteracion=$iterActualId AND valor_planificado IS NOT NULL"
+            )->fetch_assoc()['c'];
+        }
 
-        // Cantidad efectivamente planificada (una fila por métrica-iteración con valor_planificado no nulo)
-        $planificadas = (int)$cn->query(
-            "SELECT COUNT(*) AS c
-             FROM metrica_iteracion mi
-             JOIN iteracion i ON i.id_iteracion = mi.id_iteracion
-             WHERE i.id_proyecto = $idP AND mi.valor_planificado IS NOT NULL"
-        )->fetch_assoc()['c'];
-
-        // Preparar detalle para tooltip: faltantes por fase + iteración (resaltando la ACTUAL)
+        // Preparar detalle para tooltip: sólo la iteración ACTUAL
         $detalle = '';
-        $faltantesTotales = max(0, (int)($esperadas - $planificadas));
-        if ($iterCount > 0 && $totalMetricas > 0) {
-            $sqlBreak = "SELECT i.id_iteracion, i.numero_iteracion, f.nombre AS fase_nombre,
-                                 SUM(CASE WHEN mi.valor_planificado IS NOT NULL THEN 1 ELSE 0 END) AS plan_count
-                          FROM iteracion i
-                          LEFT JOIN fase f ON f.id_fase = i.id_fase
-                          LEFT JOIN metrica_iteracion mi ON mi.id_iteracion = i.id_iteracion
-                          WHERE i.id_proyecto = $idP
-                          GROUP BY i.id_iteracion, i.numero_iteracion, fase_nombre
-                          ORDER BY i.id_fase ASC, i.numero_iteracion ASC";
-            if ($rsB = $cn->query($sqlBreak)) {
-                $lineasActual = [];
-                $lineasOtras = [];
-                while ($rb = $rsB->fetch_assoc()) {
-                    $planCnt = (int)($rb['plan_count'] ?? 0);
-                    $faltan = max(0, $totalMetricas - $planCnt);
-                    if ($faltan > 0) {
-                        $faseNom = trim((string)($rb['fase_nombre'] ?? ''));
-                        $iterNum = (string)($rb['numero_iteracion'] ?? '');
-                        $label = ($faseNom !== '' ? ($faseNom . ' — ') : '') . 'Iteración ' . htmlspecialchars($iterNum, ENT_QUOTES, 'UTF-8');
-                        $line = $label . ': faltan ' . $faltan;
-                        if ((int)$rb['id_iteracion'] === $iterActualId) { $lineasActual[] = '<b>' . $line . ' (actual)</b>'; }
-                        else { $lineasOtras[] = $line; }
-                    }
-                }
-                $lineas = array_merge($lineasActual, $lineasOtras);
-                if (!empty($lineas)) {
-                    $detalle = 'Faltan ' . $faltantesTotales . ' valor(es) planificado(s) en:<br>' . implode('<br>', $lineas);
-                }
-            }
+        if ($iterActualId && $totalMetricas > 0 && $planificadasActual < $totalMetricas) {
+            $faltan = $totalMetricas - $planificadasActual;
+            $labelActual = trim(($iterActualFase !== '' ? ($iterActualFase . ' ') : '') . $iterActualNumero);
+            $detalle = 'Faltan ' . $faltan . ' valor(es) planificado(s) en la iteración actual:<br><b>' . htmlspecialchars($labelActual, ENT_QUOTES, 'UTF-8') . '</b>';
         }
 
         if ($totalMetricas === 0) {
@@ -265,30 +235,30 @@ foreach ($proyectos as $pr) {
                 'icono' => 'oi-calendar',
                 'estado' => 'pendiente'
             ];
-        } elseif ($iterCount === 0) {
-            // Seguridad: ya lo cubre el paso 4, pero evitamos falsos positivos
+        } elseif (!$iterActualId) {
             $next = [
-                'paso' => 4,
-                'texto' => 'Sin iteraciones creadas.',
-                'accion' => 'Definí las iteraciones del proyecto y planificá métricas.',
+                'paso' => 5,
+                'texto' => 'No hay iteración actual en curso.',
+                'accion' => 'Verificá fechas de iteraciones o creá una nueva iteración activa.',
                 'responsable' => 'Líder de Proyecto',
                 'icono' => 'oi-loop-circular',
                 'estado' => 'pendiente'
             ];
-        } elseif ($planificadas === 0) {
+        } elseif ($planificadasActual === 0) {
             $next = [
                 'paso' => 5,
-                'texto' => 'Sin métricas planificadas.',
-                'accion' => 'Asigná valores planificados a todas las métricas de las iteraciones.',
+                'texto' => 'Sin métricas planificadas en la iteración actual.',
+                'accion' => 'Asigná valores planificados a todas las métricas de la iteración actual.',
                 'responsable' => 'Gerente de Calidad o Líder de Proyecto',
                 'icono' => 'oi-calendar',
                 'estado' => 'pendiente'
             ];
-        } elseif ($planificadas < $esperadas) {
+        } elseif ($planificadasActual < $totalMetricas) {
+            $etiquetaIter = trim(($iterActualFase !== '' ? ($iterActualFase . ' ') : '') . $iterActualNumero);
             $next = [
                 'paso' => 5,
-                'texto' => "Planificación parcial" . ($iterActualId ? ' — Iteración actual: ' . htmlspecialchars((string)$iterActualNumero, ENT_QUOTES, 'UTF-8') : '') . '.',
-                'accion' => 'Planificá las métricas restantes para completar el flujo.',
+                'texto' => 'Planificación parcial — Iteración actual: ' . htmlspecialchars($etiquetaIter, ENT_QUOTES, 'UTF-8') . '.',
+                'accion' => 'Planificá las métricas restantes para completar esta iteración.',
                 'responsable' => 'Gerente de Calidad o Líder de Proyecto',
                 'icono' => 'oi-calendar',
                 'estado' => 'pendiente'
@@ -322,17 +292,17 @@ foreach ($proyectos as $pr) {
     } else {
         switch ($next['paso']) {
             case 2: // Usuarios asignados
-                if ($esAdminProyecto) $link = "proyecto.modificar.php?id=$idP#usuarios";
+                if ($esAdminProyecto) $link = "usuarios.php";
                 break;
-            case 3:
+            case 3:// Modelo de calidad
                 if ($esGerenteOLider || $esSuperAdmin) $link = "modelos.php";
                 break;
-            case 4:
-                if ($esGerenteOLider || $esSuperAdmin) $link = "proyecto.modificar.php?id=$idP#iteraciones";
+            case 4:// Iteraciones (solo líder de proyecto)
+                if ($esLiderProyecto) $link = "iteraciones.php";
                 break;
             case 5:
-                // Ir a la pantalla de métricas para planificar valores → solo Gerente/Líder (no Admin, no SuperAdmin)
-                if ($esGerenteOLiderSolo) $link = "metricas.php?proyecto=$idP"; // llevar contexto de proyecto para facilitar planificación
+                // Ir a la pantalla de métricas para planificar valores → solo Gerente/Líder
+                if ($esGerenteOLiderSolo) $link = "metricas.php"; // llevar contexto de proyecto para facilitar planificación
                 break;
         }
     }
@@ -686,6 +656,10 @@ foreach ($proyectos as $pr) {
                             <a href="proyecto.crear.php" class="btn btn-success btn-sm" title="Crear nuevo proyecto">
                                 <span class="oi oi-plus"></span> Nuevo
                             </a>
+                        <?php else: ?>
+                            <button class="btn btn-outline-secondary btn-sm" disabled data-toggle="tooltip" title="Requiere permiso: ABM_PROYECTOS" aria-label="Crear proyecto bloqueado">
+                                <span class="oi oi-lock-locked"></span>
+                            </button>
                         <?php endif; ?>
                     </div>
                     <div class="card-body">
@@ -748,6 +722,10 @@ foreach ($proyectos as $pr) {
                                                     aria-label="Dashboard de Calidad del proyecto <?= htmlspecialchars($Proyec['nombre'], ENT_QUOTES, 'UTF-8'); ?>">
                                                     <span class="oi oi-pie-chart" aria-hidden="true"></span>
                                                 </a>
+                                            <?php else: ?>
+                                                <button class="btn btn-outline-secondary btn-icon" disabled data-toggle="tooltip" title="Requiere rol: Gerente de Calidad o Líder de Proyecto" aria-label="Dashboard de Calidad bloqueado">
+                                                    <span class="oi oi-lock-locked" aria-hidden="true"></span>
+                                                </button>
                                             <?php endif; ?>
 
                                             <!-- Modificar / Eliminar: SuperAdmin o Administrador del proyecto -->
@@ -760,6 +738,13 @@ foreach ($proyectos as $pr) {
                                                     data-id="<?= (int)$Proyec['id_proyecto']; ?>"
                                                     data-nombre="<?= htmlspecialchars($Proyec['nombre'], ENT_QUOTES, 'UTF-8'); ?>">
                                                     <span class="oi oi-trash"></span>
+                                                </button>
+                                            <?php else: ?>
+                                                <button class="btn btn-outline-warning btn-icon" disabled data-toggle="tooltip" title="Solo Administrador puede modificar" aria-label="Modificar bloqueado">
+                                                    <span class="oi oi-lock-locked" aria-hidden="true"></span>
+                                                </button>
+                                                <button class="btn btn-outline-danger btn-icon" disabled data-toggle="tooltip" title="Solo Administrador puede eliminar" aria-label="Eliminar bloqueado">
+                                                    <span class="oi oi-lock-locked" aria-hidden="true"></span>
                                                 </button>
                                             <?php endif; ?>
                                         </td>

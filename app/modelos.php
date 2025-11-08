@@ -73,6 +73,40 @@ if ($rsUsos) {
 }
 
 // =====================================================
+// MODELOS CON MÉTRICAS PLANIFICADAS (valor_planificado NO NULL) EN ALGUNO DE SUS PROYECTOS
+// Bloquea edición/eliminación SOLO si hay métricas del modelo con planificaciones.
+// =====================================================
+$modelosPlanificados = [];              // id_modelo => cantidad total de métricas planificadas (suma)
+$modelosPlanificadosProyectos = [];     // id_modelo => array de nombres de proyectos donde hay al menos una métrica del modelo planificada
+if (!empty($usosModelos)) {
+    // Construir lista de ids de modelo usados
+    $idsModelosUsados = array_keys($usosModelos);
+    $idsModelosUsados = array_filter($idsModelosUsados, function($v){ return (int)$v > 0; });
+    if (!empty($idsModelosUsados)) {
+        $inModelos = implode(',', $idsModelosUsados);
+        // Consulta: métricas planificadas (valor_planificado NO NULL) que pertenecen al modelo (metrica_modelo_calidad) y están planificadas en iteraciones de proyectos que usan ese modelo
+        $sqlPlanMod = "SELECT p.id_modelo, p.nombre AS proyecto_nombre, COUNT(mi.id_metrica) AS c
+                       FROM metrica_iteracion mi
+                       JOIN iteracion i ON i.id_iteracion = mi.id_iteracion
+                       JOIN proyecto p ON p.id_proyecto = i.id_proyecto
+                       JOIN metrica_modelo_calidad mmc ON mmc.id_metrica = mi.id_metrica AND mmc.id_modelo = p.id_modelo
+                       WHERE mi.valor_planificado IS NOT NULL AND p.id_modelo IN ($inModelos)
+                       GROUP BY p.id_modelo, p.id_proyecto, proyecto_nombre";
+        if ($rsPM = $cn->query($sqlPlanMod)) {
+            while ($rw = $rsPM->fetch_assoc()) {
+                $idm = (int)$rw['id_modelo'];
+                $cnt = (int)$rw['c'];
+                $nomProy = (string)$rw['proyecto_nombre'];
+                if (!isset($modelosPlanificados[$idm])) { $modelosPlanificados[$idm] = 0; }
+                $modelosPlanificados[$idm] += $cnt; // suma total de métricas planificadas
+                if (!isset($modelosPlanificadosProyectos[$idm])) { $modelosPlanificadosProyectos[$idm] = []; }
+                $modelosPlanificadosProyectos[$idm][] = $nomProy; // almacenar nombre (se controla duplicado por GROUP BY p.id_proyecto)
+            }
+        }
+    }
+}
+
+// =====================================================
 // MAPA: proyectos con métricas planificadas (valor_planificado NO NULL)
 // y flag para mostrar/ocultar botón 'Nuevo Modelo Personalizado'
 // =====================================================
@@ -119,7 +153,7 @@ if (!empty($proyectos)) {
     <script type="text/javascript" src="../lib/bootstrap-4.1.1-dist/js/bootstrap.min.js"></script>
     <title><?= Constantes::NOMBRE_SISTEMA; ?> - Modelos</title>
     <style>
-        .btn-outline-secondary {
+          .btn-outline-secondary {
             border-color: #dee2e6;
             color: #495057;
             background-color: #fff;
@@ -276,6 +310,19 @@ if (!empty($proyectos)) {
                                                     <a title="Ver detalles" href="modelo.ver.php?id=<?= (int)$p['id_proyecto']; ?>" class="btn btn-outline-primary btn-icon">
                                                         <span class="oi oi-eye" aria-hidden="true"></span>
                                                     </a>
+
+                                                    <?php if ($modeloSel): ?>
+                                                        <?php
+                                                            // Para usuarios no admin, mostrar candados explicando que sólo Admin/SuperAdmin pueden editar/eliminar modelos predeterminados
+                                                            $tooltipPerm = htmlspecialchars('Solo Administrador/SuperAdmin puede editar o eliminar modelos predeterminados.', ENT_QUOTES, 'UTF-8');
+                                                        ?>
+                                                        <button class="btn btn-outline-warning btn-icon btn-locked" disabled data-toggle="tooltip" data-html="true" title="<?= $tooltipPerm; ?>" aria-label="Editar bloqueado">
+                                                            <span class="oi oi-lock-locked" aria-hidden="true"></span>
+                                                        </button>
+                                                        <button class="btn btn-outline-danger btn-icon btn-locked" disabled data-toggle="tooltip" data-html="true" title="<?= $tooltipPerm; ?>" aria-label="Eliminar bloqueado">
+                                                            <span class="oi oi-lock-locked" aria-hidden="true"></span>
+                                                        </button>
+                                                    <?php endif; ?>
                                                 </td>
                                             </tr>
                                         <?php endforeach; ?>
@@ -328,13 +375,31 @@ if (!empty($proyectos)) {
                                             <a title="Ver modelo" href="modelo.catalogo.ver.php?id_modelo=<?= $mid; ?>" class="btn btn-outline-primary btn-icon">
                                                 <span class="oi oi-eye" aria-hidden="true"></span>
                                             </a>
-                                            <!-- Acciones: si el modelo está en uso, no permitir modificar/eliminar -->
-                                            <?php if ($cant > 0): ?>
-                                                <button class="btn btn-outline-primary btn-icon" disabled title="Bloqueado: el modelo está siendo utilizado">
-                                                    <span class="oi oi-lock-locked"></span>
+                                            <!-- Acciones: bloquear SOLO si existen métricas planificadas del modelo en algún proyecto -->
+                                            <?php $estaBloqueado = !empty($modelosPlanificados[$mid]); ?>
+                                            <?php if ($estaBloqueado): ?>
+                                                <?php
+                                                    $proysBloq = $modelosPlanificadosProyectos[$mid] ?? [];
+                                                    $cantProysBloq = count($proysBloq);
+                                                    $tituloBloq = 'Bloqueado: métricas planificadas en ' . $cantProysBloq . ' proyecto(s)';
+                                                    $listaProys = '';
+                                                    if ($cantProysBloq > 0) {
+                                                        // Limitar a primeros 6 para no desbordar tooltip
+                                                        $maxMostrar = 6;
+                                                        $slice = array_slice($proysBloq, 0, $maxMostrar);
+                                                        $listaProys = implode(', ', array_map(function($n){ return htmlspecialchars($n, ENT_QUOTES, 'UTF-8'); }, $slice));
+                                                        if ($cantProysBloq > $maxMostrar) { $listaProys .= '…'; }
+                                                    }
+                                                    $detalleBloq = 'Para editar o eliminar el modelo, eliminá/ajustá la planificación (valor planificado) de sus métricas en esos proyectos o desvinculalo.';
+                                                    $tooltipBloq = htmlspecialchars($tituloBloq, ENT_QUOTES, 'UTF-8');
+                                                    if ($listaProys !== '') { $tooltipBloq .= htmlspecialchars('<br><b>Proyectos:</b> ' . $listaProys, ENT_QUOTES, 'UTF-8'); }
+                                                    $tooltipBloq .= htmlspecialchars('<br>' . $detalleBloq, ENT_QUOTES, 'UTF-8');
+                                                ?>
+                                                <button class="btn btn-outline-warning btn-icon btn-locked" disabled data-toggle="tooltip" data-html="true" title="<?= $tooltipBloq; ?>" aria-label="Editar bloqueado">
+                                                    <span class="oi oi-lock-locked" aria-hidden="true"></span>
                                                 </button>
-                                                <button class="btn btn-outline-primary btn-icon" disabled title="Bloqueado: el modelo está siendo utilizado">
-                                                    <span class="oi oi-lock-locked"></span>
+                                                <button class="btn btn-outline-danger btn-icon btn-locked" disabled data-toggle="tooltip" data-html="true" title="<?= $tooltipBloq; ?>" aria-label="Eliminar bloqueado">
+                                                    <span class="oi oi-lock-locked" aria-hidden="true"></span>
                                                 </button>
                                             <?php else: ?>
                                                 <a class="btn btn-outline-warning btn-icon" title="Editar modelo" href="modelo.modificar.php?id_modelo=<?= $mid; ?>">
@@ -359,3 +424,9 @@ if (!empty($proyectos)) {
 </body>
 
 </html>
+<script>
+// Inicializar tooltips para botones bloqueados
+$(function(){
+    $('[data-toggle="tooltip"]').tooltip();
+});
+</script>
