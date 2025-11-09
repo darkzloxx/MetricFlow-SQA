@@ -25,8 +25,8 @@ try {
         throw new Exception("El nombre es obligatorio.");
     }
 
-    if (!preg_match('/^[A-Za-zÁÉÍÓÚáéíóúÑñ ]+$/u', $nombre)) {
-        throw new Exception("El nombre solo puede contener letras y espacios.");
+    if (!preg_match('/^[A-Za-zÁÉÍÓÚáéíóúÑñ \-]+$/u', $nombre)) {
+        throw new Exception("El nombre solo puede contener letras, espacios y guiones.");
     }
 
     // Verificar duplicado

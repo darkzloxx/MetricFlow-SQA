@@ -349,7 +349,9 @@ CREATE TABLE `proyecto` (
   `descripcion` text DEFAULT NULL,
   `estado` enum('Registrado','En Progreso','Finalizado','Cancelado') NOT NULL DEFAULT 'Registrado',
   `nombre` varchar(100) NOT NULL,
-  `id_modelo` int(11) DEFAULT NULL
+  `id_modelo` int(11) DEFAULT NULL,
+  `fecha_creacion` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `anio` INT(4) GENERATED ALWAYS AS (YEAR(`fecha_creacion`)) STORED
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --

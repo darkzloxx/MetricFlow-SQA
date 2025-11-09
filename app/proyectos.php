@@ -51,6 +51,18 @@ if ($tieneAbmProyectos) {
     $stmt->close();
 }
 
+$archivados = [];
+$activos = [];
+foreach ($proyectos as $p) {
+    $estado = $p['estado'] ?? '';
+    if (in_array($estado, ['Cancelado', 'Finalizado'])) {
+        $archivados[] = $p;
+    } else {
+        $activos[] = $p;
+    }
+}
+$proyectos = $activos;
+
 // ===============================
 // 🧭 Construcción del WIZARD antes de usarlo en la vista
 // ===============================
@@ -119,12 +131,14 @@ if (empty($wizard)) {
         'estado' => 'completo',
     ];
 }
+$esAdminGlobal = ControlAcceso::esAdminGlobal();
+
 foreach ($proyectos as $pr) {
     $idP = (int)$pr['id_proyecto'];
     $nombreP = $pr['nombre'];
     $rolProyecto = $esSuperAdmin ? 'SuperAdmin' : (getRolUsuarioEnProyecto($cn, (int)$usr->id, $idP) ?? '');
     $rolLower = mb_strtolower($rolProyecto, 'UTF-8');
-    $esAdminProyecto =  ($rolLower === 'administrador');
+    $esAdminProyecto = $esAdminGlobal || ($rolLower === 'administrador');
     $esGerenteOLider =  in_array($rolLower, ['gerente de calidad', 'líder de proyecto', 'lider de proyecto'], true);
     // Para planificación/ejecución de métricas: solo Gerente/Líder (excluye Admin y SuperAdmin)
     $esGerenteOLiderSolo = in_array($rolLower, ['gerente de calidad', 'líder de proyecto', 'lider de proyecto'], true);
@@ -289,7 +303,9 @@ foreach ($proyectos as $pr) {
     } else {
         switch ($next['paso']) {
             case 2: // Usuarios asignados
-                if ($esAdminProyecto) $link = "usuarios.php";
+                if (ControlAcceso::verificaPermiso(PermisosSistema::ABM_PROYECTOS)) {
+                    $link = "usuarios.php";
+                }
                 break;
             case 3: // Modelo de calidad
                 if ($esGerenteOLider) $link = "modelos.php";
@@ -643,7 +659,7 @@ foreach ($proyectos as $pr) {
                     <?php else: ?>
                         <div class="card shadow-sm border-0">
                             <div class="card-body py-3 text-center text-muted">
-                                No tenés proyectos asignados.
+                                No tenés proyectos asignados ni rol.
                             </div>
                         </div>
                     <?php endif; ?>
@@ -659,7 +675,7 @@ foreach ($proyectos as $pr) {
                                 <span class="oi oi-plus"></span> Nuevo
                             </a>
                         <?php else: ?>
-                            <button class="btn btn-outline-secondary btn-sm" disabled data-toggle="tooltip" title="Requiere permiso: ABM_PROYECTOS" aria-label="Crear proyecto bloqueado">
+                            <button class="btn btn-outline-secondary btn-sm" disabled data-toggle="tooltip" title="Requiere rol: Administrador" aria-label="Crear proyecto bloqueado">
                                 <span class="oi oi-lock-locked"></span>
                             </button>
                         <?php endif; ?>
@@ -667,14 +683,24 @@ foreach ($proyectos as $pr) {
                     <div class="card-body">
 
                         <?php if (empty($proyectos)): ?>
-                            <div class="card my-4 text-center"
-                                style="border:1px dashed rgba(23,162,184,0.15); background:rgba(23,162,184,0.03);">
-                                <div class="card-body p-4">
-                                    <i class="oi oi-info mb-2" style="font-size:2rem; color:#17a2b8;"></i>
-                                    <h5 class="text-info font-weight-bold mb-2">No tenés proyectos asignados</h5>
-                                    <p class="text-muted mb-3">Aún no fuiste asignado a ningún proyecto. Si creés que esto es un error, contactá a un administrador.</p>
+                            <?php if ($tieneAbmProyectos && $existenProyectos === 0): ?>
+                                <div class="card my-4 text-center" style="border:1px dashed #ffc107; background:rgba(255,193,7,0.07);">
+                                    <div class="card-body p-4">
+                                        <i class="oi oi-plus mb-2" style="font-size:2rem; color:#ffc107;"></i>
+                                        <h5 class="text-warning font-weight-bold mb-2">Todavía no existen proyectos</h5>
+                                        <p class="text-muted mb-3">Crea un nuevo proyecto para comenzar a gestionar métricas de calidad.</p>
+                                    </div>
                                 </div>
-                            </div>
+                            <?php else: ?>
+                                <div class="card my-4 text-center"
+                                    style="border:1px dashed rgba(23,162,184,0.15); background:rgba(23,162,184,0.03);">
+                                    <div class="card-body p-4">
+                                        <i class="oi oi-info mb-2" style="font-size:2rem; color:#17a2b8;"></i>
+                                        <h5 class="text-info font-weight-bold mb-2">No tenés proyectos asignados ni rol</h5>
+                                        <p class="text-muted mb-3">Aún no fuiste asignado a ningún proyecto. Si creés que esto es un error, contactá a un administrador.</p>
+                                    </div>
+                                </div>
+                            <?php endif; ?>
                         <?php else: ?>
                             <table class="table table-hover table-sm">
                                 <tr class="table-info">
@@ -689,7 +715,7 @@ foreach ($proyectos as $pr) {
                                         <td class="nombre-proyecto" title="<?= htmlspecialchars($Proyec['nombre'], ENT_QUOTES, 'UTF-8'); ?>">
                                             <?= htmlspecialchars($Proyec['nombre'], ENT_QUOTES, 'UTF-8'); ?>
                                         </td>
-                                        <td>2025</td>
+                                        <td><?= htmlspecialchars($Proyec['anio'], ENT_QUOTES, 'UTF-8'); ?></td>
                                         <td><?= htmlspecialchars($Proyec['estado'], ENT_QUOTES, 'UTF-8'); ?></td>
                                         <td>
                                             <?php
@@ -731,7 +757,7 @@ foreach ($proyectos as $pr) {
                                             <?php endif; ?>
 
                                             <!-- Modificar / Eliminar: SuperAdmin o Administrador del proyecto -->
-                                            <?php if ($esSuperAdmin || $esAdminProyecto): ?>
+                                            <?php if (ControlAcceso::verificaPermiso(PermisosSistema::ABM_PROYECTOS)): ?>
                                                 <a title="Modificar" href="proyecto.modificar.php?id=<?= (int)$Proyec['id_proyecto']; ?>"
                                                     class="btn btn-outline-warning" role="button" aria-label="Modificar proyecto <?= htmlspecialchars($Proyec['nombre'], ENT_QUOTES, 'UTF-8'); ?>">
                                                     <span class="oi oi-pencil" aria-hidden="true"></span>
@@ -742,17 +768,59 @@ foreach ($proyectos as $pr) {
                                                     <span class="oi oi-trash"></span>
                                                 </button>
                                             <?php else: ?>
-                                                <button class="btn btn-outline-warning btn-icon" disabled data-toggle="tooltip" title="Solo Administrador puede modificar" aria-label="Modificar bloqueado">
+                                                <button class="btn btn-outline-warning btn-icon disabled" data-toggle="tooltip" title="Solo Administrador puede modificar" aria-label="Modificar bloqueado">
                                                     <span class="oi oi-lock-locked" aria-hidden="true"></span>
                                                 </button>
-                                                <button class="btn btn-outline-danger btn-icon" disabled data-toggle="tooltip" title="Solo Administrador puede eliminar" aria-label="Eliminar bloqueado">
+                                                <button class="btn btn-outline-danger btn-icon disabled" data-toggle="tooltip" title="Solo Administrador puede eliminar" aria-label="Eliminar bloqueado">
                                                     <span class="oi oi-lock-locked" aria-hidden="true"></span>
+                                                </button>
                                                 </button>
                                             <?php endif; ?>
                                         </td>
                                     </tr>
                                 <?php endforeach; ?>
                             </table>
+                        <?php endif; ?>
+                        <?php if ($tieneAbmProyectos && !empty($archivados)): ?>
+                            <div class="mt-4">
+                                <h4>Proyectos Finalizados/Cancelados</h4>
+                                <table class="table table-hover table-sm">
+                                    <tr class="table-info">
+                                        <th>Nombre</th>
+                                        <th>Año</th>
+                                        <th>Estado</th>
+                                        <th>Rol</th>
+                                        <th>Opciones</th>
+                                    </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php foreach ($archivados as $ProyecArchivado): ?>
+                                            <tr>
+                                                <td class="nombre-proyecto" title="<?= htmlspecialchars($ProyecArchivado['nombre'], ENT_QUOTES, 'UTF-8'); ?>">
+                                                    <?= htmlspecialchars($ProyecArchivado['nombre'], ENT_QUOTES, 'UTF-8'); ?>
+                                                </td>
+                                                <td><?= htmlspecialchars($ProyecArchivado['anio'], ENT_QUOTES, 'UTF-8'); ?></td>
+                                                <td><?= htmlspecialchars($ProyecArchivado['estado'], ENT_QUOTES, 'UTF-8'); ?></td>
+                                                <td>
+                                                    <?php
+                                                    $rolProyectoArchivado = $esSuperAdmin
+                                                        ? 'SuperAdmin'
+                                                        : (getRolUsuarioEnProyecto($cn, (int)$usr->id, (int)$ProyecArchivado['id_proyecto']) ?? '—');
+                                                    ?>
+                                                    <span class="badge badge-secondary"><?= htmlspecialchars($rolProyectoArchivado, ENT_QUOTES, 'UTF-8'); ?></span>
+                                                </td>
+                                                <td>
+                                                    <a title="Ver"
+                                                        href="proyecto.ver.php?id=<?= (int)$ProyecArchivado['id_proyecto']; ?>"
+                                                        class="btn btn-outline-primary btn-sm">
+                                                        <span class="oi oi-eye"></span>
+                                                    </a>
+                                                </td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </div>
                         <?php endif; ?>
                     </div> <!-- card-body proyectos -->
                 </div> <!-- card proyectos -->

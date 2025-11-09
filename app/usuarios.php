@@ -104,12 +104,17 @@ $ColeccionUsuarios = new ColeccionUsuarios();
                 <table class="table table-hover table-sm">
                     <tr class="table-info">
                         <th>Usuario</th>
+                        <th>Email</th>
                         <th>Opciones</th>
                     </tr>
                     <?php foreach ($ColeccionUsuarios->getUsuarios() as $Usuario): ?>
                         <tr>
-                            <?php $__txt = $Usuario->getNombre() . ' — ' . $Usuario->getEmail(); ?>
-                            <td class="cell-ellipsis" title="<?= htmlspecialchars($__txt, ENT_QUOTES, 'UTF-8'); ?>"><?= htmlspecialchars($__txt, ENT_QUOTES, 'UTF-8'); ?></td>
+                            <td class="cell-ellipsis" title="<?= htmlspecialchars($Usuario->getNombre(), ENT_QUOTES, 'UTF-8'); ?>">
+                                <?= htmlspecialchars($Usuario->getNombre(), ENT_QUOTES, 'UTF-8'); ?>
+                            </td>
+                            <td class="cell-ellipsis" title="<?= htmlspecialchars($Usuario->getEmail(), ENT_QUOTES, 'UTF-8'); ?>">
+                                <?= htmlspecialchars($Usuario->getEmail(), ENT_QUOTES, 'UTF-8'); ?>
+                            </td>
                             <td>
                                 <a title="Ver detalle" href="usuario.ver.php?id=<?= $Usuario->getId(); ?>"
                                     class="btn btn-outline-info" role="button" aria-label="Ver usuario <?= htmlspecialchars($Usuario->getNombre(), ENT_QUOTES, 'UTF-8'); ?>">
