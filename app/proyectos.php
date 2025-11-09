@@ -496,6 +496,77 @@ foreach ($proyectos as $pr) {
             margin-left: auto;
         }
 
+        /* 🧭 Scroll interno para wizard si hay muchos proyectos */
+        #wizardFlujo {
+            max-height: calc(100vh - 180px);
+            /* deja espacio para el header y footer */
+            overflow-y: auto;
+            padding-right: 4px;
+        }
+
+        #wizardFlujo::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        #wizardFlujo::-webkit-scrollbar-thumb {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 3px;
+        }
+
+        #wizardFlujo::-webkit-scrollbar-thumb:hover {
+            background: rgba(0, 0, 0, 0.35);
+        }
+
+        .card.archivados {
+            background: #f8f9fa;
+            /* gris muy suave */
+            border-left: 4px solid #adb5bd;
+            /* gris medio */
+            opacity: 0.95;
+            transition: all 0.2s ease-in-out;
+        }
+
+        .card.archivados:hover {
+            opacity: 1;
+            border-left-color: #17a2b8;
+            /* azul info al hover */
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+        }
+
+        .card.archivados .card-header {
+            background: #e9ecef;
+            /* un gris más claro que los activos */
+            color: #495057;
+            font-weight: 600;
+        }
+
+        /* Permitir hover visual, aunque siga sin ser clickeable */
+        .card.archivados .btn.disabled,
+        .card.archivados .btn:disabled {
+            pointer-events: auto !important;
+            /* Permite hover visual */
+            opacity: 0.8;
+        }
+
+        /* Colores hover coherentes */
+        .card.archivados .btn-outline-secondary:hover {
+            background-color: #6c757d;
+            color: #fff;
+            border-color: #6c757d;
+        }
+
+        .card.archivados .btn-outline-warning:hover {
+            background-color: #ffc107;
+            color: #212529;
+            border-color: #ffc107;
+        }
+
+        .card.archivados .btn-outline-danger:hover {
+            background-color: #dc3545;
+            color: #fff;
+            border-color: #dc3545;
+        }
+
         .wizard-step .titulo-paso .chevron {
             color: #17a2b8;
             font-weight: 700;
@@ -781,51 +852,76 @@ foreach ($proyectos as $pr) {
                                 <?php endforeach; ?>
                             </table>
                         <?php endif; ?>
-                        <?php if ($tieneAbmProyectos && !empty($archivados)): ?>
-                            <div class="mt-4">
-                                <h4>Proyectos Finalizados/Cancelados</h4>
-                                <table class="table table-hover table-sm">
-                                    <tr class="table-info">
-                                        <th>Nombre</th>
-                                        <th>Año</th>
-                                        <th>Estado</th>
-                                        <th>Rol</th>
-                                        <th>Opciones</th>
-                                    </tr>
-                                    </thead>
-                                    <tbody>
-                                        <?php foreach ($archivados as $ProyecArchivado): ?>
-                                            <tr>
-                                                <td class="nombre-proyecto" title="<?= htmlspecialchars($ProyecArchivado['nombre'], ENT_QUOTES, 'UTF-8'); ?>">
-                                                    <?= htmlspecialchars($ProyecArchivado['nombre'], ENT_QUOTES, 'UTF-8'); ?>
-                                                </td>
-                                                <td><?= htmlspecialchars($ProyecArchivado['anio'], ENT_QUOTES, 'UTF-8'); ?></td>
-                                                <td><?= htmlspecialchars($ProyecArchivado['estado'], ENT_QUOTES, 'UTF-8'); ?></td>
-                                                <td>
-                                                    <?php
-                                                    $rolProyectoArchivado = $esSuperAdmin
-                                                        ? 'SuperAdmin'
-                                                        : (getRolUsuarioEnProyecto($cn, (int)$usr->id, (int)$ProyecArchivado['id_proyecto']) ?? '—');
-                                                    ?>
-                                                    <span class="badge badge-secondary"><?= htmlspecialchars($rolProyectoArchivado, ENT_QUOTES, 'UTF-8'); ?></span>
-                                                </td>
-                                                <td>
-                                                    <a title="Ver"
-                                                        href="proyecto.ver.php?id=<?= (int)$ProyecArchivado['id_proyecto']; ?>"
-                                                        class="btn btn-outline-primary btn-sm">
-                                                        <span class="oi oi-eye"></span>
-                                                    </a>
-                                                </td>
-                                            </tr>
-                                        <?php endforeach; ?>
-                                    </tbody>
-                                </table>
-                            </div>
-                        <?php endif; ?>
+
                     </div> <!-- card-body proyectos -->
-                </div> <!-- card proyectos -->
-            </div> <!-- col-lg-8 -->
-        </div> <!-- row -->
+                </div> <!-- card-body proyectos -->
+            </div> <!-- card proyectos -->
+
+            <!-- 🗃️ NUEVO CARD: Proyectos finalizados/cancelados -->
+            <?php if ($tieneAbmProyectos && !empty($archivados)): ?>
+                <div class="card shadow-sm border-0 mt-4 archivados">
+                    <div class="card-header d-flex align-items-center justify-content-between">
+                        <h4 class="mb-0 text-secondary">
+                            <span class="oi oi-archive mr-1"></span>
+                            Proyectos Finalizados/Cancelados
+                        </h4>
+                    </div>
+                    <div class="card-body">
+                        <table class="table table-hover table-sm mb-0">
+                            <thead class="table-info">
+                                <tr>
+                                    <th>Nombre</th>
+                                    <th>Año</th>
+                                    <th>Estado</th>
+                                    <th>Rol</th>
+                                    <th>Opciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($archivados as $p): ?>
+                                    <tr>
+                                        <td class="nombre-proyecto"><?= htmlspecialchars($p['nombre']); ?></td>
+                                        <td><?= htmlspecialchars($p['anio']); ?></td>
+                                        <td><?= htmlspecialchars($p['estado']); ?></td>
+                                        <td>
+                                            <?php
+                                            $rolProyectoArchivado = $esSuperAdmin
+                                                ? 'SuperAdmin'
+                                                : (getRolUsuarioEnProyecto($cn, (int)$usr->id, (int)$p['id_proyecto']) ?? '—');
+                                            ?>
+                                            <span class="badge badge-secondary"><?= htmlspecialchars($rolProyectoArchivado); ?></span>
+                                        </td>
+                                        <td>
+                                            <!-- Tus botones de Ver / Dashboard / Bloqueados -->
+                                            <a title="Ver" href="proyecto.ver.php?id=<?= (int)$p['id_proyecto']; ?>" class="btn btn-outline-primary btn-icon">
+                                                <span class="oi oi-eye"></span>
+                                            </a>
+                                            <a title="Dashboard Inicial" href="dashboard.php?proyecto=<?= (int)$p['id_proyecto']; ?>" class="btn btn-outline-info btn-icon">
+                                                <span class="oi oi-bar-chart"></span>
+                                            </a>
+                                            <button class="btn btn-outline-secondary btn-icon disabled" title="Requiere rol: Gerente o Líder">
+                                                <span class="oi oi-lock-locked"></span>
+                                            </button>
+                                            </button>
+                                            <button class="btn btn-outline-warning btn-icon disabled" title="Solo Administrador puede modificar">
+                                                <span class="oi oi-lock-locked"></span>
+                                            </button>
+                                            <button class="btn btn-outline-danger btn-icon disabled" title="Solo Administrador puede eliminar">
+                                                <span class="oi oi-lock-locked"></span>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            <?php endif; ?>
+            <!-- 🗃️ FIN NUEVO CARD -->
+
+        </div> <!-- card proyectos -->
+    </div> <!-- col-lg-8 -->
+    </div> <!-- row -->
     </div>
     <?php include_once '../gui/footer.php'; ?>
 
