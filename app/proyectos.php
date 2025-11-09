@@ -909,21 +909,15 @@ foreach ($proyectos as $pr) {
                                 $(this).remove();
                             });
                             mostrarAlerta(json.message || 'Proyecto eliminado correctamente.', 'success');
-                            // Actualizar wizard visual
-                            $.get('wizard_estado.php', {
-                                id_proyecto: id
-                            }, function(data) {
-                                if (data && !data.error) {
-                                    actualizarWizardVisual(id, data);
-                                } else {
-                                    alert('Error al actualizar wizard');
-                                }
-                            }, 'json').fail(function() {
-                                alert('Error al actualizar wizard');
+                            // Eliminar wizard visual del DOM
+                            $('.wizard-card[data-id-proyecto="' + id + '"]').fadeOut(300, function() {
+                                $(this).remove();
                             });
+                            // Ya no llamar a wizard_estado.php
                         } else {
                             mostrarAlerta(json.message || 'No se pudo eliminar el proyecto.', 'danger');
                         }
+
                     })
                     .fail(function() {
                         mostrarAlerta('⚠️ Error en la comunicación con el servidor.', 'danger');
