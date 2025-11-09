@@ -899,14 +899,13 @@ foreach ($proyectos as $pr) {
                                             <a title="Dashboard Inicial" href="dashboard.php?proyecto=<?= (int)$p['id_proyecto']; ?>" class="btn btn-outline-info btn-icon">
                                                 <span class="oi oi-bar-chart"></span>
                                             </a>
-                                            <button class="btn btn-outline-secondary btn-icon disabled" title="Requiere rol: Gerente o Líder">
+                                            <button class="btn btn-outline-secondary btn-icon disabled" title="No disponible">
                                                 <span class="oi oi-lock-locked"></span>
                                             </button>
-                                            </button>
-                                            <button class="btn btn-outline-warning btn-icon disabled" title="Solo Administrador puede modificar">
+                                            <button class="btn btn-outline-warning btn-icon disabled" title="No disponible">
                                                 <span class="oi oi-lock-locked"></span>
                                             </button>
-                                            <button class="btn btn-outline-danger btn-icon disabled" title="Solo Administrador puede eliminar">
+                                            <button class="btn btn-outline-danger btn-icon disabled" title="No disponible">
                                                 <span class="oi oi-lock-locked"></span>
                                             </button>
                                         </td>
