@@ -2,55 +2,64 @@
 include_once '../lib/ControlAcceso.Class.php';
 include_once '../modelo/BDConexion.Class.php';
 
-// Acceso: Admin/SuperAdmin o permiso de gestión de modelo
+// ============================
+// 🔒 Control de acceso
+// ============================
 if (!ControlAcceso::esAdminGlobal() && !ControlAcceso::verificaPermiso(PermisosSistema::GESTION_MODELO_CALIDAD)) {
     header('Location: modelos.php?msg=' . urlencode('Acceso restringido para crear modelos.') . '&type=danger');
     exit;
 }
 
-// Datos básicos del modelo
+// ============================
+// 📥 Datos recibidos del formulario
+// ============================
 $nombre = isset($_POST['nombre']) ? trim($_POST['nombre']) : '';
 $descripcion = isset($_POST['descripcion']) ? trim($_POST['descripcion']) : '';
 $metricas = isset($_POST['metricas']) && is_array($_POST['metricas']) ? array_map('intval', $_POST['metricas']) : [];
-// Nuevas métricas desde el modal (arrays paralelos)
+
 $metricasNuevasNombres = isset($_POST['metricas_nuevas']['nombre']) && is_array($_POST['metricas_nuevas']['nombre']) ? $_POST['metricas_nuevas']['nombre'] : [];
 $metricasNuevasDescs = isset($_POST['metricas_nuevas']['descripcion']) && is_array($_POST['metricas_nuevas']['descripcion']) ? $_POST['metricas_nuevas']['descripcion'] : [];
 
-// Global/Admin vs Proyecto específico
+$modeloBaseId = isset($_POST['modelo_base_id']) ? (int)$_POST['modelo_base_id'] : 0;
+$editarBase = isset($_POST['editar_base']) ? (int)$_POST['editar_base'] === 1 : false;
+
 $esAdmin = ControlAcceso::esAdminGlobal() || ControlAcceso::esSuperAdminGlobal();
 $esGlobal = $esAdmin && isset($_POST['global']) && (int)$_POST['global'] === 1;
 $proyectoId = isset($_POST['proyecto']) ? (int)$_POST['proyecto'] : 0;
 
-if ($nombre === '') {
-    // Redirigir a formulario correcto según contexto (global o proyecto)
-    $redir = $esGlobal ? 'modelo.nuevo.predeterminado.php' : 'modelo.nuevo.php';
-    header('Location: ' . $redir . '?msg=' . urlencode('El nombre del modelo es obligatorio.') . '&type=danger');
-    exit;
-}
+$regexCampos = '/^[A-Za-zÁÉÍÓÚáéíóúÑñ0-9 _.\-\/\\():]+$/u/';
+$cn = BDConexion::getInstancia();
 
-// Descripción obligatoria
-if ($descripcion === '') {
-    $redir = $esGlobal ? 'modelo.nuevo.predeterminado.php' : 'modelo.nuevo.php';
-    header('Location: ' . $redir . '?msg=' . urlencode('La descripción del modelo es obligatoria.') . '&type=danger');
-    exit;
-}
-
-// Validar nuevas métricas: nombre y descripción obligatorios (evitar crear métricas vacías)
-if (!empty($metricasNuevasNombres)) {
-    $errorMetrica = false;
-    foreach ($metricasNuevasNombres as $i => $nom) {
-        $nom = trim((string)$nom);
-        $des = isset($metricasNuevasDescs[$i]) ? trim((string)$metricasNuevasDescs[$i]) : '';
-        if ($nom === '' || $des === '') { $errorMetrica = true; break; }
+// ============================
+// 🧠 Validaciones de campos
+// ============================
+if ($modeloBaseId === 0) {
+    if ($nombre === '' || !preg_match($regexCampos, $nombre)) {
+        header('Location: modelo.nuevo.php?msg=' . urlencode('El nombre del modelo contiene caracteres no permitidos o está vacío.') . '&type=danger');
+        exit;
     }
-    if ($errorMetrica) {
-        $redir = $esGlobal ? 'modelo.nuevo.predeterminado.php' : 'modelo.nuevo.php';
-        header('Location: ' . $redir . '?msg=' . urlencode('Cada nueva métrica debe tener nombre y descripción (no vacíos).') . '&type=danger');
+
+    if ($descripcion === '' || !preg_match($regexCampos, $descripcion)) {
+        header('Location: modelo.nuevo.php?msg=' . urlencode('La descripción contiene caracteres no permitidos o está vacía.') . '&type=danger');
         exit;
     }
 }
 
-// Si no es admin, debe asignar a un proyecto del cual forme parte
+// Validar nuevas métricas
+if (!empty($metricasNuevasNombres)) {
+    foreach ($metricasNuevasNombres as $i => $nom) {
+        $nom = trim((string)$nom);
+        $des = isset($metricasNuevasDescs[$i]) ? trim((string)$metricasNuevasDescs[$i]) : '';
+        if ($nom === '' || $des === '' || !preg_match($regexCampos, $nom) || !preg_match($regexCampos, $des)) {
+            header('Location: modelo.nuevo.php?msg=' . urlencode('Cada nueva métrica debe tener nombre y descripción válidos.') . '&type=danger');
+            exit;
+        }
+    }
+}
+
+// ============================
+// 👥 Validaciones de permisos y proyecto
+// ============================
 if (!$esAdmin) {
     if ($proyectoId <= 0) {
         header('Location: modelo.nuevo.php?msg=' . urlencode('Debe seleccionar un proyecto válido para asignar el modelo.') . '&type=danger');
@@ -62,9 +71,10 @@ if (!$esAdmin) {
     }
 }
 
-// Si se pretende asignar a un proyecto (no global), y el proyecto ya tiene métricas planificadas, bloquear
+// ============================
+// 🚫 Validar proyecto bloqueado (ya planificado)
+// ============================
 if (!$esGlobal && $proyectoId > 0) {
-    // Bloquear solo si el proyecto YA tiene un modelo asignado y hay métricas planificadas
     $sqlLock = "SELECT 1 
                 FROM metrica_iteracion mi 
                 JOIN iteracion i ON mi.id_iteracion = i.id_iteracion 
@@ -72,50 +82,63 @@ if (!$esGlobal && $proyectoId > 0) {
                 WHERE i.id_proyecto = {$proyectoId} 
                   AND p.id_modelo IS NOT NULL
                 LIMIT 1";
-    $rsLock = BDConexion::getInstancia()->query($sqlLock);
+    $rsLock = $cn->query($sqlLock);
     if ($rsLock && $rsLock->num_rows > 0) {
-        header('Location: modelos.php?msg=' . urlencode('No se puede crear/asignar un modelo personalizado: el proyecto ya tiene un modelo con métricas planificadas.') . '&type=danger');
+        header('Location: modelos.php?msg=' . urlencode('No se puede crear o asignar un modelo: el proyecto ya tiene métricas planificadas.') . '&type=danger');
         exit;
     }
 }
 
-$cn = BDConexion::getInstancia();
+// ============================
+// 🧩 CASO 1: usar modelo base sin editar
+// ============================
+if ($modeloBaseId > 0 && !$editarBase && $nombre === '' && $descripcion === '' && empty($metricasNuevasNombres)) {
+    $cn->autocommit(false);
+    $qP = "UPDATE proyecto SET id_modelo = {$modeloBaseId} WHERE id_proyecto = {$proyectoId}";
+    if (!$cn->query($qP)) {
+        $cn->rollback();
+        $cn->autocommit(true);
+        header('Location: modelos.php?msg=' . urlencode('Error al vincular el modelo base al proyecto.') . '&type=danger');
+        exit;
+    }
+    $cn->commit();
+    $cn->autocommit(true);
+    header('Location: modelos.php?msg=' . urlencode('Modelo base vinculado correctamente al proyecto.') . '&type=success');
+    exit;
+}
+
+// ============================
+// ✏️ CASO 2 y 4: Crear modelo nuevo (derivado o desde cero)
+// ============================
 $cn->autocommit(false);
 $cn->begin_transaction();
 
-$ok = $cn->query("INSERT INTO modelo_calidad (nombre, descripcion) VALUES ('" . $cn->real_escape_string($nombre) . "', '" . $cn->real_escape_string($descripcion) . "')");
+$ok = $cn->query("
+    INSERT INTO modelo_calidad (nombre, descripcion)
+    VALUES ('" . $cn->real_escape_string($nombre) . "', '" . $cn->real_escape_string($descripcion) . "')
+");
 if (!$ok) {
     $cn->rollback();
     $cn->autocommit(true);
-    die($cn->errno);
+    die($cn->error);
 }
-
 $idModelo = (int)$cn->insert_id;
 
-// Si es creación para un proyecto (no admin global), aseguramos entrada en proyecto_modelo_calidad
-// para poder vincular métricas personalizadas de manera aislada al proyecto
-$idProyectoModelo = null;
-if (!$esAdmin && $proyectoId > 0) {
-    // Buscar si ya existe
-    $sqlFindPM = "SELECT id_proyecto_modelo FROM proyecto_modelo_calidad WHERE id_proyecto = {$proyectoId} AND id_modelo_base = {$idModelo} LIMIT 1";
-    $rsPM = $cn->query($sqlFindPM);
-    if ($rsPM && $rsPM->num_rows > 0) {
-        $rowPM = $rsPM->fetch_assoc();
-        $idProyectoModelo = (int)$rowPM['id_proyecto_modelo'];
-    } else {
-        $nomPM = $cn->real_escape_string($nombre);
-        $desPM = $cn->real_escape_string($descripcion);
-        $sqlInsPM = "INSERT INTO proyecto_modelo_calidad (id_proyecto, id_modelo_base, nombre, descripcion, es_personalizado) VALUES ({$proyectoId}, {$idModelo}, '{$nomPM}', '{$desPM}', 1)";
-        if (!$cn->query($sqlInsPM)) {
-            $cn->rollback();
-            $cn->autocommit(true);
-            die($cn->errno);
-        }
-        $idProyectoModelo = (int)$cn->insert_id;
+// ============================
+// 🔗 Asociar modelo al proyecto si corresponde
+// ============================
+if ($proyectoId > 0) {
+    $qP = "UPDATE proyecto SET id_modelo = {$idModelo} WHERE id_proyecto = {$proyectoId}";
+    if (!$cn->query($qP)) {
+        $cn->rollback();
+        $cn->autocommit(true);
+        die($cn->error);
     }
 }
 
-// Insertar vínculos con métricas seleccionadas
+// ============================
+// 🧮 Insertar métricas existentes seleccionadas
+// ============================
 if (!empty($metricas)) {
     foreach ($metricas as $idMet) {
         $idMet = (int)$idMet;
@@ -124,67 +147,68 @@ if (!empty($metricas)) {
         if (!$cn->query($q)) {
             $cn->rollback();
             $cn->autocommit(true);
-            die($cn->errno);
+            die($cn->error);
         }
     }
 }
 
-// Insertar nuevas métricas y vincular (ya validadas arriba)
+// ============================
+// ➕ Insertar nuevas métricas (personalizadas o base)
+// ============================
+$idProyectoModelo = null;
+if (!$esAdmin && $proyectoId > 0) {
+    $sqlInsPM = "INSERT INTO proyecto_modelo_calidad (id_proyecto, id_modelo_base, nombre, descripcion, es_personalizado)
+                 VALUES ({$proyectoId}, {$idModelo}, '" . $cn->real_escape_string($nombre) . "', '" . $cn->real_escape_string($descripcion) . "', 1)";
+    if (!$cn->query($sqlInsPM)) {
+        $cn->rollback();
+        $cn->autocommit(true);
+        die($cn->error);
+    }
+    $idProyectoModelo = (int)$cn->insert_id;
+}
+
 if (!empty($metricasNuevasNombres)) {
     foreach ($metricasNuevasNombres as $i => $nom) {
         $nom = trim((string)$nom);
         $des = isset($metricasNuevasDescs[$i]) ? trim((string)$metricasNuevasDescs[$i]) : '';
-        // Doble chequeo defensivo
         if ($nom === '' || $des === '') continue;
-        // Tipo según rol: Admin/SuperAdmin => base, caso contrario => personalizada
+
         $tipo = $esAdmin ? 'base' : 'personalizada';
-        $qM = "INSERT INTO metrica (nombre, descripcion, tipo) VALUES ('".$cn->real_escape_string($nom)."', '".$cn->real_escape_string($des)."', '".$cn->real_escape_string($tipo)."')";
+        $qM = "INSERT INTO metrica (nombre, descripcion, tipo)
+               VALUES ('" . $cn->real_escape_string($nom) . "', '" . $cn->real_escape_string($des) . "', '" . $cn->real_escape_string($tipo) . "')";
         if (!$cn->query($qM)) {
             $cn->rollback();
             $cn->autocommit(true);
-            die($cn->errno);
+            die($cn->error);
         }
         $newId = (int)$cn->insert_id;
+
         if ($esAdmin) {
-            // Admin: métrica base se asocia al modelo global
+            // Métrica base → global
             $qL = "INSERT INTO metrica_modelo_calidad (id_modelo, id_metrica) VALUES ({$idModelo}, {$newId})";
-            if (!$cn->query($qL)) {
-                $cn->rollback();
-                $cn->autocommit(true);
-                die($cn->errno);
-            }
         } else {
-            // No admin: métrica personalizada se asocia solo al modelo del proyecto
+            // Métrica personalizada → solo visible para el proyecto
             if (!$idProyectoModelo) {
                 $cn->rollback();
                 $cn->autocommit(true);
                 die('No se pudo determinar el modelo del proyecto para asociar la métrica personalizada.');
             }
-            $qLp = "INSERT INTO metrica_proyecto_modelo (id_metrica, id_proyecto_modelo) VALUES ({$newId}, {$idProyectoModelo})";
-            if (!$cn->query($qLp)) {
-                $cn->rollback();
-                $cn->autocommit(true);
-                die($cn->errno);
-            }
+            $qL = "INSERT INTO metrica_proyecto_modelo (id_metrica, id_proyecto_modelo) VALUES ({$newId}, {$idProyectoModelo})";
         }
-    }
-}
-
-// Asignar al proyecto si corresponde
-if (!$esGlobal) {
-    // Si es admin y vino un proyecto, o si es usuario no-admin (validado arriba)
-    if ($proyectoId > 0) {
-        $qP = "UPDATE proyecto SET id_modelo = {$idModelo} WHERE id_proyecto = {$proyectoId}";
-        if (!$cn->query($qP)) {
+        if (!$cn->query($qL)) {
             $cn->rollback();
             $cn->autocommit(true);
-            die($cn->errno);
+            die($cn->error);
         }
     }
 }
 
+// ============================
+// ✅ Confirmar transacción
+// ============================
 $cn->commit();
 $cn->autocommit(true);
 
-header('Location: modelos.php?msg=' . urlencode('Modelo creado correctamente.') . '&type=success');
+header('Location: modelos.php?msg=' . urlencode('Modelo creado o derivado correctamente.') . '&type=success');
 exit;
+?>
