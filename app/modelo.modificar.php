@@ -115,7 +115,7 @@ if ($rsS = $cn->query("SELECT id_metrica FROM metrica_modelo_calidad WHERE id_mo
             <div class="card">
                 <div class="card-header">
                     <h3>Editar modelo</h3>
-                    <div class="text-muted small">Solo Administrador / SuperAdmin</div>
+                    <div class="text-muted small">Solo Administrador</div>
                 </div>
                 <div class="card-body">
                     <?php if ($flash): ?>
