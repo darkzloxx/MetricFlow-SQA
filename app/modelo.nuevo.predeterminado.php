@@ -79,6 +79,8 @@ $modelosBase = $rsMb ? $rsMb->fetch_all(MYSQLI_ASSOC) : [];
 <body>
   <?php include_once '../gui/navbar.php'; ?>
   <div class="container">
+    <div id="alertContainer"></div> <!-- 🔹 Contenedor dinámico para mensajes -->
+
     <?php if ($flash): ?>
       <div class="alert alert-<?= htmlspecialchars($flash['type']); ?> alert-dismissible fade show mt-3" role="alert">
         <?= htmlspecialchars($flash['text']); ?>
@@ -256,17 +258,29 @@ $modelosBase = $rsMb ? $rsMb->fetch_all(MYSQLI_ASSOC) : [];
 
       $('#btnAgregarMetrica').on('click', function() {
         limpiarValidacionesModal();
+        const regexMetrica = /^[A-Za-zÁÉÍÓÚáéíóúÑñ. ]+$/;
         var nombre = ($('#nmNombre').val() || '').trim();
         var desc = ($('#nmDescripcion').val() || '').trim();
 
+        // === Validaciones ===
         if (!nombre) {
           $('#nmNombre').addClass('is-invalid').focus();
           return;
+        } else if (!regexMetrica.test(nombre)) {
+          $('#nmNombre').addClass('is-invalid');
+          $('#nmNombre').next('.invalid-feedback').text('Solo se permiten letras (con o sin tilde) y puntos.');
+          return;
         }
+
         if (!desc) {
           $('#nmDescripcion').addClass('is-invalid').focus();
           return;
+        } else if (!regexMetrica.test(desc)) {
+          $('#nmDescripcion').addClass('is-invalid');
+          $('#nmDescripcion').next('.invalid-feedback').text('Solo se permiten letras (con o sin tilde) y puntos.');
+          return;
         }
+
 
         // Crear inputs ocultos
         var $wrap = $('<div class="nm-item"></div>');
@@ -277,7 +291,8 @@ $modelosBase = $rsMb ? $rsMb->fetch_all(MYSQLI_ASSOC) : [];
         $('#metricasNuevasInputs').append($wrap);
 
         // Crear chip visible
-        var $chip = $('<span class="chip" title="' + desc.replace(/\"/g, '&quot;') + '">' +
+        // Crear chip visible con data-nombre para trazabilidad exacta
+        var $chip = $('<span class="chip" data-nombre="' + nombre + '" title="' + desc.replace(/\"/g, '&quot;') + '">' +
           nombre + '<button type="button" class="remove" aria-label="Quitar">&times;</button></span>');
         $chip.find('.remove').on('click', function() {
           var i = $chip.index();
@@ -467,12 +482,17 @@ $modelosBase = $rsMb ? $rsMb->fetch_all(MYSQLI_ASSOC) : [];
 
       });
 
-      // === Validación general al enviar ===
+      // === Validación general al enviar (con validación de métricas AJAX) ===
       $("form").on("submit", function(e) {
+        e.preventDefault();
+
         let valid = true;
         const nombre = nombreInput.val().trim();
         const desc = descInput.val().trim();
+        const nombreRegex = /^[A-Za-zÁÉÍÓÚáéíóúÑñ0-9 _.\-\/\\():]+$/;
+        const descRegex = /^[A-Za-zÁÉÍÓÚáéíóúÑñ0-9 _.\-\/\\():]+$/;
 
+        // Validar nombre y descripción
         if (nombre === "") {
           errorNombre.text("El nombre del modelo es obligatorio.");
           nombreInput.addClass("is-invalid");
@@ -481,8 +501,10 @@ $modelosBase = $rsMb ? $rsMb->fetch_all(MYSQLI_ASSOC) : [];
           errorNombre.text("Solo se permiten letras (con o sin tilde), puntos y guiones.");
           nombreInput.addClass("is-invalid");
           valid = false;
+        } else {
+          errorNombre.text("");
+          nombreInput.removeClass("is-invalid");
         }
-
 
         if (desc === "") {
           errorDesc.text("La descripción es obligatoria.");
@@ -492,43 +514,113 @@ $modelosBase = $rsMb ? $rsMb->fetch_all(MYSQLI_ASSOC) : [];
           errorDesc.text("Solo se permiten letras, números, puntos y guiones.");
           descInput.addClass("is-invalid");
           valid = false;
+        } else {
+          errorDesc.text("");
+          descInput.removeClass("is-invalid");
         }
-
 
         if (!valid) {
-          e.preventDefault();
           mostrarAlerta("Debe completar todos los campos obligatorios.", "danger");
-
-          // Desplazar suavemente al primer campo inválido
-          const firstInvalid = this.querySelector(".is-invalid");
-          if (firstInvalid) {
-            firstInvalid.scrollIntoView({
-              behavior: "smooth",
-              block: "center"
-            });
-            firstInvalid.focus({
-              preventScroll: true
-            });
-          }
+          return;
         }
+
+        // === Validación de métricas nuevas vía AJAX ===
+        const nuevas = $('input[name="metricas_nuevas[nombre][]"]').map(function() {
+          return $(this).val().trim();
+        }).get().filter(Boolean);
+
+        if (nuevas.length === 0) {
+          // No hay métricas nuevas → enviar el formulario normalmente
+          this.submit();
+          return;
+        }
+
+        // Consultar duplicadas
+        $.post('api/validar_metricas.php', {
+            nombres: nuevas
+          })
+          .done(function(resp) {
+            if (!resp.ok) {
+              mostrarAlerta("Error al validar métricas.", "danger");
+              return;
+            }
+
+            const duplicadas = resp.existentes || [];
+            if (duplicadas.length > 0) {
+              mostrarAlerta(
+                "Las siguientes métricas ya existen en el sistema y fueron omitidas:<br>" +
+                "<strong>" + duplicadas.join(", ") + "</strong><br>" +
+                "<div class='mt-2 text-muted small'>El modelo aún no se ha guardado. Revise la lista actualizada y vuelva a presionar <strong>Confirmar</strong> para continuar con las métricas válidas.</div>",
+              );
+
+              // Eliminar solo las duplicadas del formulario
+              $('input[name="metricas_nuevas[nombre][]"]').each(function() {
+                const val = $(this).val().trim();
+                if (duplicadas.includes(val)) {
+                  $(this).closest('.nm-item').remove();
+                }
+              });
+
+              // Eliminar los chips correspondientes por data-nombre
+              $('#metricasNuevasChips .chip').each(function() {
+                const chipNombre = $(this).data('nombre');
+                if (duplicadas.includes(chipNombre)) {
+                  $(this).remove();
+                }
+              });
+
+              actualizarCount();
+
+              // 🚫 No reenviamos automáticamente. El usuario debe volver a confirmar manualmente.
+              return;
+            }
+
+            // ✅ Si no hubo duplicadas, enviamos el formulario normalmente
+            e.target.submit();
+
+          })
+          .fail(function(err) {
+            mostrarAlerta("Error de comunicación con el servidor al validar métricas.", "danger");
+          });
       });
 
+
       // === Función para mostrar alertas Bootstrap ===
-      function mostrarAlerta(mensaje, tipo) {
+      function mostrarAlerta(mensaje, tipo = "info") {
+        // Elimina cualquier alerta previa
+        $(".alert-dinamica").alert("close");
+
+        // Crea una alerta con misma estructura y animación que las del servidor
         const $alert = $(`
-      <div class="alert alert-${tipo} alert-dismissible fade show mt-3" role="alert">
-        ${mensaje}
-        <button type="button" class="close" data-dismiss="alert" aria-label="Cerrar">
-          <span aria-hidden="true">&times;</span>
-        </button>
-      </div>
-    `);
-        $("#alertContainer").html($alert);
+    <div class="alert alert-${tipo} alert-dismissible fade show mt-3 alert-dinamica" role="alert" style="opacity: 0;">
+      ${mensaje}
+      <button type="button" class="close" data-dismiss="alert" aria-label="Cerrar">
+        <span aria-hidden="true">&times;</span>
+      </button>
+    </div>
+  `);
+
+        $("#alertContainer").append($alert);
+
+        // Desplazamiento suave hacia arriba
         $("html, body").animate({
           scrollTop: 0
         }, "fast");
-        setTimeout(() => $alert.alert("close"), 4000);
+        // Suave aparición y desaparición sincronizada con Bootstrap
+        $alert.animate({
+          opacity: 1
+        }, 300); // fade-in
+
+        // Mantener visible más tiempo para textos largos
+        setTimeout(() => {
+          $alert.animate({
+            opacity: 0
+          }, 800, function() {
+            $(this).alert("close");
+          });
+        }, 15000); // ⏳ permanece 15 segundos totalmente visible
       }
+
     });
   </script>
   <?php include_once '../gui/footer.php'; ?>

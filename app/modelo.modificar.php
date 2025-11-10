@@ -407,28 +407,27 @@ if ($rsS = $cn->query("SELECT id_metrica FROM metrica_modelo_calidad WHERE id_mo
 
             $('#btnAgregarMetricaMod').on('click', function() {
                 limpiarValidacionesModalMod();
+                const regexMetrica = /^[A-Za-zÁÉÍÓÚáéíóúÑñ. ]+$/;
                 const n = ($('#mnmNombre').val() || '').trim();
                 const d = ($('#mnmDescripcion').val() || '').trim();
 
                 if (!n) {
                     $('#mnmNombre').addClass('is-invalid').focus();
                     return;
-                }
-                if (!regexGeneral.test(n)) {
+                } else if (!regexMetrica.test(n)) {
                     $('#mnmNombre').addClass('is-invalid');
-                    mostrarAlerta('El nombre de la métrica contiene caracteres no permitidos.', 'danger');
-                    return;
-                }
-                if (!d) {
-                    $('#mnmDescripcion').addClass('is-invalid').focus();
-                    return;
-                }
-                if (!regexGeneral.test(d)) {
-                    $('#mnmDescripcion').addClass('is-invalid');
-                    mostrarAlerta('La descripción de la métrica contiene caracteres no permitidos.', 'danger');
+                    $('#mnmNombre').next('.invalid-feedback').text('Solo se permiten letras (con o sin tilde) y puntos.');
                     return;
                 }
 
+                if (!d) {
+                    $('#mnmDescripcion').addClass('is-invalid').focus();
+                    return;
+                } else if (!regexMetrica.test(d)) {
+                    $('#mnmDescripcion').addClass('is-invalid');
+                    $('#mnmDescripcion').next('.invalid-feedback').text('Solo se permiten letras (con o sin tilde) y puntos.');
+                    return;
+                }
                 const $wrap = $('<span class="nm-item mr-2"></span>');
                 $wrap.append($('<input type="hidden" name="new_metric_name[]" />').val(n));
                 $wrap.append($('<input type="hidden" name="new_metric_desc[]" />').val(d));
