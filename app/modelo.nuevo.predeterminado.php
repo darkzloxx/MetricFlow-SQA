@@ -100,7 +100,7 @@ $modelosBase = $rsMb ? $rsMb->fetch_all(MYSQLI_ASSOC) : [];
       <div class="card mt-3">
         <div class="card-header">
           <h3>Crear modelo predeterminado (global)</h3>
-          <div class="text-muted small">Como administrador podés partir de un modelo base (opcional) o crear desde cero. Este modelo quedará disponible para todos los proyectos.</div>
+          <div class="text-muted small">Se puede partir de un modelo base (opcional) o crear desde cero. Este modelo quedará disponible para todos los proyectos.</div>
         </div>
         <div class="card-body">
           <div class="form-group">
