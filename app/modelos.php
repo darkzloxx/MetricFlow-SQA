@@ -7,17 +7,13 @@ $cn = BDConexion::getInstancia();
 $usr = ControlAcceso::usuarioActual();
 $esSuperAdmin = ControlAcceso::esSuperAdminGlobal();
 $esAdminGlobal = ControlAcceso::esAdminGlobal();
-// Permiso requerido para gestionar/visualizar modelos (para no-admin)
 $tienePermGestionModelo = ControlAcceso::verificaPermiso(PermisosSistema::GESTION_MODELO_CALIDAD);
 
 // =====================================================
-// OBTENER PROYECTOS ASIGNADOS (o todos si es admin/superadmin)
+// 🔹 OBTENER PROYECTOS (solo si NO es admin/superadmin)
 // =====================================================
-if ($esAdminGlobal || $esSuperAdmin) {
-    $sql = "SELECT id_proyecto, nombre, id_modelo FROM proyecto ORDER BY nombre";
-    $stmt = $cn->query($sql);
-} else {
-    $sql = "SELECT p.id_proyecto, p.nombre, p.id_modelo 
+if (!$esAdminGlobal && !$esSuperAdmin) {
+    $sql = "SELECT p.id_proyecto, p.nombre, p.id_modelo_global, p.id_modelo_personalizado
             FROM usuario_proyecto up
             JOIN proyecto p ON p.id_proyecto = up.id_proyecto
             WHERE up.id_usuario = ?
@@ -26,117 +22,92 @@ if ($esAdminGlobal || $esSuperAdmin) {
     $stmt->bind_param('i', $usr->id);
     $stmt->execute();
     $stmt = $stmt->get_result();
-}
-$proyectos = $stmt ? $stmt->fetch_all(MYSQLI_ASSOC) : [];
-
-// =====================================================
-// PROYECTOS BLOQUEADOS: tienen métricas planificadas en alguna iteración
-// No se permite cambiar modelo ni crear/asignar uno nuevo a esos proyectos
-// =====================================================
-$bloqueados = [];
-if (!empty($proyectos)) {
-    $ids = array_map(function ($r) {
-        return (int)$r['id_proyecto'];
-    }, $proyectos);
-    $ids = array_filter($ids, function ($v) {
-        return $v > 0;
-    });
-    if (!empty($ids)) {//aca se obtienen los proyectos bloqueados porque tienen metricas planificadas
-        $in = implode(',', $ids);
-        $sqlB = "SELECT DISTINCT i.id_proyecto AS id
-                 FROM metrica_iteracion mi
-                 JOIN iteracion i ON i.id_iteracion = mi.id_iteracion
-                 WHERE i.id_proyecto IN ($in)";
-        if ($rsB = $cn->query($sqlB)) {
-            while ($row = $rsB->fetch_assoc()) {
-                $bloqueados[(int)$row['id']] = true;
-            }
-        }
-    }
+    $proyectos = $stmt ? $stmt->fetch_all(MYSQLI_ASSOC) : [];
+} else {
+    $proyectos = [];
 }
 
 // =====================================================
-// OBTENER MODELOS DISPONIBLES
+// 🔹 OBTENER MODELOS GLOBALES (solo admin/superadmin)
 // =====================================================
-$modelos = $cn->query("SELECT id_modelo, nombre, descripcion FROM modelo_calidad ORDER BY nombre")->fetch_all(MYSQLI_ASSOC);
-// Mapear usos de modelos por proyectos
+if ($esAdminGlobal || $esSuperAdmin) {
+    $modelos = $cn->query("SELECT id_modelo, nombre, descripcion FROM modelo_calidad ORDER BY nombre")->fetch_all(MYSQLI_ASSOC);
+} else {
+    $modelos = [];
+}
+
+// =====================================================
+// 🔹 MAPA DE USO Y BLOQUEO (solo admin/superadmin)
+// =====================================================
 $usosModelos = [];
-$rsUsos = $cn->query("SELECT p.id_modelo, p.id_proyecto, p.nombre AS proyecto FROM proyecto p WHERE p.id_modelo IS NOT NULL");
-if ($rsUsos) {
-    while ($row = $rsUsos->fetch_assoc()) {
-        $mid = (int)$row['id_modelo'];
-        if (!isset($usosModelos[$mid])) {
-            $usosModelos[$mid] = [];
-        }
-        $usosModelos[$mid][] = ['id' => (int)$row['id_proyecto'], 'proyecto' => $row['proyecto']];
-    }
-}
+$modelosPlanificados = [];
+$modelosPlanificadosProyectos = [];
 
-// =====================================================
-// MODELOS CON MÉTRICAS PLANIFICADAS (valor_planificado NO NULL) EN ALGUNO DE SUS PROYECTOS
-// Bloquea edición/eliminación SOLO si hay métricas del modelo con planificaciones.
-// =====================================================
-$modelosPlanificados = [];              // id_modelo => cantidad total de métricas planificadas (suma)
-$modelosPlanificadosProyectos = [];     // id_modelo => array de nombres de proyectos donde hay al menos una métrica del modelo planificada
-if (!empty($usosModelos)) {
-    // Construir lista de ids de modelo usados
-    $idsModelosUsados = array_keys($usosModelos);
-    $idsModelosUsados = array_filter($idsModelosUsados, function($v){ return (int)$v > 0; });
-    if (!empty($idsModelosUsados)) {
+if ($esAdminGlobal || $esSuperAdmin) {
+    $rsUsos = $cn->query("SELECT p.id_modelo_global AS id_modelo, p.id_proyecto, p.nombre AS proyecto 
+                           FROM proyecto p WHERE p.id_modelo_global IS NOT NULL");
+    if ($rsUsos) {
+        while ($row = $rsUsos->fetch_assoc()) {
+            $mid = (int)$row['id_modelo'];
+            if (!isset($usosModelos[$mid])) {
+                $usosModelos[$mid] = [];
+            }
+            $usosModelos[$mid][] = ['id' => (int)$row['id_proyecto'], 'proyecto' => $row['proyecto']];
+        }
+    }
+
+    if (!empty($usosModelos)) {
+        $idsModelosUsados = array_keys($usosModelos);
         $inModelos = implode(',', $idsModelosUsados);
-        // Consulta: métricas planificadas (valor_planificado NO NULL) que pertenecen al modelo (metrica_modelo_calidad) y están planificadas en iteraciones de proyectos que usan ese modelo
-        $sqlPlanMod = "SELECT p.id_modelo, p.nombre AS proyecto_nombre, COUNT(mi.id_metrica) AS c
-                       FROM metrica_iteracion mi
-                       JOIN iteracion i ON i.id_iteracion = mi.id_iteracion
-                       JOIN proyecto p ON p.id_proyecto = i.id_proyecto
-                       JOIN metrica_modelo_calidad mmc ON mmc.id_metrica = mi.id_metrica AND mmc.id_modelo = p.id_modelo
-                       WHERE mi.valor_planificado IS NOT NULL AND p.id_modelo IN ($inModelos)
-                       GROUP BY p.id_modelo, p.id_proyecto, proyecto_nombre";
-        if ($rsPM = $cn->query($sqlPlanMod)) {
+        $sqlPlan = "SELECT p.id_modelo_global AS id_modelo, p.nombre AS proyecto_nombre, COUNT(mi.id_metrica) AS c
+                    FROM metrica_iteracion mi
+                    JOIN iteracion i ON i.id_iteracion = mi.id_iteracion
+                    JOIN proyecto p ON p.id_proyecto = i.id_proyecto
+                    JOIN metrica_modelo_calidad mmc ON mmc.id_metrica = mi.id_metrica AND mmc.id_modelo = p.id_modelo_global
+                    WHERE mi.valor_planificado IS NOT NULL AND p.id_modelo_global IN ($inModelos)
+                    GROUP BY p.id_modelo_global, p.id_proyecto, proyecto_nombre";
+        if ($rsPM = $cn->query($sqlPlan)) {
             while ($rw = $rsPM->fetch_assoc()) {
                 $idm = (int)$rw['id_modelo'];
                 $cnt = (int)$rw['c'];
                 $nomProy = (string)$rw['proyecto_nombre'];
-                if (!isset($modelosPlanificados[$idm])) { $modelosPlanificados[$idm] = 0; }
-                $modelosPlanificados[$idm] += $cnt; // suma total de métricas planificadas
-                if (!isset($modelosPlanificadosProyectos[$idm])) { $modelosPlanificadosProyectos[$idm] = []; }
-                $modelosPlanificadosProyectos[$idm][] = $nomProy; // almacenar nombre (se controla duplicado por GROUP BY p.id_proyecto)
+                if (!isset($modelosPlanificados[$idm])) {
+                    $modelosPlanificados[$idm] = 0;
+                }
+                $modelosPlanificados[$idm] += $cnt;
+                if (!isset($modelosPlanificadosProyectos[$idm])) {
+                    $modelosPlanificadosProyectos[$idm] = [];
+                }
+                $modelosPlanificadosProyectos[$idm][] = $nomProy;
             }
         }
     }
 }
 
 // =====================================================
-// MAPA: proyectos con métricas planificadas (valor_planificado NO NULL)
-// y flag para mostrar/ocultar botón 'Nuevo Modelo Personalizado'
+// 🔹 MAPA DE PLANIFICADOS (solo para vista de gerente/líder)
 // =====================================================
 $mapPlanificados = [];
 $hayElegiblePersonalizado = false;
 if (!empty($proyectos)) {
-    $idsAll = array_map(function ($r) {
-        return (int)$r['id_proyecto'];
-    }, $proyectos);
-    $idsAll = array_filter($idsAll, function ($v) {
-        return $v > 0;
-    });
+    $idsAll = array_column($proyectos, 'id_proyecto');
+    $idsAll = array_filter($idsAll, fn($v) => $v > 0);
     if (!empty($idsAll)) {
         $inAll = implode(',', $idsAll);
         $sqlPlan = "SELECT i.id_proyecto AS id, COUNT(*) AS c
-                     FROM metrica_iteracion mi
-                     JOIN iteracion i ON i.id_iteracion = mi.id_iteracion
-                     WHERE mi.valor_planificado IS NOT NULL AND i.id_proyecto IN ($inAll)
-                     GROUP BY i.id_proyecto";
+                    FROM metrica_iteracion mi
+                    JOIN iteracion i ON i.id_iteracion = mi.id_iteracion
+                    WHERE mi.valor_planificado IS NOT NULL AND i.id_proyecto IN ($inAll)
+                    GROUP BY i.id_proyecto";
         if ($rsPlan = $cn->query($sqlPlan)) {
             while ($row = $rsPlan->fetch_assoc()) {
                 $mapPlanificados[(int)$row['id']] = (int)$row['c'];
             }
         }
     }
-    // Elegible si el proyecto NO tiene métricas planificadas (independiente de si tiene modelo o no)
     foreach ($proyectos as $pp) {
         $pid = (int)$pp['id_proyecto'];
-        $hasPlanned = !empty($mapPlanificados[$pid]);
-        if (!$hasPlanned) {
+        if (empty($mapPlanificados[$pid])) {
             $hayElegiblePersonalizado = true;
             break;
         }
@@ -149,90 +120,64 @@ if (!empty($proyectos)) {
     <meta charset="UTF-8">
     <link rel="stylesheet" href="../lib/bootstrap-4.1.1-dist/css/bootstrap.css" />
     <link rel="stylesheet" href="../lib/open-iconic-master/font/css/open-iconic-bootstrap.css" />
-    <script type="text/javascript" src="../lib/JQuery/jquery-3.3.1.js"></script>
-    <script type="text/javascript" src="../lib/bootstrap-4.1.1-dist/js/bootstrap.min.js"></script>
+    <script src="../lib/JQuery/jquery-3.3.1.js"></script>
+    <script src="../lib/bootstrap-4.1.1-dist/js/bootstrap.min.js"></script>
     <title><?= Constantes::NOMBRE_SISTEMA; ?> - Modelos</title>
     <style>
-          .btn-outline-secondary {
-            border-color: #dee2e6;
-            color: #495057;
-            background-color: #fff;
-        }
-
-        .btn-outline-secondary:hover {
-            background-color: #f8f9fa;
-            color: #212529;
-        }
-
-        /* celdas largas con ellipsis + expand hover */
-        .cell-ellipsis {
-            max-width: 240px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-
-        .cell-ellipsis.large {
-            max-width: 520px;
-        }
-
-
-        .badge-list .badge {
-            max-width: 140px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-
-        .badge-list .badge:hover {
-            position: relative;
-            white-space: normal;
-            word-break: break-word;
-            overflow: visible;
-            z-index: 4;
-        }
-
-        /* Asegurar mismo ancho para botones con solo ícono */
         .btn-icon {
+            width: 40px;
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            width: 40px;
-            padding-left: 0;
-            padding-right: 0;
         }
-        /* ===============================
-   🔒 Hover visual para botones deshabilitados
-   =============================== */
-.btn.disabled,
-.btn:disabled {
-    pointer-events: auto !important; /* Permite hover visual */
-    opacity: 0.8;
-    transition: all 0.2s ease-in-out;
-}
 
-/* Colores hover coherentes con sus variantes */
-.btn-outline-warning.disabled:hover,
-.btn-outline-warning:disabled:hover {
-    background-color: #ffc107;
-    color: #212529;
-    border-color: #ffc107;
-}
+        .cell-ellipsis {
+            max-width: 250px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
 
-.btn-outline-danger.disabled:hover,
-.btn-outline-danger:disabled:hover {
-    background-color: #dc3545;
-    color: #fff;
-    border-color: #dc3545;
-}
 
-.btn-outline-secondary.disabled:hover,
-.btn-outline-secondary:disabled:hover {
-    background-color: #6c757d;
-    color: #fff;
-    border-color: #6c757d;
-}
+        /* Hover visual coherente en disabled */
+        .btn.disabled,
+        .btn:disabled {
+            pointer-events: auto !important;
+            opacity: 0.8;
+            transition: all .2s;
+        }
 
+        .btn-outline-warning.disabled:hover,
+        .btn-outline-warning:disabled:hover {
+            background: #ffc107;
+            color: #212529;
+            border-color: #ffc107;
+        }
+
+        .btn-outline-danger.disabled:hover,
+        .btn-outline-danger:disabled:hover {
+            background: #dc3545;
+            color: #fff;
+            border-color: #dc3545;
+        }
+
+        .btn-outline-secondary.disabled:hover,
+        .btn-outline-secondary:disabled:hover {
+            background: #6c757d;
+            color: #fff;
+            border-color: #6c757d;
+        }
+
+        .btn-outline-secondary {
+            border-color: #dee2e6;
+            color: #495057;
+            background: #fff;
+        }
+
+        .btn-outline-secondary:hover {
+            background: #f8f9fa;
+            color: #212529;
+        }
     </style>
 </head>
 
@@ -240,185 +185,131 @@ if (!empty($proyectos)) {
     <?php include_once '../gui/navbar.php'; ?>
     <div class="container">
         <div class="mb-3">
-            <a id="btnVolver" href="proyectos.php" class="btn btn-outline-secondary">
+            <a href="proyectos.php" class="btn btn-outline-secondary">
                 <span class="oi oi-arrow-left mr-1"></span> Volver
             </a>
         </div>
 
-        <!-- 🔔 ALERTAS -->
-        <div id="alertContainer">
-            <?php if (isset($_GET['msg'])): ?>
-                <div class="alert alert-<?= ($_GET['type'] ?? '') === 'success' ? 'success' : 'danger'; ?> alert-dismissible fade show" role="alert">
-                    <?= htmlspecialchars($_GET['msg']); ?>
-                    <button type="button" class="close" data-dismiss="alert" aria-label="Cerrar">
-                        <span aria-hidden="true">&times;</span>
-                    </button>
-                </div>
-                <script>
-                    $('html, body').animate({
-                        scrollTop: 0
-                    }, 'fast');
-                    setTimeout(() => $('.alert').alert('close'), 3000);
-                </script>
-            <?php endif; ?>
-        </div>
         <div class="card">
             <div class="card-header">
                 <h3>Modelos de calidad</h3>
             </div>
             <div class="card-body">
-                <!-- Botón Nuevo Modelo -->
-                <p>
-                    <?php if ($esAdminGlobal || $esSuperAdmin): ?>
-                        <a href="modelo.nuevo.predeterminado.php">
-                            <button type="button" class="btn btn-success">
-                                <span class="oi oi-plus"></span> Nuevo Modelo Predeterminado
-                            </button>
-                        </a>
-                    <?php else: ?>
-                        <?php if ($tienePermGestionModelo && $hayElegiblePersonalizado): ?>
-                            <a href="modelo.nuevo.php" class="btn btn-success" title="Crear modelo personalizado">
-                                <span class="oi oi-plus"></span> Seleccionar/Crear/Cambiar Modelo Personalizado
-                            </a>
-                        <?php endif; ?>
-                    <?php endif; ?>
-                </p>
-
-                <?php if (!($esAdminGlobal || $esSuperAdmin)): ?>
-                    <!-- Vista para no admin: requiere permiso de gestión de modelo y tener proyectos asignados -->
-                    <?php if (!$tienePermGestionModelo): ?>
-                        <div class="card my-4 text-center" style="border:1px dashed rgba(220,53,69,0.15); background:rgba(220,53,69,0.03);">
-                            <div class="card-body p-4">
-                                <i class="oi oi-lock-locked mb-2" style="font-size:2rem; color:#dc3545;"></i>
-                                <h5 class="text-danger font-weight-bold mb-2">No tenés permisos para gestionar modelos</h5>
-                                <p class="text-muted mb-0">Solicitá el permiso "<?= htmlspecialchars(PermisosSistema::GESTION_MODELO_CALIDAD); ?>" a un administrador si necesitás acceso.</p>
-                            </div>
-                        </div>
-                    <?php else: ?>
-                        <?php if (empty($proyectos)): ?>
-                            <div class="card my-4 text-center" style="border:1px dashed rgba(23,162,184,0.15); background:rgba(23,162,184,0.03);">
-                                <div class="card-body p-4">
-                                    <i class="oi oi-info mb-2" style="font-size:2rem; color:#17a2b8;"></i>
-                                    <h5 class="text-info font-weight-bold mb-2">No tenés proyectos asignados</h5>
-                                    <p class="text-muted mb-3">Aún no fuiste asignado a ningún proyecto. Si creés que esto es un error, contactá a un administrador.</p>
-                                </div>
-                            </div>
-                        <?php else: ?>
-                            <table class="table table-hover table-sm">
-                                <tr class="table-info">
-                                    <th>Proyecto</th>
-                                    <th>Modelo Actual</th>
-                                    <th>Tipo</th>
-                                    <th>Opciones</th>
-                                    </thead>
-                                    <tbody>
-                                        <?php foreach ($proyectos as $p):
-                                            $modeloSel = (int)($p['id_modelo'] ?? 0);
-                                            $modeloNombre = '—';
-                                            $tipo = '—';
-                                            if ($modeloSel) {
-                                                $r = $cn->query("SELECT nombre, descripcion FROM modelo_calidad WHERE id_modelo=" . $modeloSel . " LIMIT 1")->fetch_assoc();
-                                                $modeloNombre = $r ? $r['nombre'] : '—';
-                                                // Si en el futuro hay una columna/flag para predeterminados, puede usarse aquí.
-                                                $tipo = 'Predeterminado';
-                                            }
-                                        ?>
-                                            <tr>
-                                                <td><?= htmlspecialchars($p['nombre']); ?></td>
-                                                <td><?= htmlspecialchars($modeloNombre); ?></td>
-                                                <td><span class="badge badge-<?= $tipo === 'Predeterminado' ? 'secondary' : 'info'; ?>"><?= $tipo; ?></span></td>
-                                                <td>
-                                                    <!-- Ver métricas -->
-                                                    <a title="Ver detalles" href="modelo.ver.php?id=<?= (int)$p['id_proyecto']; ?>" class="btn btn-outline-primary btn-icon">
-                                                        <span class="oi oi-eye" aria-hidden="true"></span>
-                                                    </a>
-
-                                                    <?php if ($modeloSel): ?>
-                                                        <?php
-                                                            // Para usuarios no admin, mostrar candados explicando que sólo Admin/SuperAdmin pueden editar/eliminar modelos predeterminados
-                                                            $tooltipPerm = htmlspecialchars('Solo Administrador puede editar o eliminar modelos predeterminados.', ENT_QUOTES, 'UTF-8');
-                                                        ?>
-                                                        <button class="btn btn-outline-warning btn-icon btn-locked" disabled data-toggle="tooltip" data-html="true" title="<?= $tooltipPerm; ?>" aria-label="Editar bloqueado">
-                                                            <span class="oi oi-lock-locked" aria-hidden="true"></span>
-                                                        </button>
-                                                        <button class="btn btn-outline-danger btn-icon btn-locked" disabled data-toggle="tooltip" data-html="true" title="<?= $tooltipPerm; ?>" aria-label="Eliminar bloqueado">
-                                                            <span class="oi oi-lock-locked" aria-hidden="true"></span>
-                                                        </button>
-                                                    <?php endif; ?>
-                                                </td>
-                                            </tr>
-                                        <?php endforeach; ?>
-                                    </tbody>
-                            </table>
-                        <?php endif; ?>
-                    <?php endif; ?>
-                <?php endif; ?>
 
                 <?php if ($esAdminGlobal || $esSuperAdmin): ?>
-                    <hr />
+                    <!-- ===========================================
+                 🧩 VISTA ADMIN/SUPERADMIN: SOLO MODELOS GLOBALES
+                 =========================================== -->
+                    <p>
+                        <a href="modelo.nuevo.predeterminado.php" class="btn btn-success">
+                            <span class="oi oi-plus"></span> Nuevo Modelo Global
+                        </a>
+                    </p>
+
                     <?php if (empty($modelos)): ?>
-                        <div class="text-muted">No hay modelos registrados.</div>
+                        <div class="text-muted">No hay modelos globales registrados.</div>
                     <?php else: ?>
                         <table class="table table-hover table-sm">
-                            <tr class="table-info">
-                                <th>Modelo</th>
-                                <th>Usado por</th>
-                                <th>Acciones</th>
-                            </tr>
+                            <thead class="table-info">
+                                <tr>
+                                    <th>Modelo</th>
+                                    <th>Usado por</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
                             <tbody>
                                 <?php foreach ($modelos as $m):
                                     $mid = (int)$m['id_modelo'];
                                     $usos = $usosModelos[$mid] ?? [];
                                     $cant = count($usos);
-                                    $collapseId = 'usos-' . $mid;
+                                    $estaBloqueado = !empty($modelosPlanificados[$mid]);
                                 ?>
                                     <tr>
                                         <td>
-                                            <div class="font-weight-bold cell-ellipsis" title="<?= htmlspecialchars($m['nombre'], ENT_QUOTES, 'UTF-8'); ?>"><?= htmlspecialchars($m['nombre']); ?></div>
-                                            <div class="text-muted small cell-ellipsis" title="<?= htmlspecialchars($m['descripcion'] ?? '', ENT_QUOTES, 'UTF-8'); ?>"><?= htmlspecialchars($m['descripcion'] ?? ''); ?></div>
+                                            <div class="font-weight-bold"><?= htmlspecialchars($m['nombre']); ?></div>
+                                            <div class="text-muted small"><?= htmlspecialchars($m['descripcion']); ?></div>
                                         </td>
-                                        <td class="cell-ellipsis large" title="<?= $cant > 0 ? htmlspecialchars($cant . ' proyecto(s)', ENT_QUOTES, 'UTF-8') : 'Sin uso'; ?>">
+                                        <td>
                                             <?php if ($cant === 0): ?>
-                                                <span class="badge badge-secondary">Nadie</span>
-                                            <?php elseif ($cant === 1): ?>
-                                                <?= htmlspecialchars($usos[0]['proyecto']); ?>
+                                                <span class="badge badge-secondary">Ningún proyecto</span>
                                             <?php else: ?>
-                                                <span class="badge badge-info mr-2"><?= $cant; ?> proyectos</span>
-                                                <button class="btn btn-sm btn-outline-secondary" type="button" data-toggle="collapse" data-target="#<?= $collapseId; ?>" aria-expanded="false" aria-controls="<?= $collapseId; ?>">Ver lista</button>
-                                                <div class="collapse mt-2 badge-list" id="<?= $collapseId; ?>">
-                                                    <?php foreach ($usos as $u): ?>
-                                                        <span class="badge badge-light mr-1 mb-1" title="ID <?= (int)$u['id']; ?> | <?= htmlspecialchars($u['proyecto'], ENT_QUOTES, 'UTF-8'); ?>"><?= htmlspecialchars($u['proyecto']); ?></span>
-                                                    <?php endforeach; ?>
-                                                </div>
+                                                <span class="badge badge-info"><?= $cant; ?> proyecto(s)</span>
                                             <?php endif; ?>
                                         </td>
                                         <td>
-                                            <!-- Ver (siempre disponible) -->
-                                            <a title="Ver modelo" href="modelo.catalogo.ver.php?id_modelo=<?= $mid; ?>" class="btn btn-outline-primary btn-icon">
-                                                <span class="oi oi-eye" aria-hidden="true"></span>
-                                            </a>
-                                            <!-- Acciones: bloquear SOLO si existen métricas planificadas del modelo en algún proyecto -->
-                                            <?php $estaBloqueado = !empty($modelosPlanificados[$mid]); ?>
+                                            <a href="modelo.catalogo.ver.php?id_modelo=<?= $mid; ?>" class="btn btn-outline-primary btn-icon" title="Ver modelo"><span class="oi oi-eye"></span></a>
                                             <?php if ($estaBloqueado): ?>
-                                                <?php
-                                                    $proysBloq = $modelosPlanificadosProyectos[$mid] ?? [];
-                                                    $cantProysBloq = count($proysBloq);
-                                                    $tituloBloq = 'No se puede editar ni eliminar porque uno o más proyectos tienen métricas de este modelo con valores planificados.';
-                                                    $tooltipBloq = htmlspecialchars($tituloBloq, ENT_QUOTES, 'UTF-8');
-                                                ?>
-                                                <button class="btn btn-outline-warning btn-icon btn-locked" disabled data-toggle="tooltip" data-html="true" title="<?= $tooltipBloq; ?>" aria-label="Editar bloqueado">
-                                                    <span class="oi oi-lock-locked" aria-hidden="true"></span>
-                                                </button>
-                                                <button class="btn btn-outline-danger btn-icon btn-locked" disabled data-toggle="tooltip" data-html="true" title="<?= $tooltipBloq; ?>" aria-label="Eliminar bloqueado">
-                                                    <span class="oi oi-lock-locked" aria-hidden="true"></span>
-                                                </button>
+                                                <?php $tooltip = htmlspecialchars('No se puede editar/eliminar: modelo en uso con métricas planificadas.', ENT_QUOTES, 'UTF-8'); ?>
+                                                <button class="btn btn-outline-warning btn-icon" disabled data-toggle="tooltip" title="<?= $tooltip; ?>"><span class="oi oi-lock-locked"></span></button>
+                                                <button class="btn btn-outline-danger btn-icon" disabled data-toggle="tooltip" title="<?= $tooltip; ?>"><span class="oi oi-lock-locked"></span></button>
                                             <?php else: ?>
-                                                <a class="btn btn-outline-warning btn-icon" title="Editar modelo" href="modelo.modificar.php?id_modelo=<?= $mid; ?>">
-                                                    <span class="oi oi-pencil"></span>
-                                                </a>
-                                                <a class="btn btn-outline-danger btn-icon" title="Eliminar modelo" href="modelo.eliminar.procesar.php?id_modelo=<?= $mid; ?>" onclick="return confirm('¿Confirma que desea eliminar este modelo? Se eliminarán solo las métricas asociadas exclusivamente a este modelo (las que no estén vinculadas a ningún otro). Esta acción no se puede deshacer.');">
-                                                    <span class="oi oi-trash"></span>
-                                                </a>
+                                                <a href="modelo.modificar.php?id_modelo=<?= $mid; ?>" class="btn btn-outline-warning btn-icon" title="Editar modelo"><span class="oi oi-pencil"></span></a>
+                                                <a href="modelo.eliminar.procesar.php?id_modelo=<?= $mid; ?>" class="btn btn-outline-danger btn-icon" title="Eliminar modelo" onclick="return confirm('¿Confirma que desea eliminar este modelo? Esta acción no se puede deshacer.');"><span class="oi oi-trash"></span></a>
+                                            <?php endif; ?>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    <?php endif; ?>
+
+                <?php else: ?>
+                    <!-- ===========================================
+                 👤 VISTA GERENTE/LÍDER: MODELOS POR PROYECTO
+                 =========================================== -->
+                    <?php if (!$tienePermGestionModelo): ?>
+                        <div class="alert alert-warning">No tenés permisos para gestionar modelos de calidad.</div>
+                    <?php elseif (empty($proyectos)): ?>
+                        <div class="alert alert-info">No tenés proyectos asignados.</div>
+                    <?php else: ?>
+                        <p>
+                            <?php if ($hayElegiblePersonalizado): ?>
+                                <a href="modelo.nuevo.php" class="btn btn-success"><span class="oi oi-plus"></span> Crear/Asignar Modelo Personalizado</a>
+                            <?php endif; ?>
+                        </p>
+
+                        <table class="table table-hover table-sm">
+                            <tr class="table-info">
+                                <th>Proyecto</th>
+                                <th>Modelo Actual</th>
+                                <th>Tipo</th>
+                                <th>Acciones</th>
+                            </tr>
+                            <tbody>
+                                <?php foreach ($proyectos as $p):
+                                    $modeloGlobalId = (int)($p['id_modelo_global'] ?? 0);
+                                    $modeloPersId   = (int)($p['id_modelo_personalizado'] ?? 0);
+                                    $modeloNombre   = '—';
+                                    $tipo           = '—';
+
+                                    if ($modeloGlobalId > 0) {
+                                        $r = $cn->query("SELECT nombre FROM modelo_calidad WHERE id_modelo = {$modeloGlobalId} LIMIT 1")->fetch_assoc();
+                                        if ($r) {
+                                            $modeloNombre = $r['nombre'];
+                                            $tipo = 'Predeterminado';
+                                        }
+                                    } elseif ($modeloPersId > 0) {
+                                        $r2 = $cn->query("SELECT nombre FROM proyecto_modelo_calidad WHERE id_proyecto_modelo = {$modeloPersId} LIMIT 1")->fetch_assoc();
+                                        if ($r2) {
+                                            $modeloNombre = $r2['nombre'];
+                                            $tipo = 'Personalizado';
+                                        }
+                                    }
+                                ?>
+                                    <tr>
+                                        <td><?= htmlspecialchars($p['nombre']); ?></td>
+                                        <td><?= htmlspecialchars($modeloNombre); ?></td>
+                                        <td><span class="badge badge-<?= $tipo === 'Predeterminado' ? 'secondary' : ($tipo === 'Personalizado' ? 'info' : 'light'); ?>"><?= $tipo; ?></span></td>
+                                        <td>
+                                            <a href="modelo.ver.php?id=<?= (int)$p['id_proyecto']; ?>" class="btn btn-outline-primary btn-icon" title="Ver detalles"><span class="oi oi-eye"></span></a>
+                                            <?php if ($tipo === 'Predeterminado'): ?>
+                                                <button class="btn btn-outline-warning btn-icon" disabled title="Los modelos globales no pueden modificarse."><span class="oi oi-lock-locked"></span></button>
+                                                <button class="btn btn-outline-danger btn-icon" disabled title="Los modelos globales no pueden eliminarse."><span class="oi oi-lock-locked"></span></button>
+                                            <?php elseif ($tipo === 'Personalizado'): ?>
+                                                <a href="modelo.editar.personalizado.php?id=<?= $modeloPersId; ?>" class="btn btn-outline-warning btn-icon" title="Editar modelo personalizado"><span class="oi oi-pencil"></span></a>
+                                                <a href="modelo.eliminar.personalizado.php?id=<?= $modeloPersId; ?>" class="btn btn-outline-danger btn-icon" title="Eliminar modelo personalizado" onclick="return confirm('¿Seguro que desea eliminar este modelo personalizado y sus métricas asociadas?');"><span class="oi oi-trash"></span></a>
+                                            <?php else: ?>
+                                                <a href="modelo.nuevo.php?proyecto=<?= (int)$p['id_proyecto']; ?>" class="btn btn-outline-success btn-icon" title="Asignar modelo"><span class="oi oi-plus"></span></a>
                                             <?php endif; ?>
                                         </td>
                                     </tr>
@@ -427,17 +318,17 @@ if (!empty($proyectos)) {
                         </table>
                     <?php endif; ?>
                 <?php endif; ?>
+
             </div>
         </div>
     </div>
 
     <?php include_once '../gui/footer.php'; ?>
+    <script>
+        $(function() {
+            $('[data-toggle="tooltip"]').tooltip();
+        });
+    </script>
 </body>
 
 </html>
-<script>
-// Inicializar tooltips para botones bloqueados
-$(function(){
-    $('[data-toggle="tooltip"]').tooltip();
-});
-</script>

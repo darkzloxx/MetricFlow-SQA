@@ -172,7 +172,7 @@ foreach ($proyectos as $pr) {
     // Paso 3: modelo
     if ($next === null) {
         if (empty($pr['id_modelo'])) {
-            $next = ['paso' => 3, 'texto' => 'Sin modelo de calidad asignado.', 'accion' => 'Seleccioná o creá un modelo.', 'responsable' => 'Gerente de Calidad o Líder de Proyecto', 'icono' => 'oi-layers', 'estado' => 'pendiente'];
+            $next = ['paso' => 3, 'texto' => 'Sin modelo de calidad asignado.', 'accion' => 'Seleccioná o creá un modelo (debe tener métricas).', 'responsable' => 'Gerente de Calidad o Líder de Proyecto', 'icono' => 'oi-layers', 'estado' => 'pendiente'];
         } else {
             $completados++;
         }
