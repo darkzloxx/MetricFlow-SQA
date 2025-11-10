@@ -147,49 +147,54 @@ $modelosBase = $rsMb ? $rsMb->fetch_all(MYSQLI_ASSOC) : [];
             </div>
           <?php } ?>
 
-          <div class="form-group">
-            <label>Métricas asociadas</label>
-            <div class="border rounded p-2" style="max-height: 260px; overflow:auto;">
-              <?php if (empty($metricas)) { ?>
-                <div class="text-muted">No hay métricas definidas.</div>
-                <?php } else {
-                foreach ($metricas as $met) { ?>
-                  <div class="form-check">
-                    <input class="form-check-input" type="checkbox"
-                      value="<?= (int)$met['id_metrica'] ?>"
-                      id="m<?= (int)$met['id_metrica'] ?>"
-                      name="metricas[]"
-                      <?= in_array($met['id_metrica'], $formData['metricas'] ?? []) ? 'checked' : '' ?>>
-
-                    <label class="form-check-label" for="m<?= (int)$met['id_metrica'] ?>" title="<?= htmlspecialchars($met['descripcion']) ?>">
-                      <?= htmlspecialchars($met['nombre']) ?>
-                    </label>
-                  </div>
-              <?php }
-              } ?>
-            </div>
-            <div class="mt-2 d-flex align-items-center flex-wrap">
-              <button type="button" id="btnAbrirModalMetrica" class="btn btn-outline-primary mr-2">
-                <span class="oi oi-plus"></span> Nueva métrica
-              </button>
-
-              <button type="button" id="btnLimpiarMetricas" class="btn btn-outline-secondary">Limpiar selección</button>
-              <span id="metricasSeleccionadasCount" class="badge badge-info ml-3 d-none"></span>
-            </div>
-            <div id="metricasNuevasChips" class="mt-2"></div>
+          <hr />
+          <h5 class="mb-2">Métricas asociadas</h5>
+          <div class="mb-2 text-muted small">
+            Marque las métricas que desea incluir en el modelo. También puede agregar nuevas métricas al final.
           </div>
-        </div>
-        <div class="card-footer">
-          <button type="submit" class="btn btn-outline-success">
-            <span class="oi oi-check"></span> Confirmar
-          </button>
-          <a href="modelos.php" onclick="return confirm('¿Cancelar la creación del modelo? Se perderán los cambios no guardados.');"><button type="button" class="btn btn-outline-danger">
-              <span class="oi oi-x"></span> Cancelar
-            </button></a>
-          <div id="metricasNuevasInputs"></div>
+
+          <div class="border rounded p-2" style="max-height: 300px; overflow:auto;">
+            <?php if (empty($metricas)): ?>
+              <div class="text-muted">No hay métricas definidas.</div>
+            <?php else: ?>
+              <?php foreach ($metricas as $met): $mid = (int)$met['id_metrica']; ?>
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox"
+                    name="metricas[]"
+                    value="<?= $mid; ?>"
+                    id="m<?= $mid; ?>"
+                    <?= in_array($mid, $formData['metricas'] ?? []) ? 'checked' : ''; ?> />
+                  <label class="form-check-label" for="m<?= $mid; ?>">
+                    <strong><?= htmlspecialchars($met['nombre']); ?></strong>
+                    <span class="text-muted small ml-1"><?= htmlspecialchars($met['descripcion'] ?? ''); ?></span>
+                  </label>
+                </div>
+              <?php endforeach; ?>
+            <?php endif; ?>
+          </div>
+
+          <div class="mt-2 d-flex align-items-center flex-wrap">
+            <button type="button" id="btnAbrirModalMetrica" class="btn btn-outline-primary mr-2">
+              <span class="oi oi-plus"></span> Nueva métrica
+            </button>
+
+            <button type="button" id="btnLimpiarMetricas" class="btn btn-outline-secondary">Limpiar selección</button>
+            <span id="metricasSeleccionadasCount" class="badge badge-info ml-3 d-none"></span>
+          </div>
+          <div id="metricasNuevasChips" class="mt-2"></div>
         </div>
       </div>
-    </form>
+      <div class="card-footer">
+        <button type="submit" class="btn btn-outline-success">
+          <span class="oi oi-check"></span> Confirmar
+        </button>
+        <a href="modelos.php" onclick="return confirm('¿Cancelar la creación del modelo? Se perderán los cambios no guardados.');"><button type="button" class="btn btn-outline-danger">
+            <span class="oi oi-x"></span> Cancelar
+          </button></a>
+        <div id="metricasNuevasInputs"></div>
+      </div>
+  </div>
+  </form>
   </div>
 
   <!-- Modal Nueva Métrica -->
