@@ -44,6 +44,18 @@ try {
 } catch (Throwable $e) {
     $hasTipo = false;
 }
+// 🔹 Cargar modelos accesibles (si existen proyectos con modelo asignado)
+if (!$esAdminGlobal && !$esSuperAdmin && $usr) {
+    $sqlModelos = "SELECT DISTINCT m.id_modelo, m.nombre
+                   FROM proyecto p
+                   JOIN modelo_calidad m ON m.id_modelo = p.id_modelo
+                   JOIN usuario_proyecto up ON up.id_proyecto = p.id_proyecto
+                   WHERE up.id_usuario = {$usr->id}
+                     AND p.id_modelo IS NOT NULL";
+    if ($rsMod = $cn->query($sqlModelos)) {
+        $modelosAccesibles = $rsMod->fetch_all(MYSQLI_ASSOC);
+    }
+}
 
 if ($esAdminGlobal || $esSuperAdmin) {
     // Admin global / superadmin: mostrar todas las métricas base.
@@ -173,6 +185,7 @@ if ($esAdminGlobal || $esSuperAdmin) {
             padding-left: 0;
             padding-right: 0;
         }
+
         .btn-outline-secondary {
             border-color: #dee2e6;
             color: #495057;
@@ -183,6 +196,7 @@ if ($esAdminGlobal || $esSuperAdmin) {
             background-color: #f8f9fa;
             color: #212529;
         }
+
         .table-sm td,
         .table-sm th {
             vertical-align: middle;
@@ -220,7 +234,7 @@ if ($esAdminGlobal || $esSuperAdmin) {
         <div class="card">
             <div class="card-header">
                 <h3>Métricas</h3>
-                
+
             </div>
             <div class="card-body">
                 <?php if ($esAdminGlobal || $esSuperAdmin): ?>
@@ -244,7 +258,7 @@ if ($esAdminGlobal || $esSuperAdmin) {
                             <tbody>
                                 <?php foreach ($metricsBase as $m): ?>
                                     <tr>
-                                         <td class="cell-ellipsis" ><?= htmlspecialchars($m['nombre']); ?></td>
+                                        <td class="cell-ellipsis"><?= htmlspecialchars($m['nombre']); ?></td>
                                         <td class="cell-ellipsis"><?= htmlspecialchars($m['descripcion'] ?? ''); ?></td>
                                         <td><span class="badge badge-secondary">Base</span></td>
                                         <td>
@@ -291,11 +305,21 @@ if ($esAdminGlobal || $esSuperAdmin) {
                         <?php endif; ?>
                         <?php foreach ($proyectosAccesibles as $px): ?>
                             <div class="mb-3">
-                                <h5 class="mb-2">Proyecto: <strong><?= htmlspecialchars($px['proyecto']); ?></strong> — Modelo: <span class="badge badge-info"><?= htmlspecialchars($px['modelo']); ?></span>
+                                <h5 class="mb-2">
+                                    Proyecto: <strong><?= htmlspecialchars($px['proyecto']); ?></strong> —
+                                    Modelo: <span class="badge badge-info"><?= htmlspecialchars($px['modelo']); ?></span>
                                     <?php if ($proyectoContextoId > 0): ?>
                                         <span class="badge badge-secondary ml-1" title="Filtro activo">Filtrado</span>
                                     <?php endif; ?>
                                 </h5>
+
+                                <?php if ($iteracionesUsuario === 0): ?>
+                                    <div class="alert alert-info small mb-3">
+                                        <span class="oi oi-lock-locked mr-1"></span>
+                                        Para planificar o registrar valores, primero creá una <strong>iteración</strong> en tu proyecto.
+                                    </div>
+                                <?php endif; ?>
+
                                 <?php if (empty($px['metricas'])): ?>
                                     <div class="text-muted">Este proyecto no tiene métricas asociadas.</div>
                                 <?php else: ?>
@@ -315,42 +339,56 @@ if ($esAdminGlobal || $esSuperAdmin) {
                                                 $estadoEjec = (bool)($m['_estado_ejec'] ?? false);
                                                 $puedeEditar = !$isBase && $tienePermGestionMetricas && !$estadoPlan;
                                                 $puedeEliminar = $puedeEditar;
-                                                $puedePlanificar = !$isBase && !$estadoPlan;
-                                                $puedeEjecutar = !$isBase && $estadoPlan && !$estadoEjec;
+                                                $puedePlanificar = !$isBase && !$estadoPlan && $iteracionesUsuario > 0;
+                                                $puedeEjecutar = !$isBase && $estadoPlan && !$estadoEjec && $iteracionesUsuario > 0;
                                             ?>
                                                 <tr>
                                                     <td class="cell-ellipsis" title="<?= htmlspecialchars($m['nombre'], ENT_QUOTES, 'UTF-8'); ?>"><?= htmlspecialchars($m['nombre']); ?></td>
                                                     <td class="cell-ellipsis" title="<?= htmlspecialchars($m['descripcion'] ?? '', ENT_QUOTES, 'UTF-8'); ?>"><?= htmlspecialchars($m['descripcion'] ?? ''); ?></td>
                                                     <td><span class="badge badge-<?= $isBase ? 'secondary' : 'info'; ?>"><?= $isBase ? 'Base' : 'Personalizada'; ?></span></td>
                                                     <td>
-                                                        <a title="Ver" href="metrica.ver.php?id=<?= (int)$m['id_metrica']; ?>" class="btn btn-outline-primary btn-icon"><span class="oi oi-eye"></span></a>
+                                                        <a title="Ver" href="metrica.ver.php?id=<?= (int)$m['id_metrica']; ?>" class="btn btn-outline-primary btn-icon">
+                                                            <span class="oi oi-eye"></span>
+                                                        </a>
+
                                                         <?php if ($puedeEditar): ?>
                                                             <a class="btn btn-outline-warning btn-icon" title="Editar" href="metrica.modificar.php?id=<?= (int)$m['id_metrica']; ?>">
                                                                 <span class="oi oi-pencil"></span>
                                                             </a>
                                                         <?php else: ?>
-                                                            <button class="btn btn-outline-secondary btn-icon" disabled title="Editar no permitido"><span class="oi oi-lock-locked"></span></button>
+                                                            <button class="btn btn-outline-secondary btn-icon" disabled title="Editar no permitido">
+                                                                <span class="oi oi-lock-locked"></span>
+                                                            </button>
                                                         <?php endif; ?>
+
                                                         <?php if ($puedeEliminar): ?>
                                                             <a class="btn btn-outline-danger btn-icon" title="Eliminar" href="metrica.eliminar.php?id=<?= (int)$m['id_metrica']; ?>">
                                                                 <span class="oi oi-trash"></span>
                                                             </a>
                                                         <?php else: ?>
-                                                            <button class="btn btn-outline-secondary btn-icon" disabled title="Eliminar no permitido"><span class="oi oi-lock-locked"></span></button>
+                                                            <button class="btn btn-outline-secondary btn-icon" disabled title="Eliminar no permitido">
+                                                                <span class="oi oi-lock-locked"></span>
+                                                            </button>
                                                         <?php endif; ?>
+
                                                         <?php if ($puedePlanificar): ?>
                                                             <a class="btn btn-outline-info btn-icon" title="Planificar" href="metrica.planificar.php?id=<?= (int)$m['id_metrica']; ?>">
                                                                 <span class="oi oi-calendar"></span>
                                                             </a>
                                                         <?php else: ?>
-                                                            <button class="btn btn-outline-secondary btn-icon" disabled title="Planificar no disponible"><span class="oi oi-lock-locked"></span></button>
+                                                            <button class="btn btn-outline-secondary btn-icon" disabled title="Planificar no disponible">
+                                                                <span class="oi oi-lock-locked"></span>
+                                                            </button>
                                                         <?php endif; ?>
+
                                                         <?php if ($puedeEjecutar): ?>
                                                             <a class="btn btn-outline-success btn-icon" title="Registrar ejecución" href="metrica.ejecutar.php?id=<?= (int)$m['id_metrica']; ?>">
                                                                 <span class="oi oi-play"></span>
                                                             </a>
                                                         <?php else: ?>
-                                                            <button class="btn btn-outline-secondary btn-icon" disabled title="Ejecución no disponible"><span class="oi oi-lock-locked"></span></button>
+                                                            <button class="btn btn-outline-secondary btn-icon" disabled title="Ejecución no disponible">
+                                                                <span class="oi oi-lock-locked"></span>
+                                                            </button>
                                                         <?php endif; ?>
                                                     </td>
                                                 </tr>
@@ -360,6 +398,7 @@ if ($esAdminGlobal || $esSuperAdmin) {
                                 <?php endif; ?>
                             </div>
                         <?php endforeach; ?>
+
                     <?php endif; ?>
                 <?php endif; ?>
             </div>

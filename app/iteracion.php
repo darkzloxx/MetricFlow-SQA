@@ -1,83 +1,64 @@
 <?php
 include_once '../lib/ControlAcceso.Class.php';
-ControlAcceso::requierePermiso(PermisosSistema::PERMISO_PERMISOS);
-include_once '../modelo/ColeccionPermisos.php';
-$ColeccionPermisos = new ColeccionPermisos();
-?>
+ControlAcceso::requierePermiso(PermisosSistema::ABM_ITERACIONES);
+include_once '../modelo/BDConexion.Class.php';
 
+$DatosFormulario = $_POST;
+$cn = BDConexion::getInstancia();
+
+// Sanitización
+$id = (int)$DatosFormulario["id"];
+$numero = (int)$DatosFormulario["nombre"]; // o usar otro campo si corresponde
+$fase = (int)$DatosFormulario["fase"];
+$objetivo = $cn->real_escape_string(trim($DatosFormulario["objetivo"]));
+$fecha_inicio = $cn->real_escape_string(trim($DatosFormulario["fecha_inicio"]));
+$fecha_fin = $cn->real_escape_string(trim($DatosFormulario["fecha_fin"]));
+
+// Preparar consulta
+$sql = "UPDATE iteracion
+        SET numero_iteracion = ?, 
+            objetivo = ?, 
+            fecha_inicio = ?, 
+            fecha_fin = ?, 
+            id_fase = ?
+        WHERE id_iteracion = ?";
+$stmt = $cn->prepare($sql);
+$stmt->bind_param('isssii', $numero, $objetivo, $fecha_inicio, $fecha_fin, $fase, $id);
+
+$ok = $stmt->execute();
+$stmt->close();
+?>
 <html>
     <head>
         <meta charset="UTF-8">
         <link rel="stylesheet" href="../lib/bootstrap-4.1.1-dist/css/bootstrap.css" />
         <link rel="stylesheet" href="../lib/open-iconic-master/font/css/open-iconic-bootstrap.css" />
-        <script type="text/javascript" src="../lib/JQuery/jquery-3.3.1.js"></script>
-        <script type="text/javascript" src="../lib/bootstrap-4.1.1-dist/js/bootstrap.min.js"></script>        
-        <title><?php echo Constantes::NOMBRE_SISTEMA; ?> - Iteración</title>
-        <style>
-            .cell-ellipsis{ max-width:160px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-            .cell-ellipsis:hover{ position:relative; white-space:normal; word-break:break-word; overflow:visible; z-index:2; background:#f8f9fa; border-radius:.25rem; padding:.1rem .2rem; }
-        </style>
-
+        <script src="../lib/JQuery/jquery-3.3.1.js"></script>
+        <script src="../lib/bootstrap-4.1.1-dist/js/bootstrap.min.js"></script>
+        <title><?= Constantes::NOMBRE_SISTEMA; ?> - Actualizar Iteración</title>
     </head>
     <body>
-
         <?php include_once '../gui/navbar.php'; ?>
-
         <div class="container">
-            <div class="card">
+            <div class="card mt-3">
                 <div class="card-header">
-
-                    <h3>Iteraciones</h3>
+                    <h3>Actualizar Iteración</h3>
                 </div>
                 <div class="card-body">
-                    <p>
-                        <a href="iteracion.crear.php">
-                            <button type="button" class="btn btn-success">
-                                <span class="oi oi-plus"></span> Nuevo Iteración
-                            </button>
-                        </a>
-                    </p>
-                    <table class="table table-hover table-sm">
-                        <tr class="table-info">
-                            <th>Numero</th>
-                            <th>Fecha Inicio</th>
-                            <th>Fecha Fin</th>
-                            <th>Fase</th>
-                            <th>Opciones</th>
-                        </tr>
-                        <tr>
-                            <?php 
-                            $id = 1;
-                            $proyectos = "SELECT i.*,f.nombre FROM iteracion i join fase f on i.id_fase = f.id_fase
-                            where id_proyecto = ". $id . " ORDER BY i.id_fase asc"; 
-                            $proyectos=BDConexion::getInstancia()->query($proyectos);
-                            //$proyecto = mysqli_fetch_array($proyectos); 
-                            $proyecto = $proyectos->fetch_all(MYSQLI_ASSOC); 
-                            foreach ($proyecto as $Proyec) { ?>
-                                <td class="cell-ellipsis" title="<?= htmlspecialchars($Proyec['numero_iteracion'], ENT_QUOTES, 'UTF-8'); ?>"><?= htmlspecialchars($Proyec['numero_iteracion']); ?></td>
-                                <td class="cell-ellipsis" title="<?= htmlspecialchars($Proyec['fecha_inicio'], ENT_QUOTES, 'UTF-8'); ?>"><?= htmlspecialchars($Proyec['fecha_inicio']); ?></td>
-                                <td class="cell-ellipsis" title="<?= htmlspecialchars($Proyec['fecha_fin'], ENT_QUOTES, 'UTF-8'); ?>"><?= htmlspecialchars($Proyec['fecha_fin']); ?></td>
-                                <td class="cell-ellipsis" title="<?= htmlspecialchars($Proyec['nombre'], ENT_QUOTES, 'UTF-8'); ?>"><?= htmlspecialchars($Proyec['nombre']); ?></td>
-                                <td>
-                                    <a title="Ver detalle" href="iteracion.ver.php?id=<?= $Proyec['id_iteracion']; ?>">
-                                        <button type="button" class="btn btn-outline-info">
-                                            <span class="oi oi-zoom-in"></span>
-                                        </button>
-                                    </a>
-                                    <a title="Modificar" href="iteracion.modificar.php?id=<?= $Proyec['id_iteracion']; ?>">
-                                        <button type="button" class="btn btn-outline-warning">
-                                            <span class="oi oi-pencil"></span>
-                                        </button>
-                                    </a>
-                                    <a title="Eliminar" href="iteracion.eliminar.php?id=<?= $Proyec['id_iteracion']; ?>">
-                                        <button type="button" class="btn btn-outline-danger">
-                                            <span class="oi oi-trash"></span>
-                                        </button>
-                                    </a>  
-                                </td>
-                            </tr>
-                        <?php } ?>
-                    </table>
+                    <?php if ($ok): ?>
+                        <div class="alert alert-success" role="alert">
+                            <span class="oi oi-check mr-1"></span> Operación realizada con éxito.
+                        </div>
+                    <?php else: ?>
+                        <div class="alert alert-danger" role="alert">
+                            <span class="oi oi-warning mr-1"></span> Ha ocurrido un error al actualizar la iteración.
+                        </div>
+                    <?php endif; ?>
+                    <hr />
+                    <h5 class="card-text">Opciones</h5>
+                    <a href="iteracion.php" class="btn btn-primary">
+                        <span class="oi oi-account-logout"></span> Salir
+                    </a>
                 </div>
             </div>
         </div>

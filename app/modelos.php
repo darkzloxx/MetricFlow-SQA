@@ -201,6 +201,38 @@ if (!empty($proyectos)) {
             padding-left: 0;
             padding-right: 0;
         }
+        /* ===============================
+   🔒 Hover visual para botones deshabilitados
+   =============================== */
+.btn.disabled,
+.btn:disabled {
+    pointer-events: auto !important; /* Permite hover visual */
+    opacity: 0.8;
+    transition: all 0.2s ease-in-out;
+}
+
+/* Colores hover coherentes con sus variantes */
+.btn-outline-warning.disabled:hover,
+.btn-outline-warning:disabled:hover {
+    background-color: #ffc107;
+    color: #212529;
+    border-color: #ffc107;
+}
+
+.btn-outline-danger.disabled:hover,
+.btn-outline-danger:disabled:hover {
+    background-color: #dc3545;
+    color: #fff;
+    border-color: #dc3545;
+}
+
+.btn-outline-secondary.disabled:hover,
+.btn-outline-secondary:disabled:hover {
+    background-color: #6c757d;
+    color: #fff;
+    border-color: #6c757d;
+}
+
     </style>
 </head>
 
@@ -304,7 +336,7 @@ if (!empty($proyectos)) {
                                                     <?php if ($modeloSel): ?>
                                                         <?php
                                                             // Para usuarios no admin, mostrar candados explicando que sólo Admin/SuperAdmin pueden editar/eliminar modelos predeterminados
-                                                            $tooltipPerm = htmlspecialchars('Solo Administrador/SuperAdmin puede editar o eliminar modelos predeterminados.', ENT_QUOTES, 'UTF-8');
+                                                            $tooltipPerm = htmlspecialchars('Solo Administrador puede editar o eliminar modelos predeterminados.', ENT_QUOTES, 'UTF-8');
                                                         ?>
                                                         <button class="btn btn-outline-warning btn-icon btn-locked" disabled data-toggle="tooltip" data-html="true" title="<?= $tooltipPerm; ?>" aria-label="Editar bloqueado">
                                                             <span class="oi oi-lock-locked" aria-hidden="true"></span>

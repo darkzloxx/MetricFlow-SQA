@@ -22,7 +22,7 @@ class PermisosSistema
     public const PERMISO_PERMISOS = 'ABM Permisos';
     public const PERMISO_ROLES = 'ABM Roles';
     public const REGISTRO_METRICAS = 'Registro de Métricas Ejecutadas';
-
+    public const ABM_ITERACIONES = 'Gestión de Iteraciones';
     // Rol por defecto para auto-registro
     public const ROL_ESTANDAR = 'Espectador';
 }
