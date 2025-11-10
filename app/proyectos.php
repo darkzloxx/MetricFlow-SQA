@@ -626,6 +626,39 @@ foreach ($proyectos as $pr) {
                 margin-top: .25rem;
             }
         }
+
+        /* ===============================
+   🔒 Hover visual para botones deshabilitados
+   =============================== */
+        .btn.disabled,
+        .btn:disabled {
+            pointer-events: auto !important;
+            /* Permite hover visual */
+            opacity: 0.8;
+            transition: all 0.2s ease-in-out;
+        }
+
+        /* Colores hover coherentes con sus variantes */
+        .btn-outline-warning.disabled:hover,
+        .btn-outline-warning:disabled:hover {
+            background-color: #ffc107;
+            color: #212529;
+            border-color: #ffc107;
+        }
+
+        .btn-outline-danger.disabled:hover,
+        .btn-outline-danger:disabled:hover {
+            background-color: #dc3545;
+            color: #fff;
+            border-color: #dc3545;
+        }
+
+        .btn-outline-secondary.disabled:hover,
+        .btn-outline-secondary:disabled:hover {
+            background-color: #6c757d;
+            color: #fff;
+            border-color: #6c757d;
+        }
     </style>
 </head>
 
