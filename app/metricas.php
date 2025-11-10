@@ -114,7 +114,7 @@ $tienePermGestionMetricas = ControlAcceso::verificaPermiso(PermisosSistema::GEST
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h3 class="mb-0">Gestión de Métricas</h3>
                 <?php if ($tienePermGestionMetricas): ?>
-                    <a href="metrica.crear.php" class="btn btn-success btn-sm">
+                    <a href="metrica.nueva.php" class="btn btn-success btn-sm">
                         <span class="oi oi-plus"></span> Agregar Métrica
                     </a>
                 <?php endif; ?>

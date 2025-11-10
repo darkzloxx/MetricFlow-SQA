@@ -1,6 +1,11 @@
 <?php
 include_once '../lib/ControlAcceso.Class.php';
 include_once '../modelo/BDConexion.Class.php';
+
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
 ControlAcceso::verificaLogin();
 
 $cn = BDConexion::getInstancia();
@@ -11,32 +16,50 @@ $nombre = trim($_POST['nombre'] ?? '');
 $descripcion = trim($_POST['descripcion'] ?? '');
 $modelos = $_POST['modelos'] ?? [];
 
-$regex = '/^[a-zA-Z0-9ÁÉÍÓÚáéíóúüÜñÑ\s_\-()\/.,]+$/u';
+// Guardar datos del formulario en sesión (para repoblar si hay error)
+$_SESSION['form_data'] = [
+    'nombre' => $nombre,
+    'descripcion' => $descripcion,
+    'modelos' => $modelos
+];
 
+// ===============================
+// 🔹 Validaciones básicas
+// ===============================
 if ($nombre === '' || $descripcion === '' || empty($modelos)) {
-    header('Location: metrica.nueva.php?msg=' . urlencode('Debe completar todos los campos y seleccionar al menos un modelo.') . '&type=danger');
+    header('Location: metrica.crear.php?msg=' . urlencode('Debe completar todos los campos y seleccionar al menos un modelo.') . '&type=danger');
     exit;
 }
 
-if (!preg_match($regex, $nombre) || !preg_match($regex, $descripcion)) {
-    header('Location: metrica.nueva.php?msg=' . urlencode('Formato inválido: use solo letras, números, espacios y _ - ( ) / . ,') . '&type=danger');
+// ===============================
+// 🔹 Validar formato de nombre y descripción
+// ===============================
+$pattern = '/^[a-zA-Z0-9ÁÉÍÓÚáéíóúüÜñÑ_\-\(\)\.\/ ]{3,255}$/u';
+
+if (!preg_match($pattern, $nombre) || !preg_match($pattern, $descripcion)) {
+    header('Location: metrica.crear.php?msg=' . urlencode('El nombre o la descripción contienen caracteres no permitidos. Solo se admiten letras, números y los símbolos . - _ / ( )') . '&type=danger');
     exit;
 }
 
-// Verificar si ya existe una métrica con el mismo nombre y tipo
+// ===============================
+// 🔹 Verificar nombre duplicado (en base o personalizada)
+// ===============================
+$sqlDup = "SELECT COUNT(*) AS c FROM metrica WHERE LOWER(nombre) = LOWER(?)";
+$stmt = $cn->prepare($sqlDup);
+$stmt->bind_param('s', $nombre);
+$stmt->execute();
+$res = $stmt->get_result()->fetch_assoc();
+$stmt->close();
+
+if ($res['c'] > 0) {
+    header('Location: metrica.crear.php?msg=' . urlencode('⚠️ Ya existe una métrica con ese nombre en el sistema. Si desea usarla, puede vincularla desde la opción “Vincular existente”.') . '&type=danger');
+    exit;
+}
+
+// ===============================
+// 🔹 Insertar nueva métrica
+// ===============================
 $tipo = $esAdmin ? 'base' : 'personalizada';
-$stmtCheck = $cn->prepare("SELECT COUNT(*) AS total FROM metrica WHERE nombre = ? AND tipo = ?");
-$stmtCheck->bind_param('ss', $nombre, $tipo);
-$stmtCheck->execute();
-$res = $stmtCheck->get_result()->fetch_assoc();
-$stmtCheck->close();
-
-if ($res['total'] > 0) {
-    header('Location: metrica.nueva.php?msg=' . urlencode('Ya existe una métrica con ese nombre y tipo.') . '&type=danger');
-    exit;
-}
-
-// Crear métrica
 $sqlInsert = "INSERT INTO metrica (nombre, descripcion, tipo) VALUES (?, ?, ?)";
 $stmt = $cn->prepare($sqlInsert);
 $stmt->bind_param('sss', $nombre, $descripcion, $tipo);
@@ -44,7 +67,9 @@ $stmt->execute();
 $idMetrica = $stmt->insert_id;
 $stmt->close();
 
-// Asociar a modelos
+// ===============================
+// 🔹 Asociar la métrica a modelos
+// ===============================
 if ($esAdmin) {
     foreach ($modelos as $idModelo) {
         $idModelo = (int)$idModelo;
@@ -57,6 +82,10 @@ if ($esAdmin) {
     }
 }
 
+// ✅ Limpiar la sesión temporal
+unset($_SESSION['form_data']);
+
+// Redirigir con éxito
 header('Location: metricas.php?msg=' . urlencode('✅ Métrica creada y asociada correctamente.') . '&type=success');
 exit;
 ?>
