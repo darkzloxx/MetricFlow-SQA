@@ -8,8 +8,8 @@ if (!ControlAcceso::esAdminGlobal()) {
     exit;
 }
 
-include_once '../modelo/BDConexion.Class.php';  
-$cn = BDConexion::getInstancia();               
+include_once '../modelo/BDConexion.Class.php';
+$cn = BDConexion::getInstancia();
 
 include_once '../modelo/ColeccionUsuarios.php';
 $ColeccionUsuarios = new ColeccionUsuarios();
@@ -109,9 +109,21 @@ $ColeccionUsuarios = new ColeccionUsuarios();
                     </tr>
                     <?php foreach ($ColeccionUsuarios->getUsuarios() as $Usuario): ?>
                         <tr>
-                            <td class="cell-ellipsis" title="<?= htmlspecialchars($Usuario->getNombre(), ENT_QUOTES, 'UTF-8'); ?>">
-                                <?= htmlspecialchars($Usuario->getNombre(), ENT_QUOTES, 'UTF-8'); ?>
+                            <?php
+                            // Usuario actual en sesión
+                            $usrActual = ControlAcceso::usuarioActual();
+                            $esActual = ($usrActual && isset($usrActual->id) && $usrActual->id == $Usuario->getId());
+
+                            // Mostrar nombre con "(Tú)" si corresponde
+                            $nombreMostrar = htmlspecialchars($Usuario->getNombre(), ENT_QUOTES, 'UTF-8');
+                            if ($esActual) {
+                                $nombreMostrar .= ' <span class="text-muted small">(Tú)</span>';
+                            }
+                            ?>
+                            <td class="cell-ellipsis" title="<?= strip_tags($nombreMostrar); ?>">
+                                <?= $nombreMostrar; ?>
                             </td>
+
                             <td class="cell-ellipsis" title="<?= htmlspecialchars($Usuario->getEmail(), ENT_QUOTES, 'UTF-8'); ?>">
                                 <?= htmlspecialchars($Usuario->getEmail(), ENT_QUOTES, 'UTF-8'); ?>
                             </td>
