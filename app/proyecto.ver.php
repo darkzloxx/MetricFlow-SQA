@@ -25,7 +25,7 @@ $stmt->close();
 // Obtener nombre del modelo asociado si existe
 $nombreModelo = null;
 if (!empty($Proyecto['id_modelo'])) {
-    $stmt = $cn->prepare('SELECT nombre FROM modelo WHERE id_modelo = ?');
+    $stmt = $cn->prepare('SELECT nombre FROM modelo_calidad WHERE id_modelo = ?');
     $stmt->bind_param('i', $Proyecto['id_modelo']);
     $stmt->execute();
     $res = $stmt->get_result();
