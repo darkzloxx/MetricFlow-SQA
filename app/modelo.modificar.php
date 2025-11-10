@@ -161,7 +161,7 @@ if ($rsS = $cn->query("SELECT id_metrica FROM metrica_modelo_calidad WHERE id_mo
                     <div class="mt-3">
                         <h6>Agregar nuevas métricas</h6>
                         <div class="mt-2 d-flex align-items-center flex-wrap">
-                            <button type="button" class="btn btn-outline-primary mr-2" data-toggle="modal" data-target="#modalNuevaMetricaMod">
+                            <button type="button" id="btnAbrirModalMetrica" class="btn btn-outline-primary mr-2">
                                 <span class="oi oi-plus"></span> Nueva métrica
                             </button>
                             <button type="button" id="btnLimpiarMetricas" class="btn btn-outline-secondary">Limpiar selección</button>
@@ -218,6 +218,11 @@ if ($rsS = $cn->query("SELECT id_metrica FROM metrica_modelo_calidad WHERE id_mo
     </div>
 
     <script>
+        // Si por cualquier motivo Bootstrap genera múltiples backdrops, limpiarlos
+        $(document).on('show.bs.modal', '.modal', function() {
+            $('.modal-backdrop').not(':first').remove();
+        });
+
         (function() {
             const regexGeneral = /^[A-Za-zÁÉÍÓÚáéíóúÑñ0-9 _.\-\/\\():]+$/;
             const origNombre = <?= json_encode($modelo['nombre'] ?? ''); ?>;
@@ -382,6 +387,23 @@ if ($rsS = $cn->query("SELECT id_metrica FROM metrica_modelo_calidad WHERE id_mo
                 $('#mnmNombre').removeClass('is-invalid');
                 $('#mnmDescripcion').removeClass('is-invalid');
             }
+            // ===== APERTURA DEL MODAL (controlada para evitar congelamiento) =====
+            $('#btnAbrirModalMetrica').on('click', function(e) {
+                e.preventDefault();
+
+                // Si ya hay un backdrop residual, limpiarlo antes de abrir
+                $('.modal-backdrop').remove();
+                $('body').removeClass('modal-open');
+
+                // Pequeño retardo para garantizar que el DOM esté listo
+                setTimeout(function() {
+                    $('#modalNuevaMetricaMod').modal({
+                        backdrop: 'static', // evita doble clic accidentales
+                        keyboard: false, // evita cierre con ESC mientras abre
+                        show: true
+                    });
+                }, 100);
+            });
 
             $('#btnAgregarMetricaMod').on('click', function() {
                 limpiarValidacionesModalMod();
@@ -421,14 +443,22 @@ if ($rsS = $cn->query("SELECT id_metrica FROM metrica_modelo_calidad WHERE id_mo
                 $('#mnmNombre').val('');
                 $('#mnmDescripcion').val('');
                 actualizarCount();
-                $('#modalNuevaMetricaMod').one('hidden.bs.modal', function() {
-                    $('body').removeClass('modal-open');
-                    $('.modal-backdrop').remove();
-                }).modal('hide');
-                setTimeout(() => {
-                    $('body').removeClass('modal-open');
-                    $('.modal-backdrop').remove();
-                }, 250);
+                // ✅ Cerrar el modal con breve retardo para evitar congelamiento
+                setTimeout(function() {
+                    $('#modalNuevaMetricaMod').modal('hide');
+                }, 150);
+
+                // 🧩 Fallback de seguridad (si el backdrop quedó pegado)
+                $('#modalNuevaMetricaMod').on('hidden.bs.modal', function() {
+                    $('#mnmNombre').val('');
+                    $('#mnmDescripcion').val('');
+                    limpiarValidacionesModalMod();
+                    setTimeout(function() {
+                        $('.modal-backdrop').remove();
+                        $('body').removeClass('modal-open');
+                    }, 300);
+                });
+
             });
 
             $('#btnLimpiarMetricas').on('click', function() {

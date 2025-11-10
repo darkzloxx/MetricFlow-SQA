@@ -169,9 +169,10 @@ $modelosBase = $rsMb ? $rsMb->fetch_all(MYSQLI_ASSOC) : [];
               } ?>
             </div>
             <div class="mt-2 d-flex align-items-center flex-wrap">
-              <button type="button" class="btn btn-outline-primary mr-2" data-toggle="modal" data-target="#modalNuevaMetrica">
+              <button type="button" id="btnAbrirModalMetrica" class="btn btn-outline-primary mr-2">
                 <span class="oi oi-plus"></span> Nueva métrica
               </button>
+
               <button type="button" id="btnLimpiarMetricas" class="btn btn-outline-secondary">Limpiar selección</button>
               <span id="metricasSeleccionadasCount" class="badge badge-info ml-3 d-none"></span>
             </div>
@@ -226,9 +227,10 @@ $modelosBase = $rsMb ? $rsMb->fetch_all(MYSQLI_ASSOC) : [];
 
   <script>
     $(function() {
-      // Contador dinámico: métrica(s) existentes marcadas + nuevas agregadas
+      // ===== FUNCIONES AUXILIARES =====
       function actualizarCount() {
-        var total = $('input[name="metricas[]"]:checked').length + $('input[name="metricas_nuevas[nombre][]"]').length;
+        var total = $('input[name="metricas[]"]:checked').length +
+          $('input[name="metricas_nuevas[nombre][]"]').length;
         var $b = $('#metricasSeleccionadasCount');
         if (total > 0) {
           $b.text(total + ' seleccionadas').removeClass('d-none');
@@ -236,18 +238,22 @@ $modelosBase = $rsMb ? $rsMb->fetch_all(MYSQLI_ASSOC) : [];
           $b.addClass('d-none').text('');
         }
       }
-      // Agregar nueva métrica a inputs ocultos + chip
+
       function limpiarValidacionesModal() {
         $('#nmNombre').removeClass('is-invalid');
         $('#nmDescripcion').removeClass('is-invalid');
       }
+
+      // ===== EVENTOS DEL MODAL =====
+      $('#modalNuevaMetrica').on('shown.bs.modal', function() {
+        $('#nmNombre').trigger('focus');
+      });
 
       $('#btnAgregarMetrica').on('click', function() {
         limpiarValidacionesModal();
         var nombre = ($('#nmNombre').val() || '').trim();
         var desc = ($('#nmDescripcion').val() || '').trim();
 
-        // Validaciones obligatorias
         if (!nombre) {
           $('#nmNombre').addClass('is-invalid').focus();
           return;
@@ -257,11 +263,17 @@ $modelosBase = $rsMb ? $rsMb->fetch_all(MYSQLI_ASSOC) : [];
           return;
         }
 
+        // Crear inputs ocultos
         var $wrap = $('<div class="nm-item"></div>');
-        $wrap.append('<input type="hidden" name="metricas_nuevas[nombre][]" value="' + $('<div/>').text(nombre).html() + '" />');
-        $wrap.append('<input type="hidden" name="metricas_nuevas[descripcion][]" value="' + $('<div/>').text(desc).html() + '" />');
+        $wrap.append('<input type="hidden" name="metricas_nuevas[nombre][]" value="' +
+          $('<div/>').text(nombre).html() + '" />');
+        $wrap.append('<input type="hidden" name="metricas_nuevas[descripcion][]" value="' +
+          $('<div/>').text(desc).html() + '" />');
         $('#metricasNuevasInputs').append($wrap);
-        var $chip = $('<span class="chip" title="' + desc.replace(/\"/g, '&quot;') + '">' + nombre + '<button type="button" class="remove" aria-label="Quitar">&times;</button></span>');
+
+        // Crear chip visible
+        var $chip = $('<span class="chip" title="' + desc.replace(/\"/g, '&quot;') + '">' +
+          nombre + '<button type="button" class="remove" aria-label="Quitar">&times;</button></span>');
         $chip.find('.remove').on('click', function() {
           var i = $chip.index();
           $('#metricasNuevasInputs .nm-item').eq(i).remove();
@@ -269,22 +281,28 @@ $modelosBase = $rsMb ? $rsMb->fetch_all(MYSQLI_ASSOC) : [];
           actualizarCount();
         });
         $('#metricasNuevasChips').append($chip);
-        $('#nmNombre').val('');
-        $('#nmDescripcion').val('');
+
         actualizarCount();
-        // Cerrar el modal limpiamente (a veces queda el backdrop si no se fuerza)
-        $('#modalNuevaMetrica').one('hidden.bs.modal', function() {
-          $('body').removeClass('modal-open');
-          $('.modal-backdrop').remove();
-        }).modal('hide');
-        // Fallback por si algún tema/JS impide el evento anterior
+
+        // ✅ Cerrar el modal con breve retardo para evitar que se congele el backdrop
         setTimeout(function() {
-          $('body').removeClass('modal-open');
-          $('.modal-backdrop').remove();
-        }, 250);
+          $('#modalNuevaMetrica').modal('hide');
+        }, 150);
       });
 
-      // En Enter dentro de inputs, intentar agregar
+      $('#modalNuevaMetrica').on('hidden.bs.modal', function() {
+        $('#nmNombre').val('');
+        $('#nmDescripcion').val('');
+        limpiarValidacionesModal();
+
+        // 🧩 Fallback de seguridad (si el backdrop quedó pegado)
+        setTimeout(function() {
+          $('.modal-backdrop').remove();
+          $('body').removeClass('modal-open');
+        }, 300);
+      });
+
+
       $('#nmNombre, #nmDescripcion').on('keypress', function(e) {
         if (e.which === 13) {
           e.preventDefault();
@@ -292,7 +310,9 @@ $modelosBase = $rsMb ? $rsMb->fetch_all(MYSQLI_ASSOC) : [];
         }
       });
 
-      // Selección de modelo base para pre-chequear métricas
+      // ===== MODELO BASE =====
+      var baseMetricIds = [];
+
       function marcarCard($card, active) {
         $('.modelo-card').removeClass('active');
         if (active) $card.addClass('active');
@@ -310,19 +330,17 @@ $modelosBase = $rsMb ? $rsMb->fetch_all(MYSQLI_ASSOC) : [];
       }
 
       function quitarModeloBase() {
-        // Destildar solo las métricas que fueron marcadas por el modelo base
         baseMetricIds.forEach(function(idm) {
           $('#m' + idm).prop('checked', false);
         });
         baseMetricIds = [];
         limpiarModeloBaseUI();
       }
-      // Guardar métricas seleccionadas automáticamente por el modelo base
-      var baseMetricIds = [];
-      // Toggler explícito por si el data-toggle no actúa en algunos navegadores
+
       var $collapseBase = $('#collapseModeloBase');
       var $btnToggleBase = $('#btnToggleBase');
       var $iconToggleBase = $('#iconToggleBase');
+
       $btnToggleBase.on('click', function() {
         $collapseBase.collapse('toggle');
       });
@@ -334,6 +352,7 @@ $modelosBase = $rsMb ? $rsMb->fetch_all(MYSQLI_ASSOC) : [];
         $btnToggleBase.attr('aria-expanded', 'false');
         $iconToggleBase.removeClass('oi-chevron-top').addClass('oi-chevron-bottom');
       });
+
       $('.modelo-card').on('click', function() {
         var $c = $(this);
         var id = parseInt($c.data('id')) || 0;
@@ -341,41 +360,63 @@ $modelosBase = $rsMb ? $rsMb->fetch_all(MYSQLI_ASSOC) : [];
         if (!id) return;
         marcarCard($c, true);
         setModeloBase(nombre, id);
+
         $.getJSON('api/modelo_metricas.php', {
-          id_modelo: id
-        }).done(function(resp) {
-          if (!resp || !resp.ok) return;
-          $('input[name="metricas[]"]').prop('checked', false);
-          baseMetricIds = [];
-          (resp.metricas || []).forEach(function(m) {
-            var idm = parseInt(m.id_metrica) || 0;
-            if (idm) {
-              $('#m' + idm).prop('checked', true);
-              baseMetricIds.push(idm);
-            }
+            id_modelo: id
+          })
+          .done(function(resp) {
+            if (!resp || !resp.ok) return;
+            $('input[name="metricas[]"]').prop('checked', false);
+            baseMetricIds = [];
+            (resp.metricas || []).forEach(function(m) {
+              var idm = parseInt(m.id_metrica) || 0;
+              if (idm) {
+                $('#m' + idm).prop('checked', true);
+                baseMetricIds.push(idm);
+              }
+            });
+            actualizarCount();
           });
-          actualizarCount();
-        });
-        // Ocultar el panel una vez seleccionada la base
+
         $collapseBase.collapse('hide');
       });
+
       $('#btnChipQuitarBase').on('click', function() {
         quitarModeloBase();
         actualizarCount();
       });
+
       $('#btnLimpiarMetricas').on('click', function() {
         $('input[name="metricas[]"]').prop('checked', false);
         actualizarCount();
       });
+
       $(document).on('change', 'input[name="metricas[]"]', actualizarCount);
 
-      // Inicializar badge al cargar
+      // ===== INICIALIZACIÓN =====
       actualizarCount();
+      // ===== APERTURA DEL MODAL (controlada para evitar congelamiento) =====
+      $('#btnAbrirModalMetrica').on('click', function(e) {
+        e.preventDefault();
 
-      // Actualizar contador tras seleccionar un modelo base (preselecciona métricas)
-      // Nota: el AJAX marca/desmarca, luego actualizamos el badge
-      // (inyectamos un hook al final de done)
+        // Si ya hay un backdrop residual, limpiarlo antes de abrir
+        $('.modal-backdrop').remove();
+        $('body').removeClass('modal-open');
+
+        // Pequeño retardo para garantizar que el DOM esté listo
+        setTimeout(function() {
+          $('#modalNuevaMetrica').modal({
+            backdrop: 'static', // evita doble clic accidentales
+            keyboard: false, // evita cierre con ESC mientras abre
+            show: true
+          });
+        }, 100);
+      });
+
     });
+
+
+
     $(document).ready(function() {
 
       // === Referencias a inputs ===
@@ -393,12 +434,11 @@ $modelosBase = $rsMb ? $rsMb->fetch_all(MYSQLI_ASSOC) : [];
       nombreInput.on("input", function() {
         const val = nombreInput.val().trim();
         const nombreRegex = /^[A-Za-zÁÉÍÓÚáéíóúÑñ0-9 _.\-\/\\():]+$/;
-
         if (val === "") {
           errorNombre.text("El nombre del modelo es obligatorio.");
           nombreInput.addClass("is-invalid");
         } else if (!nombreRegex.test(val)) {
-          errorNombre.text("Solo se permiten letras (con o sin tilde), puntos y guiones.");
+          errorNombre.text("Solo se permiten letras, números, espacios, puntos, guiones, barras, paréntesis y dos puntos.");
           nombreInput.addClass("is-invalid");
         } else {
           errorNombre.text("");
@@ -407,8 +447,8 @@ $modelosBase = $rsMb ? $rsMb->fetch_all(MYSQLI_ASSOC) : [];
       });
 
       descInput.on("input", function() {
+        const val = descInput.val().trim();
         const descRegex = /^[A-Za-zÁÉÍÓÚáéíóúÑñ0-9 _.\-\/\\():]+$/;
-
         if (val === "") {
           errorDesc.text("La descripción es obligatoria.");
           descInput.addClass("is-invalid");
