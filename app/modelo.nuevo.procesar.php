@@ -108,25 +108,31 @@ if ($modeloBaseId > 0 && !$editarBase && $nombre === '' && $descripcion === '' &
 }
 
 // ============================
-// ✏️ CASO 2 y 4: Crear modelo nuevo (derivado o desde cero)
+// ✏️ CASO 2: Crear o reemplazar modelo
 // ============================
 $cn->autocommit(false);
 $cn->begin_transaction();
 
-$ok = $cn->query("
-    INSERT INTO modelo_calidad (nombre, descripcion)
-    VALUES ('" . $cn->real_escape_string($nombre) . "', '" . $cn->real_escape_string($descripcion) . "')
-");
-if (!$ok) {
+// 🔹 Si el proyecto ya tenía modelo, eliminarlo (si no es global)
+$modeloAnterior = null;
+if ($proyectoId > 0) {
+    $rsPrev = $cn->query("SELECT id_modelo FROM proyecto WHERE id_proyecto = {$proyectoId}");
+    if ($rsPrev && $row = $rsPrev->fetch_assoc()) {
+        $modeloAnterior = (int)$row['id_modelo'];
+    }
+}
+
+// Crear nuevo modelo
+$qModelo = "INSERT INTO modelo_calidad (nombre, descripcion)
+            VALUES ('" . $cn->real_escape_string($nombre) . "', '" . $cn->real_escape_string($descripcion) . "')";
+if (!$cn->query($qModelo)) {
     $cn->rollback();
     $cn->autocommit(true);
     die($cn->error);
 }
 $idModelo = (int)$cn->insert_id;
 
-// ============================
-// 🔗 Asociar modelo al proyecto si corresponde
-// ============================
+// 🔗 Asociar modelo al proyecto
 if ($proyectoId > 0) {
     $qP = "UPDATE proyecto SET id_modelo = {$idModelo} WHERE id_proyecto = {$proyectoId}";
     if (!$cn->query($qP)) {
@@ -136,9 +142,7 @@ if ($proyectoId > 0) {
     }
 }
 
-// ============================
 // 🧮 Insertar métricas existentes seleccionadas
-// ============================
 if (!empty($metricas)) {
     foreach ($metricas as $idMet) {
         $idMet = (int)$idMet;
@@ -152,21 +156,7 @@ if (!empty($metricas)) {
     }
 }
 
-// ============================
 // ➕ Insertar nuevas métricas (personalizadas o base)
-// ============================
-$idProyectoModelo = null;
-if (!$esAdmin && $proyectoId > 0) {
-    $sqlInsPM = "INSERT INTO proyecto_modelo_calidad (id_proyecto, id_modelo_base, nombre, descripcion, es_personalizado)
-                 VALUES ({$proyectoId}, {$idModelo}, '" . $cn->real_escape_string($nombre) . "', '" . $cn->real_escape_string($descripcion) . "', 1)";
-    if (!$cn->query($sqlInsPM)) {
-        $cn->rollback();
-        $cn->autocommit(true);
-        die($cn->error);
-    }
-    $idProyectoModelo = (int)$cn->insert_id;
-}
-
 if (!empty($metricasNuevasNombres)) {
     foreach ($metricasNuevasNombres as $i => $nom) {
         $nom = trim((string)$nom);
@@ -183,23 +173,22 @@ if (!empty($metricasNuevasNombres)) {
         }
         $newId = (int)$cn->insert_id;
 
-        if ($esAdmin) {
-            // Métrica base → global
-            $qL = "INSERT INTO metrica_modelo_calidad (id_modelo, id_metrica) VALUES ({$idModelo}, {$newId})";
-        } else {
-            // Métrica personalizada → solo visible para el proyecto
-            if (!$idProyectoModelo) {
-                $cn->rollback();
-                $cn->autocommit(true);
-                die('No se pudo determinar el modelo del proyecto para asociar la métrica personalizada.');
-            }
-            $qL = "INSERT INTO metrica_proyecto_modelo (id_metrica, id_proyecto_modelo) VALUES ({$newId}, {$idProyectoModelo})";
-        }
+        $qL = "INSERT INTO metrica_modelo_calidad (id_modelo, id_metrica) VALUES ({$idModelo}, {$newId})";
         if (!$cn->query($qL)) {
             $cn->rollback();
             $cn->autocommit(true);
             die($cn->error);
         }
+    }
+}
+
+// 🧹 Si el modelo anterior era personalizado y ya no está en uso, eliminarlo
+if ($modeloAnterior) {
+    $rsUso = $cn->query("SELECT COUNT(*) AS c FROM proyecto WHERE id_modelo = {$modeloAnterior}");
+    $enUso = ($rsUso && $r = $rsUso->fetch_assoc() && (int)$r['c'] > 0);
+    if (!$enUso) {
+        $cn->query("DELETE FROM metrica_modelo_calidad WHERE id_modelo = {$modeloAnterior}");
+        $cn->query("DELETE FROM modelo_calidad WHERE id_modelo = {$modeloAnterior}");
     }
 }
 
@@ -209,6 +198,6 @@ if (!empty($metricasNuevasNombres)) {
 $cn->commit();
 $cn->autocommit(true);
 
-header('Location: modelos.php?msg=' . urlencode('Modelo creado o derivado correctamente.') . '&type=success');
+header('Location: modelos.php?msg=' . urlencode('Modelo creado y asignado correctamente al proyecto.') . '&type=success');
 exit;
 ?>

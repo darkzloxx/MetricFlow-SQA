@@ -18,6 +18,25 @@ $rsMb = $cn->query("SELECT id_modelo, nombre, descripcion FROM modelo_calidad OR
 $modelosBase = $rsMb ? $rsMb->fetch_all(MYSQLI_ASSOC) : [];
 
 $esAdmin = ControlAcceso::esAdminGlobal() || ControlAcceso::esSuperAdminGlobal();
+
+// 🔹 Detectar si se accede desde "Cambiar modelo" con ?proyecto=ID
+$proyectoCambioId = isset($_GET['proyecto']) ? (int)$_GET['proyecto'] : 0;
+$nombreProyectoActual = null;
+$modeloActual = null;
+
+if ($proyectoCambioId > 0) {
+  $sqlInfo = "SELECT p.nombre AS proyecto, m.nombre AS modelo
+              FROM proyecto p
+              LEFT JOIN modelo_calidad m ON p.id_modelo = m.id_modelo
+              WHERE p.id_proyecto = $proyectoCambioId
+              LIMIT 1";
+  if ($rsInfo = $cn->query($sqlInfo)) {
+    if ($info = $rsInfo->fetch_assoc()) {
+      $nombreProyectoActual = $info['proyecto'];
+      $modeloActual = $info['modelo'];
+    }
+  }
+}
 ?>
 <html>
 
@@ -186,84 +205,85 @@ $esAdmin = ControlAcceso::esAdminGlobal() || ControlAcceso::esSuperAdminGlobal()
             </div>
             <div id="metricasNuevasChips" class="mt-2"></div>
           </div>
+
           <?php
           // =====================================================
-          // 🔹 Determinar proyectos elegibles (sin métricas planificadas)
+          // 🔹 Mostrar contexto si viene desde “Cambiar modelo”
           // =====================================================
-          $uid = (int)$_SESSION['usuario']->id;
-          $proyectosElegibles = [];
+          if ($proyectoCambioId > 0 && $nombreProyectoActual): ?>
+            <div class="alert alert-info mt-3">
+              <span class="oi oi-info mr-2"></span>
+              Proyecto: <strong><?= htmlspecialchars($nombreProyectoActual); ?></strong><br>
+              Modelo actual: <em><?= htmlspecialchars($modeloActual ?? '—'); ?></em><br>
+              <small class="text-muted">Si confirmás la creación, el nuevo modelo reemplazará al actual en este proyecto.</small>
+            </div>
+            <input type="hidden" name="proyecto" value="<?= $proyectoCambioId; ?>">
+            <?php
+          // =====================================================
+          // 🔹 Si no viene desde cambio, aplicar lógica de proyectos elegibles
+          // =====================================================
+          else:
+            $uid = (int)$_SESSION['usuario']->id;
+            $proyectosElegibles = [];
 
-          $sqlProy = "SELECT p.id_proyecto, p.nombre
-            FROM usuario_proyecto up
-            JOIN proyecto p ON p.id_proyecto = up.id_proyecto
-            WHERE up.id_usuario = {$uid}
-            ORDER BY p.nombre";
-          $resProy = $cn->query($sqlProy);
+            $sqlProy = "SELECT p.id_proyecto, p.nombre
+              FROM usuario_proyecto up
+              JOIN proyecto p ON p.id_proyecto = up.id_proyecto
+              WHERE up.id_usuario = {$uid}
+              ORDER BY p.nombre";
+            $resProy = $cn->query($sqlProy);
 
-          if ($resProy) {
-            while ($p = $resProy->fetch_assoc()) {
-              $pid = (int)$p['id_proyecto'];
-              // Verificar si el proyecto tiene métricas planificadas
-              $sqlCheck = "SELECT COUNT(*) AS c
-                 FROM metrica_iteracion mi
-                 JOIN iteracion i ON mi.id_iteracion = i.id_iteracion
-                 WHERE i.id_proyecto = {$pid}";
-              $resCheck = $cn->query($sqlCheck);
-              $hasMetrics = false;
-              if ($resCheck && $rowC = $resCheck->fetch_assoc()) {
-                $hasMetrics = ((int)$rowC['c'] > 0);
-              }
-              if (!$hasMetrics) {
-                $proyectosElegibles[] = [
-                  'id' => $pid,
-                  'nombre' => $p['nombre']
-                ];
+            if ($resProy) {
+              while ($p = $resProy->fetch_assoc()) {
+                $pid = (int)$p['id_proyecto'];
+                $sqlCheck = "SELECT COUNT(*) AS c
+                   FROM metrica_iteracion mi
+                   JOIN iteracion i ON mi.id_iteracion = i.id_iteracion
+                   WHERE i.id_proyecto = {$pid}";
+                $resCheck = $cn->query($sqlCheck);
+                $hasMetrics = false;
+                if ($resCheck && $rowC = $resCheck->fetch_assoc()) {
+                  $hasMetrics = ((int)$rowC['c'] > 0);
+                }
+                if (!$hasMetrics) {
+                  $proyectosElegibles[] = ['id' => $pid, 'nombre' => $p['nombre']];
+                }
               }
             }
-          }
-          ?>
 
-          <!-- 🔹 Sección de proyecto elegible -->
-          <?php if (empty($proyectosElegibles)) { ?>
-            <div class="alert alert-warning mt-3">
-              <span class="oi oi-warning mr-2"></span>
-              No hay proyectos elegibles para asignar un modelo de calidad.
-              <br>Todos los proyectos del usuario ya tienen métricas planificadas.
-            </div>
-
-            <script>
-              // Deshabilitar envío del formulario si no hay proyectos
-              $(function() {
-                $('form button[type="submit"]').prop('disabled', true);
-              });
-            </script>
-
-          <?php } elseif (count($proyectosElegibles) === 1) {
-            $p = $proyectosElegibles[0]; ?>
-            <div class="form-group mt-3">
-              <label>Se asigna a proyecto</label>
-              <div class="form-control-plaintext font-weight-bold">
-                <?= htmlspecialchars($p['nombre']); ?>
+            if (empty($proyectosElegibles)): ?>
+              <div class="alert alert-warning mt-3">
+                <span class="oi oi-warning mr-2"></span>
+                No hay proyectos elegibles para asignar un modelo de calidad.<br>
+                Todos los proyectos del usuario ya tienen métricas planificadas.
               </div>
-              <input type="hidden" name="proyecto" value="<?= (int)$p['id']; ?>">
-            </div>
-
-          <?php } else { ?>
-            <div class="form-group mt-3">
-              <label for="proyecto">Asignar a proyecto</label>
-              <select class="form-control" id="proyecto" name="proyecto" required>
-                <option value="">Seleccione un proyecto...</option>
-                <?php foreach ($proyectosElegibles as $p): ?>
-                  <option value="<?= (int)$p['id']; ?>">
-                    <?= htmlspecialchars($p['nombre']); ?>
-                  </option>
-                <?php endforeach; ?>
-              </select>
-              <small class="text-muted">
-                Solo se muestran los proyectos sin métricas planificadas.
-              </small>
-            </div>
-          <?php } ?>
+              <script>
+                $(function() {
+                  $('form button[type="submit"]').prop('disabled', true);
+                });
+              </script>
+            <?php elseif (count($proyectosElegibles) === 1):
+              $p = $proyectosElegibles[0]; ?>
+              <div class="form-group mt-3">
+                <label>Se asigna a proyecto</label>
+                <div class="form-control-plaintext font-weight-bold">
+                  <?= htmlspecialchars($p['nombre']); ?>
+                </div>
+                <input type="hidden" name="proyecto" value="<?= (int)$p['id']; ?>">
+              </div>
+            <?php else: ?>
+              <div class="form-group mt-3">
+                <label for="proyecto">Asignar a proyecto</label>
+                <select class="form-control" id="proyecto" name="proyecto" required>
+                  <option value="">Seleccione un proyecto...</option>
+                  <?php foreach ($proyectosElegibles as $p): ?>
+                    <option value="<?= (int)$p['id']; ?>"><?= htmlspecialchars($p['nombre']); ?></option>
+                  <?php endforeach; ?>
+                </select>
+                <small class="text-muted">Solo se muestran los proyectos sin métricas planificadas.</small>
+              </div>
+          <?php endif;
+          endif; ?>
 
         </div>
 
@@ -450,6 +470,42 @@ $esAdmin = ControlAcceso::esAdminGlobal() || ControlAcceso::esSuperAdminGlobal()
       });
 
       actualizarCount();
+      <?php
+      $tieneModeloActual = false;
+
+      if ($proyectoCambioId > 0) {
+        // Caso con parámetro explícito
+        $tieneModeloActual = ($modeloActual !== null);
+      } else {
+        // Caso general: verificar si el usuario tiene proyectos con modelo asignado
+        $uid = (int)$_SESSION['usuario']->id;
+        $sqlTiene = "SELECT COUNT(*) AS c
+                 FROM proyecto p
+                 JOIN usuario_proyecto up ON up.id_proyecto = p.id_proyecto
+                 WHERE up.id_usuario = {$uid} AND p.id_modelo IS NOT NULL";
+        $rTiene = $cn->query($sqlTiene);
+        if ($rTiene && $rowT = $rTiene->fetch_assoc()) {
+          $tieneModeloActual = ((int)$rowT['c'] > 0);
+        }
+      }
+      ?>
+
+      // 🚨 Confirmación antes de reemplazar modelo
+      const tieneModeloActual = <?php echo json_encode($tieneModeloActual); ?>;
+      console.log("Tiene modelo actual:", tieneModeloActual);
+
+      if (tieneModeloActual) {
+        $('form').on('submit', function(e) {
+          const ok = confirm(
+            "⚠️ Este proyecto ya tiene un modelo asignado.\n\n" +
+            "¿Deseás reemplazarlo por el nuevo modelo?\n\n" +
+            "Esta acción no se puede deshacer."
+          );
+          if (!ok) e.preventDefault();
+        });
+      }
+
+
     });
   </script>
   <?php include_once '../gui/footer.php'; ?>

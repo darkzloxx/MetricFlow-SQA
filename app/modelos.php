@@ -278,7 +278,7 @@ if (!empty($proyectos)) {
                     <?php else: ?>
                         <?php if ($tienePermGestionModelo && $hayElegiblePersonalizado): ?>
                             <a href="modelo.nuevo.php" class="btn btn-success" title="Crear modelo personalizado">
-                                <span class="oi oi-plus"></span> Nuevo Modelo Personalizado
+                                <span class="oi oi-plus"></span> Seleccionar/Crear/Cambiar Modelo Personalizado
                             </a>
                         <?php endif; ?>
                     <?php endif; ?>
