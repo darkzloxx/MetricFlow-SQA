@@ -111,7 +111,7 @@ $urlDashboard = 'dashboard.php?proyecto=' . $idProyecto;
                 </div>
                 <div class="mb-3">
                     <h5 class="mb-1">Fecha de Registro</h5>
-                    <div><?= htmlspecialchars(date('d/m/Y H:i', strtotime($Proyecto['fecha_creacion'])), ENT_QUOTES, 'UT F-8'); ?></div>
+                    <div><?= htmlspecialchars(date('d/m/Y H:i', strtotime($Proyecto['fecha_creacion'])), ENT_QUOTES, 'UTF-8'); ?></div>
                 </div>
                 <?php if (!empty($Proyecto['descripcion'])) { ?>
                     <div class="mb-3">
