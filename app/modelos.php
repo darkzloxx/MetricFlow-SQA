@@ -209,14 +209,12 @@ if (!empty($proyectos)) {
                     <?php if (empty($modelos)): ?>
                         <div class="text-muted">No hay modelos globales registrados.</div>
                     <?php else: ?>
-                        <table class="table table-hover table-sm">
-                            <thead class="table-info">
-                                <tr>
+                          <table class="table table-hover table-sm">
+                            <tr class="table-info">
                                     <th>Modelo</th>
                                     <th>Usado por</th>
                                     <th>Acciones</th>
                                 </tr>
-                            </thead>
                             <tbody>
                                 <?php foreach ($modelos as $m):
                                     $mid = (int)$m['id_modelo'];

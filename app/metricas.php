@@ -132,14 +132,12 @@ $tienePermGestionMetricas = ControlAcceso::verificaPermiso(PermisosSistema::GEST
                         <div class="text-muted">No hay métricas registradas.</div>
                     <?php else: ?>
                         <table class="table table-hover table-sm">
-                            <thead class="table-info">
-                                <tr>
-                                    <th>Nombre</th>
-                                    <th>Descripción</th>
-                                    <th>Tipo</th>
-                                    <th>Opciones</th>
-                                </tr>
-                            </thead>
+                            <tr class="table-info">
+                                <th>Nombre</th>
+                                <th>Descripción</th>
+                                <th>Tipo</th>
+                                <th>Opciones</th>
+                            </tr>
                             <tbody>
                                 <?php foreach ($metricas as $m):
                                     $id  = (int)$m['id_metrica'];
@@ -241,15 +239,13 @@ $tienePermGestionMetricas = ControlAcceso::verificaPermiso(PermisosSistema::GEST
                             if (empty($metricas)): ?>
                                 <div class="text-muted mb-4">No hay métricas definidas para este modelo.</div>
                             <?php else: ?>
-                                <table class="table table-hover table-sm mb-4">
-                                    <thead class="table-info">
-                                        <tr>
-                                            <th>Nombre</th>
-                                            <th>Descripción</th>
-                                            <th>Tipo</th>
-                                            <th>Opciones</th>
-                                        </tr>
-                                    </thead>
+                                <table class="table table-hover table-sm">
+                                    <tr class="table-info">
+                                        <th>Nombre</th>
+                                        <th>Descripción</th>
+                                        <th>Tipo</th>
+                                        <th>Opciones</th>
+                                    </tr>
                                     <tbody>
                                         <?php foreach ($metricas as $m):
                                             $idM = (int)$m['id_metrica'];
