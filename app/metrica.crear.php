@@ -51,6 +51,18 @@ $modelos = $rs ? $rs->fetch_all(MYSQLI_ASSOC) : [];
     <link rel="stylesheet" href="../lib/open-iconic-master/font/css/open-iconic-bootstrap.css" />
     <script src="../lib/JQuery/jquery-3.3.1.js"></script>
     <script src="../lib/bootstrap-4.1.1-dist/js/bootstrap.min.js"></script>
+    <style>
+        .btn-outline-secondary {
+            border-color: #dee2e6;
+            color: #495057;
+            background: #fff;
+        }
+
+        .btn-outline-secondary:hover {
+            background: #f8f9fa;
+            color: #212529;
+        }
+    </style>
 </head>
 
 <body>
@@ -58,7 +70,7 @@ $modelos = $rs ? $rs->fetch_all(MYSQLI_ASSOC) : [];
 
     <div class="container mt-4">
         <div class="mb-3">
-            <a href="proyectos.php" class="btn btn-outline-secondary">
+            <a href="metricas.php" class="btn btn-outline-secondary">
                 <span class="oi oi-arrow-left mr-1"></span> Volver
             </a>
         </div>
