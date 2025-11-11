@@ -408,7 +408,12 @@ if (!empty($proyectos)) {
                 },
                 error: function(xhr) {
                     console.error("Respuesta servidor:", xhr.responseText);
-                    alert('⚠️ Error de comunicación con el servidor.');
+                    try {
+                        const resp = JSON.parse(xhr.responseText);
+                        alert('❌ ' + (resp.error || 'Error en el servidor.'));
+                    } catch (e) {
+                        alert('⚠️ Error de comunicación con el servidor.');
+                    }
                 }
             });
         }
