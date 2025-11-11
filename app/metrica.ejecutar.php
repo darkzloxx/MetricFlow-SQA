@@ -101,30 +101,56 @@ if ($idIter) {
         <p><strong>Descripción:</strong> <?= htmlspecialchars($met['descripcion'] ?? ''); ?></p>
         <hr />
         <?php if (!$planificado): ?>
-          <div class="alert alert-warning">La métrica aún no está planificada. No se puede registrar ejecución.</div>
-        <?php elseif ($ejecutado): ?>
-          <div class="alert alert-info">La métrica ya tiene un valor ejecutado (<?= htmlspecialchars((string)$valEjec); ?>). No se puede volver a ejecutar aquí.</div>
+          <div class="alert alert-warning">
+            La métrica aún no está planificada. No se puede registrar ejecución.
+          </div>
+
         <?php else: ?>
+          <?php if ($ejecutado): ?>
+            <div class="alert alert-info">
+              La métrica ya tiene un valor ejecutado (<strong><?= htmlspecialchars((string)$valEjec); ?></strong>).
+              Si lo desea, puede actualizarlo a continuación.
+            </div>
+          <?php endif; ?>
+
           <form method="post" action="metrica.ejecutar.procesar.php" class="mt-2">
             <input type="hidden" name="id_metrica" value="<?= (int)$met['id_metrica']; ?>" />
             <input type="hidden" name="id_iteracion" value="<?= (int)$idIter; ?>" />
+
             <div class="form-group">
               <label>Valor planificado</label>
               <input type="text" class="form-control" value="<?= htmlspecialchars((string)$valPlan); ?>" readonly />
             </div>
+
             <div class="form-group">
               <label>Umbral de desviación</label>
               <input type="text" class="form-control" value="<?= htmlspecialchars((string)$umbral); ?>" readonly />
             </div>
+
             <div class="form-group">
               <label for="valor_ejecutado">Valor ejecutado</label>
-              <input type="number" step="any" min="0" class="form-control" id="valor_ejecutado" name="valor_ejecutado" required placeholder="Ej: 125" />
-              <small class="form-text text-muted">Ingrese el valor realmente alcanzado por la métrica.</small>
+              <input
+                type="number" step="any" min="0"
+                class="form-control"
+                id="valor_ejecutado"
+                name="valor_ejecutado"
+                required
+                value="<?= htmlspecialchars((string)$valEjec); ?>"
+                placeholder="Ej: 125" />
+              <small class="form-text text-muted">
+                Ingrese el valor realmente alcanzado por la métrica.
+              </small>
             </div>
-            <button type="submit" class="btn btn-outline-success"><span class="oi oi-check"></span> Guardar Ejecución</button>
-            <a href="metricas.php" class="btn btn-outline-danger ml-2"><span class="oi oi-x"></span> Cancelar</a>
+
+            <button type="submit" class="btn btn-outline-success">
+              <span class="oi oi-check"></span> Guardar Ejecución
+            </button>
+            <a href="metricas.php" class="btn btn-outline-danger ml-2">
+              <span class="oi oi-x"></span> Cancelar
+            </a>
           </form>
         <?php endif; ?>
+
       </div>
     </div>
   </div>
