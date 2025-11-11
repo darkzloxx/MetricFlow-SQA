@@ -9,7 +9,7 @@ $cn->autocommit(false);
 $cn->begin_transaction();
 
 $idProyecto = (int)$DatosFormulario["id_proyecto"];
-$numero = (int)$DatosFormulario["nombre"];
+$numero = (int)$DatosFormulario["numero"];
 $fecha_inicio = $cn->real_escape_string($DatosFormulario["fecha_inicio"]);
 $fecha_fin = $cn->real_escape_string($DatosFormulario["fecha_fin"]);
 $objetivo = $cn->real_escape_string(trim($DatosFormulario["objetivo"]));
@@ -30,6 +30,15 @@ $res = $cn->query($sqlCheck);
 if ($res && $res->num_rows > 0) {
     $mensaje = "Ya existe una iteración con ese número en la fase seleccionada.";
 } else {
+    if ($numero === 0) {
+        $sqlNext = "
+        SELECT COALESCE(MAX(numero_iteracion), 0) + 1 AS siguiente
+        FROM iteracion
+        WHERE id_proyecto = {$idProyecto}";
+        $resNext = $cn->query($sqlNext);
+        $numero = (int)($resNext->fetch_assoc()['siguiente'] ?? 1);
+    }
+
     $sqlInsert = "
         INSERT INTO iteracion (id_proyecto, numero_iteracion, fecha_inicio, fecha_fin, objetivo, id_fase)
         VALUES ({$idProyecto}, {$numero}, '{$fecha_inicio}', '{$fecha_fin}', '{$objetivo}', {$fase})";

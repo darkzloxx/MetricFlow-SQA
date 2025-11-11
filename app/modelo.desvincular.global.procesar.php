@@ -44,6 +44,25 @@ try {
     if (empty($row) || (int)$row['id_modelo_global'] === 0) {
         throw new Exception('El proyecto no tiene un modelo global asignado.');
     }
+    // =====================================================
+    // 🔍 Verificar si el modelo global tiene métricas planificadas o ejecutadas
+    // =====================================================
+    $sqlUso = "
+    SELECT 1
+    FROM metrica_iteracion mi
+    WHERE mi.id_metrica IN (
+        SELECT mmc.id_metrica
+        FROM metrica_modelo_calidad mmc
+        JOIN proyecto p ON p.id_modelo_global = mmc.id_modelo
+        WHERE p.id_proyecto = {$idProyecto}
+    )
+    LIMIT 1
+";
+
+    $resUso = $cn->query($sqlUso);
+    if ($resUso && $resUso->num_rows > 0) {
+        throw new Exception('No se puede desvincular el modelo global: contiene métricas planificadas o en ejecución.');
+    }
 
     // ✅ Desvincular modelo
     $update = $cn->query("UPDATE proyecto SET id_modelo_global = NULL WHERE id_proyecto = {$idProyecto} LIMIT 1");
@@ -59,7 +78,6 @@ try {
         header('Location: modelos.php?msg=' . urlencode('Modelo predeterminado desvinculado correctamente.') . '&type=success');
         exit;
     }
-
 } catch (Exception $ex) {
     if ($__isAjax) {
         header('Content-Type: application/json', true, 500);

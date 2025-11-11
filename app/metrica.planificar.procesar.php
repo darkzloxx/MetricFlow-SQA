@@ -53,22 +53,19 @@ $iter = $rsCheck->fetch_assoc();
 // 🔹 Comprobar si ya hay una planificación existente
 // ===========================================================
 $sqlExist = "
-    SELECT id_metrica_iteracion 
+    SELECT 1
     FROM metrica_iteracion 
     WHERE id_metrica = {$idMetrica} AND id_iteracion = {$idIteracion}
     LIMIT 1";
 $rsExist = $cn->query($sqlExist);
 
 if ($rsExist && $rsExist->num_rows > 0) {
-  // Ya existe → actualizar
-  $row = $rsExist->fetch_assoc();
-  $idMetricaIter = (int)$row['id_metrica_iteracion'];
-
+  // 🔄 Ya existe → actualizar valores
   $stmt = $cn->prepare("
         UPDATE metrica_iteracion
-        SET valor_planificado = ?, umbral = ?, fecha_planificacion = NOW()
-        WHERE id_metrica_iteracion = ?");
-  $stmt->bind_param('ddi', $valorPlanificado, $umbral, $idMetricaIter);
+        SET valor_planificado = ?, umbral_desviacion = ?
+        WHERE id_metrica = ? AND id_iteracion = ?");
+  $stmt->bind_param('ddii', $valorPlanificado, $umbral, $idMetrica, $idIteracion);
   $ok = $stmt->execute();
   $stmt->close();
 
@@ -80,10 +77,10 @@ if ($rsExist && $rsExist->num_rows > 0) {
     exit;
   }
 } else {
-  // No existe → insertar nuevo registro
+  // 🆕 No existe → insertar nuevo registro
   $stmt = $cn->prepare("
-        INSERT INTO metrica_iteracion (id_metrica, id_iteracion, valor_planificado, umbral, fecha_planificacion)
-        VALUES (?, ?, ?, ?, NOW())");
+        INSERT INTO metrica_iteracion (id_metrica, id_iteracion, valor_planificado, umbral_desviacion)
+        VALUES (?, ?, ?, ?)");
   $stmt->bind_param('iidd', $idMetrica, $idIteracion, $valorPlanificado, $umbral);
   $ok = $stmt->execute();
   $stmt->close();

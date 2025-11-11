@@ -67,7 +67,7 @@ $mensaje = "Operación Realizada con Éxito";
                     <?php } ?>
                     <hr />
                     <h5 class="card-text">Opciones</h5>
-                    <a href="iteracion.php">
+                    <a href="iteraciones.php">
                         <button type="button" class="btn btn-primary">
                             <span class="oi oi-account-logout"></span> Salir
                         </button>

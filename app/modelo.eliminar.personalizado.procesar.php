@@ -57,17 +57,36 @@ try {
     // =====================================================
     // 🔍 Verificar si tiene métricas planificadas (en metrica_iteracion)
     // =====================================================
+    // =====================================================
+    // 🔍 Verificar si el modelo (personalizado) tiene métricas planificadas o ejecutadas
+    // =====================================================
     $sqlUso = "
-        SELECT 1
-        FROM metrica_iteracion mi
-        JOIN metrica_proyecto_modelo mpm ON mpm.id_metrica = mi.id_metrica
+    SELECT 1
+    FROM metrica_iteracion mi
+    WHERE mi.id_metrica IN (
+        -- Métricas personalizadas del modelo personalizado
+        SELECT mpm.id_metrica
+        FROM metrica_proyecto_modelo mpm
         WHERE mpm.id_proyecto_modelo = {$idModelo}
-        LIMIT 1
-    ";
+
+        UNION
+
+        -- Métricas base heredadas del modelo global del proyecto
+        SELECT mmc.id_metrica
+        FROM metrica_modelo_calidad mmc
+        JOIN proyecto p ON p.id_modelo_global = mmc.id_modelo
+        JOIN proyecto_modelo_calidad pmc ON pmc.id_proyecto = p.id_proyecto
+        WHERE pmc.id_proyecto_modelo = {$idModelo}
+    )
+    LIMIT 1
+";
+
     $resUso = $cn->query($sqlUso);
     if ($resUso && $resUso->num_rows > 0) {
-        throw new Exception('No se puede eliminar el modelo: contiene métricas planificadas o en ejecución.');
+        throw new Exception('No se puede eliminar el modelo: contiene métricas base o personalizadas planificadas o en ejecución.');
     }
+
+ 
 
     // =====================================================
     // 🔹 Iniciar transacción

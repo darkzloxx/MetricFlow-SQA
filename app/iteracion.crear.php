@@ -69,12 +69,25 @@ $unicoProyecto = count($proyectos) === 1;
                         </div>
                     <?php endif; ?>
 
+                    <!-- 🔹 FASE -->
+                    <div class="form-group">
+                        <label for="fase">Fase</label>
+                        <select id="fase" name="fase" class="form-control">
+                            <?php
+                            $resFase = $cn->query("SELECT id_fase, nombre FROM fase ORDER BY id_fase ASC");
+                            $fases = $resFase ? $resFase->fetch_all(MYSQLI_ASSOC) : [];
+                            foreach ($fases as $f): ?>
+                                <option value="<?= $f['id_fase']; ?>"><?= htmlspecialchars($f['nombre']); ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+
                     <!-- 🔹 NÚMERO DE ITERACIÓN -->
                     <div class="form-group">
-                        <label for="inputNombre">Número de Iteración</label>
-                        <input type="number" name="nombre" class="form-control" id="inputNombre"
-                            placeholder="Ingrese el número de la iteración" required>
+                        <label for="inputNumero">Número de Iteración</label>
+                        <input type="number" id="inputNumero" name="numero" class="form-control" readonly placeholder="Seleccioná una fase">
                     </div>
+
 
                     <!-- 🔹 FECHAS -->
                     <div class="form-group">
@@ -93,18 +106,7 @@ $unicoProyecto = count($proyectos) === 1;
                             placeholder="Ingrese un breve objetivo de la iteración">
                     </div>
 
-                    <!-- 🔹 FASE -->
-                    <div class="form-group">
-                        <label for="fase">Fase</label>
-                        <select id="fase" name="fase" class="form-control">
-                            <?php
-                            $resFase = $cn->query("SELECT id_fase, nombre FROM fase ORDER BY id_fase ASC");
-                            $fases = $resFase ? $resFase->fetch_all(MYSQLI_ASSOC) : [];
-                            foreach ($fases as $f): ?>
-                                <option value="<?= $f['id_fase']; ?>"><?= htmlspecialchars($f['nombre']); ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
+
 
                 </div>
                 <div class="card-footer">
@@ -130,7 +132,49 @@ $unicoProyecto = count($proyectos) === 1;
             return true;
         }
     </script>
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            const faseSelect = document.getElementById("fase");
+            const numeroInput = document.getElementById("inputNumero");
+            const proyectoSelect = document.getElementById("proyecto");
+            const idProyecto = <?= $unicoProyecto ? $proyectos[0]['id_proyecto'] : 'null'; ?>;
 
+            function cargarNumeroIteracion() {
+                const idFase = faseSelect.value;
+                const proyecto = idProyecto ?? (proyectoSelect ? proyectoSelect.value : null);
+                if (!idFase || !proyecto) {
+                    numeroInput.value = '';
+                    numeroInput.placeholder = 'Seleccioná una fase';
+                    return;
+                }
+
+                fetch(`./ajax/next_iteracion.php?idProyecto=${proyecto}&idFase=${idFase}`)
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.error) {
+                            console.error('Error del servidor:', data.error);
+                            numeroInput.value = '';
+                            return;
+                        }
+                        numeroInput.value = data.siguiente ?? 1;
+                    })
+                    .catch(err => {
+                        console.error('Error al obtener el número de iteración:', err);
+                        numeroInput.value = '';
+                    });
+
+            }
+
+            // 🔹 Escuchar cambios en fase o proyecto
+            faseSelect.addEventListener("change", cargarNumeroIteracion);
+            if (proyectoSelect) proyectoSelect.addEventListener("change", cargarNumeroIteracion);
+
+            // 🔹 Cargar automáticamente al iniciar si hay fase seleccionada y proyecto fijo
+            if (idProyecto && faseSelect.value) {
+                cargarNumeroIteracion();
+            }
+        });
+    </script>
     <?php include_once '../gui/footer.php'; ?>
 </body>
 
