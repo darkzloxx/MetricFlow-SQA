@@ -39,19 +39,39 @@ if ($esAdmin || $esSuperAdmin) {
         exit;
     }
 
-    // Bloquear si la métrica base está en uso (modelo, proyecto o iteración)
+    // 🔒 Verificar si la métrica está en uso directo o indirecto (por modelos asignados a proyectos)
     $sqlUso = "
-        SELECT 1 FROM (
-            SELECT id_metrica FROM metrica_modelo_calidad WHERE id_metrica = {$idMetrica}
-            UNION
-            SELECT id_metrica FROM metrica_proyecto_modelo WHERE id_metrica = {$idMetrica}
-            UNION
-            SELECT id_metrica FROM metrica_iteracion WHERE id_metrica = {$idMetrica}
-        ) AS usos LIMIT 1
-    ";
+    SELECT 1 FROM (
+        -- En algún modelo personalizado
+        SELECT id_metrica FROM metrica_proyecto_modelo WHERE id_metrica = {$idMetrica}
+
+        UNION
+
+        -- En alguna iteración (planificada o ejecutada)
+        SELECT id_metrica FROM metrica_iteracion WHERE id_metrica = {$idMetrica}
+
+        UNION
+
+        -- En un modelo base actualmente asignado a algún proyecto
+        SELECT mmc.id_metrica
+        FROM metrica_modelo_calidad mmc
+        INNER JOIN proyecto p ON p.id_modelo_global = mmc.id_modelo
+        WHERE mmc.id_metrica = {$idMetrica}
+
+        UNION
+
+        -- En un modelo base usado como base de un modelo personalizado
+        SELECT mmc.id_metrica
+        FROM metrica_modelo_calidad mmc
+        INNER JOIN proyecto_modelo_calidad pmc ON pmc.id_modelo_base = mmc.id_modelo
+        WHERE mmc.id_metrica = {$idMetrica}
+    ) AS usos
+    LIMIT 1
+";
+
     $resUso = $cn->query($sqlUso);
     if ($resUso && $resUso->num_rows > 0) {
-        header('Location: metricas.php?msg=' . urlencode('⚠️ No se puede eliminar: la métrica base está asociada a uno o más modelos o proyectos.') . '&type=danger');
+        header('Location: metricas.php?msg=' . urlencode('⚠️ No se puede eliminar: la métrica base está asociada a uno o más modelos que están en uso en proyecto/s.') . '&type=danger');
         exit;
     }
 

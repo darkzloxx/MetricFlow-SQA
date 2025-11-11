@@ -170,13 +170,54 @@ foreach ($proyectos as $pr) {
     }
 
     // Paso 3: modelo
-    if ($next === null) {
-        if (empty($pr['id_modelo'])) {
-            $next = ['paso' => 3, 'texto' => 'Sin modelo de calidad asignado.', 'accion' => 'Seleccioná o creá un modelo (debe tener métricas).', 'responsable' => 'Gerente de Calidad o Líder de Proyecto', 'icono' => 'oi-layers', 'estado' => 'pendiente'];
-        } else {
+if ($next === null) {
+    $idModeloGlobal = (int)($pr['id_modelo_global'] ?? 0);
+    $idModeloPers   = (int)($pr['id_modelo_personalizado'] ?? 0);
+
+    if ($idModeloGlobal === 0 && $idModeloPers === 0) {
+        // ❌ Sin modelo
+        $next = [
+            'paso' => 3,
+            'texto' => 'Sin modelo de calidad asignado.',
+            'accion' => 'Seleccioná o creá un modelo personalizado basado en uno global existente (debe tener métricas).',
+            'responsable' => 'Gerente de Calidad o Líder de Proyecto',
+            'icono' => 'oi-layers',
+            'estado' => 'pendiente'
+        ];
+    } else {
+        // ✅ Verificar existencia real
+        $existeModelo = false;
+
+        if ($idModeloGlobal > 0) {
+            $res = $cn->query("SELECT id_modelo FROM modelo_calidad WHERE id_modelo = $idModeloGlobal");
+            $existeModelo = ($res && $res->num_rows > 0);
+        }
+
+        if (!$existeModelo && $idModeloPers > 0) {
+            $res = $cn->query("
+                SELECT id_proyecto_modelo
+                FROM proyecto_modelo_calidad
+                WHERE id_proyecto_modelo = $idModeloPers
+            ");
+            $existeModelo = ($res && $res->num_rows > 0);
+        }
+
+        if ($existeModelo) {
             $completados++;
+        } else {
+            $next = [
+                'paso' => 3,
+                'texto' => 'Modelo de calidad no válido o eliminado.',
+                'accion' => 'Verificá que el modelo asignado al proyecto exista o reasigná uno nuevo.',
+                'responsable' => 'Administrador o Gerente de Calidad',
+                'icono' => 'oi-warning',
+                'estado' => 'pendiente'
+            ];
         }
     }
+}
+
+
     // Paso 4: iteraciones
     if ($next === null) {
         $cantIter = (int)$cn->query("SELECT COUNT(*) AS c FROM iteracion WHERE id_proyecto=$idP")->fetch_assoc()['c'];
