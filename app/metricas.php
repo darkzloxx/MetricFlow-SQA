@@ -69,11 +69,6 @@ $cn = BDConexion::getInstancia();
             <a href="proyectos.php" class="btn btn-outline-secondary">
                 <span class="oi oi-arrow-left mr-1"></span> Volver
             </a>
-            <?php if ($tienePermGestionMetricas): ?>
-                <a href="metrica.nueva.php" class="btn btn-success ml-2">
-                    <span class="oi oi-plus"></span> Nueva Métrica
-                </a>
-            <?php endif; ?>
         </div>
 
         <?php if (isset($_GET['msg'])): ?>
@@ -95,7 +90,12 @@ $cn = BDConexion::getInstancia();
                 <h3 class="mb-0">Gestión de Métricas</h3>
             </div>
             <div class="card-body">
-
+                <?php if ($tienePermGestionMetricas): ?>
+                    <a href="metrica.nueva.php" class="btn btn-success">
+                        <span class="oi oi-plus"></span> Nueva Métrica
+                    </a>
+                <?php endif; ?>
+                <br> <br>
                 <?php
                 /* ==========================================================
            🧑‍💼 ADMIN / SUPERADMIN → Métricas base globales

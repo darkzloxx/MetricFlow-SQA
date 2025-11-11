@@ -122,13 +122,11 @@ $idModelo = (int)($modelo['id_modelo'] ?? 0);
 
                     $rsDet = $cn->query($sqlDet);
                     ?>
-                    <table class="table table-hover table-sm">
-                        <thead class="table-info">
-                            <tr>
+                     <table class="table table-hover table-sm">
+                            <tr class="table-info">
                                 <th>Métrica</th>
                                 <th>Descripción</th>
                             </tr>
-                        </thead>
                         <tbody>
                             <?php
                             $tiene = false;

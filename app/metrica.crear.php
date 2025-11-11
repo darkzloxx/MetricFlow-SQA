@@ -57,6 +57,11 @@ $modelos = $rs ? $rs->fetch_all(MYSQLI_ASSOC) : [];
     <?php include_once '../gui/navbar.php'; ?>
 
     <div class="container mt-4">
+        <div class="mb-3">
+            <a href="proyectos.php" class="btn btn-outline-secondary">
+                <span class="oi oi-arrow-left mr-1"></span> Volver
+            </a>
+        </div>
         <?php if (isset($_GET['msg'])): ?>
             <div class="alert alert-<?= ($_GET['type'] ?? '') === 'success' ? 'success' : 'danger'; ?> alert-dismissible fade show" role="alert">
                 <?= $_GET['msg']; ?>
