@@ -1,4 +1,4 @@
-<?php 
+<?php
 if (session_status() !== PHP_SESSION_ACTIVE) {
     session_start();
 }
@@ -78,7 +78,14 @@ $currentPage = isset($_SERVER['SCRIPT_NAME']) ? basename($_SERVER['SCRIPT_NAME']
                     </a>
                 </li>
             <?php } ?>
-
+            <!-- 🔹 Iteraciones (solo Líder / permiso ABM_ITERACIONES) -->
+            <?php if (ControlAcceso::verificaPermiso(PermisosSistema::ABM_ITERACIONES)) { ?>
+                <li class="nav-item">
+                    <a class="nav-link" href="../app/iteracion.php">
+                        <span class="oi oi-loop-circular"></span> Iteraciones
+                    </a>
+                </li>
+            <?php } ?>
             <!-- 🔹 Botón Salir: solo si no estamos en index.php ni salir.php -->
             <?php if (!in_array($currentPage, ['index.php', 'salir.php'])) { ?>
                 <li class="nav-item">
@@ -92,14 +99,14 @@ $currentPage = isset($_SERVER['SCRIPT_NAME']) ? basename($_SERVER['SCRIPT_NAME']
 </nav>
 
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    var btnSalir = document.getElementById('btnSalir');
-    if (btnSalir) {
-        btnSalir.addEventListener('click', function(e) {
-            if (!confirm('¿Está seguro que desea cerrar sesión?')) {
-                e.preventDefault();
-            }
-        });
-    }
-});
+    document.addEventListener('DOMContentLoaded', function() {
+        var btnSalir = document.getElementById('btnSalir');
+        if (btnSalir) {
+            btnSalir.addEventListener('click', function(e) {
+                if (!confirm('¿Está seguro que desea cerrar sesión?')) {
+                    e.preventDefault();
+                }
+            });
+        }
+    });
 </script>

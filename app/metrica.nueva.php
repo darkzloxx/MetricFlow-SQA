@@ -13,6 +13,7 @@ if (!($esAdmin || $esSuperAdmin || $tienePermGestionMetricas)) {
 ?>
 
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
     <title><?= Constantes::NOMBRE_SISTEMA; ?> - Nueva Métrica</title>
@@ -26,13 +27,16 @@ if (!($esAdmin || $esSuperAdmin || $tienePermGestionMetricas)) {
             transition: all 0.2s ease-in-out;
             cursor: pointer;
         }
+
         .action-card:hover {
             transform: translateY(-4px);
-            box-shadow: 0 0.5rem 1rem rgba(0,0,0,.15);
+            box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, .15);
         }
+
         .icon {
             font-size: 2rem;
         }
+
         /* 🔹 Evitar subrayado o cambio de color en hover */
         a.text-decoration-none:hover,
         a.text-decoration-none:focus,
@@ -53,54 +57,66 @@ if (!($esAdmin || $esSuperAdmin || $tienePermGestionMetricas)) {
             box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
             border-width: 2px !important;
         }
+
+        .btn-outline-secondary {
+            border-color: #dee2e6;
+            color: #495057;
+            background: #fff;
+        }
+
+        .btn-outline-secondary:hover {
+            background: #f8f9fa;
+            color: #212529;
+        }
     </style>
 </head>
 
 <body>
-<?php include_once '../gui/navbar.php'; ?>
+    <?php include_once '../gui/navbar.php'; ?>
 
-<div class="container mt-5">
-    <div class="card shadow-sm">
-        <div class="card-header">
-            <h3 class="mb-0">Nueva Métrica</h3>
-            <p class="text-muted mb-0 mt-1">Seleccione la acción que desea realizar.</p>
-        </div>
-        <div class="card-body text-center">
-            <div class="row">
-                <div class="col-md-6 mb-3">
-                    <a href="metrica.crear.php" class="text-decoration-none text-dark">
-                        <div class="card action-card h-100 border-success">
-                            <div class="card-body">
-                                <span class="oi oi-plus icon text-success mb-3 d-block"></span>
-                                <h5>Crear nueva métrica</h5>
-                                <p class="text-muted mb-0">Defina una métrica nueva y asígnela a uno o más modelos disponibles.</p>
+    <div class="container mt-5">
+        <div class="card shadow-sm">
+            <div class="card-header">
+                <h3 class="mb-0">Nueva Métrica</h3>
+                <p class="text-muted mb-0 mt-1">Seleccione la acción que desea realizar.</p>
+            </div>
+            <div class="card-body text-center">
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <a href="metrica.crear.php" class="text-decoration-none text-dark">
+                            <div class="card action-card h-100 border-success">
+                                <div class="card-body">
+                                    <span class="oi oi-plus icon text-success mb-3 d-block"></span>
+                                    <h5>Crear nueva métrica</h5>
+                                    <p class="text-muted mb-0">Defina una métrica nueva y asígnela a uno o más modelos disponibles.</p>
+                                </div>
                             </div>
-                        </div>
-                    </a>
-                </div>
+                        </a>
+                    </div>
 
-                <div class="col-md-6 mb-3">
-                    <a href="metrica.vincular.php" class="text-decoration-none text-dark">
-                        <div class="card action-card h-100 border-primary">
-                            <div class="card-body">
-                                <span class="oi oi-link-intact icon text-primary mb-3 d-block"></span>
-                                <h5>Vincular métrica existente</h5>
-                                <p class="text-muted mb-0">Seleccione una métrica ya creada y asóciela a un modelo de calidad.</p>
+                    <div class="col-md-6 mb-3">
+                        <a href="metrica.vincular.php" class="text-decoration-none text-dark">
+                            <div class="card action-card h-100 border-primary">
+                                <div class="card-body">
+                                    <span class="oi oi-link-intact icon text-primary mb-3 d-block"></span>
+                                    <h5>Vincular métrica existente</h5>
+                                    <p class="text-muted mb-0">Seleccione una métrica ya creada y asóciela a un modelo de calidad.</p>
+                                </div>
                             </div>
-                        </div>
-                    </a>
+                        </a>
+                    </div>
                 </div>
             </div>
-        </div>
 
-        <div class="card-footer text-right">
-            <a href="metricas.php" class="btn btn-outline-secondary">
-                <span class="oi oi-arrow-left"></span> Volver
-            </a>
+            <div class="card-footer text-right">
+                <a href="metricas.php" class="btn btn-outline-secondary">
+                    <span class="oi oi-arrow-left"></span> Volver
+                </a>
+            </div>
         </div>
     </div>
-</div>
 
-<?php include_once '../gui/footer.php'; ?>
+    <?php include_once '../gui/footer.php'; ?>
 </body>
+
 </html>
