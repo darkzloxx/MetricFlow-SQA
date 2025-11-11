@@ -1,6 +1,6 @@
 <?php
 include_once '../lib/ControlAcceso.class.php';
-ControlAcceso::requierePermiso(PermisosSistema::PERMISO_PERMISOS);
+ControlAcceso::requierePermiso(PermisosSistema::ABM_ITERACIONES);
 include_once '../modelo/Permiso.php';
 $id = $_GET["id"];
 
@@ -74,7 +74,7 @@ $id = $_GET["id"];
                         <button type="submit" class="btn btn-outline-success">
                             <span class="oi oi-check"></span> Confirmar
                         </button>
-                        <a href="iteracion.php">
+                        <a href="iteraciones.php">
                             <button type="button" class="btn btn-outline-danger">
                                 <span class="oi oi-x"></span> Cancelar
                             </button>

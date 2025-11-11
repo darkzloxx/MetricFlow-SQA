@@ -1,6 +1,6 @@
 <?php
 include_once '../lib/ControlAcceso.class.php';
-ControlAcceso::requierePermiso(PermisosSistema::PERMISO_PERMISOS);
+ControlAcceso::requierePermiso(PermisosSistema::ABM_ITERACIONES);
 include_once '../modelo/Permiso.php';
 
 $id = $_GET["id"];
@@ -59,7 +59,7 @@ $id = $_GET["id"];
                 </table>
             </div>
             <div class="card-footer">
-                <a href="iteracion.php">
+                <a href="iteraciones.php">
                     <button type="button" class="btn btn-outline-danger">
                         <span class="oi oi-x"></span> Volver
                     </button>

@@ -81,7 +81,7 @@ $currentPage = isset($_SERVER['SCRIPT_NAME']) ? basename($_SERVER['SCRIPT_NAME']
             <!-- 🔹 Iteraciones (solo Líder / permiso ABM_ITERACIONES) -->
             <?php if (ControlAcceso::verificaPermiso(PermisosSistema::ABM_ITERACIONES)) { ?>
                 <li class="nav-item">
-                    <a class="nav-link" href="../app/iteracion.php">
+                    <a class="nav-link" href="../app/iteraciones.php">
                         <span class="oi oi-loop-circular"></span> Iteraciones
                     </a>
                 </li>

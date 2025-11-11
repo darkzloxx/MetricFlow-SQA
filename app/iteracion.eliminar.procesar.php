@@ -1,6 +1,6 @@
 <?php
 include_once '../lib/ControlAcceso.class.php';
-ControlAcceso::requierePermiso(PermisosSistema::PERMISO_PERMISOS);
+ControlAcceso::requierePermiso(PermisosSistema::ABM_ITERACIONES);
 include_once '../modelo/BDConexion.Class.php';
 $DatosFormulario = $_POST;
 

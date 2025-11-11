@@ -170,52 +170,52 @@ foreach ($proyectos as $pr) {
     }
 
     // Paso 3: modelo
-if ($next === null) {
-    $idModeloGlobal = (int)($pr['id_modelo_global'] ?? 0);
-    $idModeloPers   = (int)($pr['id_modelo_personalizado'] ?? 0);
+    if ($next === null) {
+        $idModeloGlobal = (int)($pr['id_modelo_global'] ?? 0);
+        $idModeloPers   = (int)($pr['id_modelo_personalizado'] ?? 0);
 
-    if ($idModeloGlobal === 0 && $idModeloPers === 0) {
-        // ❌ Sin modelo
-        $next = [
-            'paso' => 3,
-            'texto' => 'Sin modelo de calidad asignado.',
-            'accion' => 'Seleccioná o creá un modelo personalizado basado en uno global existente (debe tener métricas).',
-            'responsable' => 'Gerente de Calidad o Líder de Proyecto',
-            'icono' => 'oi-layers',
-            'estado' => 'pendiente'
-        ];
-    } else {
-        // ✅ Verificar existencia real
-        $existeModelo = false;
+        if ($idModeloGlobal === 0 && $idModeloPers === 0) {
+            // ❌ Sin modelo
+            $next = [
+                'paso' => 3,
+                'texto' => 'Sin modelo de calidad asignado.',
+                'accion' => 'Seleccioná o creá un modelo personalizado basado en uno global existente (debe tener métricas).',
+                'responsable' => 'Gerente de Calidad o Líder de Proyecto',
+                'icono' => 'oi-layers',
+                'estado' => 'pendiente'
+            ];
+        } else {
+            // ✅ Verificar existencia real
+            $existeModelo = false;
 
-        if ($idModeloGlobal > 0) {
-            $res = $cn->query("SELECT id_modelo FROM modelo_calidad WHERE id_modelo = $idModeloGlobal");
-            $existeModelo = ($res && $res->num_rows > 0);
-        }
+            if ($idModeloGlobal > 0) {
+                $res = $cn->query("SELECT id_modelo FROM modelo_calidad WHERE id_modelo = $idModeloGlobal");
+                $existeModelo = ($res && $res->num_rows > 0);
+            }
 
-        if (!$existeModelo && $idModeloPers > 0) {
-            $res = $cn->query("
+            if (!$existeModelo && $idModeloPers > 0) {
+                $res = $cn->query("
                 SELECT id_proyecto_modelo
                 FROM proyecto_modelo_calidad
                 WHERE id_proyecto_modelo = $idModeloPers
             ");
-            $existeModelo = ($res && $res->num_rows > 0);
-        }
+                $existeModelo = ($res && $res->num_rows > 0);
+            }
 
-        if ($existeModelo) {
-            $completados++;
-        } else {
-            $next = [
-                'paso' => 3,
-                'texto' => 'Modelo de calidad no válido o eliminado.',
-                'accion' => 'Verificá que el modelo asignado al proyecto exista o reasigná uno nuevo.',
-                'responsable' => 'Administrador o Gerente de Calidad',
-                'icono' => 'oi-warning',
-                'estado' => 'pendiente'
-            ];
+            if ($existeModelo) {
+                $completados++;
+            } else {
+                $next = [
+                    'paso' => 3,
+                    'texto' => 'Modelo de calidad no válido o eliminado.',
+                    'accion' => 'Verificá que el modelo asignado al proyecto exista o reasigná uno nuevo.',
+                    'responsable' => 'Administrador o Gerente de Calidad',
+                    'icono' => 'oi-warning',
+                    'estado' => 'pendiente'
+                ];
+            }
         }
     }
-}
 
 
     // Paso 4: iteraciones
@@ -228,56 +228,80 @@ if ($next === null) {
         }
     }
 
-    // Paso 5: planificación de métricas (Sólo se evalúa la ITERACIÓN ACTUAL: debe tener TODAS sus métricas planificadas)
+    // =======================================================
+    // PASO 5 — Planificación de métricas
+    // =======================================================
     if ($next === null) {
-        // Total de métricas del proyecto = base del modelo + personalizadas asociadas al proyecto
+
+        // =======================================================
+        // 🔹 Determinar modelo global y/o personalizado
+        // =======================================================
+        $idModeloGlobal = (int)($pr['id_modelo_global'] ?? 0);
+        $idModeloPersonalizado = (int)($pr['id_modelo_personalizado'] ?? 0);
+
         $totalMetricasBase = 0;
-        if (!empty($pr['id_modelo'])) {
-            $totalMetricasBase = (int)$cn->query(
-                "SELECT COUNT(*) AS c FROM metrica_modelo_calidad WHERE id_modelo=" . (int)$pr['id_modelo']
-            )->fetch_assoc()['c'];
+        $totalMetricasPers = 0;
+
+        // 🔸 Si el proyecto tiene modelo global (base)
+        if ($idModeloGlobal > 0) {
+            $sqlBase = "SELECT COUNT(*) AS c 
+                    FROM metrica_modelo_calidad 
+                    WHERE id_modelo = $idModeloGlobal";
+            $rowBase = $cn->query($sqlBase)->fetch_assoc();
+            $totalMetricasBase = (int)($rowBase['c'] ?? 0);
         }
-        $totalMetricasPers = (int)$cn->query(
-            "SELECT COUNT(DISTINCT mpm.id_metrica) AS c
-             FROM metrica_proyecto_modelo mpm
-             JOIN proyecto_modelo_calidad pmc ON pmc.id_proyecto_modelo = mpm.id_proyecto_modelo
-             WHERE pmc.id_proyecto = $idP"
-        )->fetch_assoc()['c'];
+
+        // 🔸 Si tiene modelo personalizado (modificado o propio)
+        if ($idModeloPersonalizado > 0) {
+            $sqlPers = "
+            SELECT COUNT(DISTINCT mpm.id_metrica) AS c
+            FROM metrica_proyecto_modelo mpm
+            WHERE mpm.id_proyecto_modelo = $idModeloPersonalizado";
+            $rowPers = $cn->query($sqlPers)->fetch_assoc();
+            $totalMetricasPers = (int)($rowPers['c'] ?? 0);
+        }
+
+        // 🔸 Total de métricas visibles (base + personalizadas)
         $totalMetricas = $totalMetricasBase + $totalMetricasPers;
 
-        // Detectar iteración ACTUAL (hoy dentro del rango)
+        // =======================================================
+        // 🔹 Buscar iteración activa
+        // =======================================================
         $iterActualId = 0;
         $iterActualFase = '';
         $iterActualNumero = '';
-        $sqlAct = "SELECT i.id_iteracion, i.numero_iteracion, f.nombre AS fase_nombre
-                   FROM iteracion i
-                   LEFT JOIN fase f ON f.id_fase = i.id_fase
-                   WHERE i.id_proyecto = $idP AND CURDATE() BETWEEN i.fecha_inicio AND i.fecha_fin
-                   ORDER BY i.id_fase ASC, i.numero_iteracion ASC LIMIT 1";
+
+        $sqlAct = "
+        SELECT i.id_iteracion, i.numero_iteracion, f.nombre AS fase_nombre
+        FROM iteracion i
+        LEFT JOIN fase f ON f.id_fase = i.id_fase
+        WHERE i.id_proyecto = $idP 
+          AND CURDATE() BETWEEN i.fecha_inicio AND i.fecha_fin
+        ORDER BY i.id_fase ASC, i.numero_iteracion ASC
+        LIMIT 1";
         if ($rsAct = $cn->query($sqlAct)) {
             if ($ra = $rsAct->fetch_assoc()) {
                 $iterActualId = (int)$ra['id_iteracion'];
-                $iterActualFase = (string)($ra['fase_nombre'] ?? '');
-                $iterActualNumero = (string)($ra['numero_iteracion'] ?? '');
+                $iterActualFase = $ra['fase_nombre'] ?? '';
+                $iterActualNumero = $ra['numero_iteracion'] ?? '';
             }
         }
 
-        // Cantidad efectivamente planificada sólo para la iteración actual
+        // =======================================================
+        // 🔹 Contar métricas planificadas en la iteración actual
+        // =======================================================
         $planificadasActual = 0;
-        if ($iterActualId) {
-            $planificadasActual = (int)$cn->query(
-                "SELECT COUNT(*) AS c FROM metrica_iteracion WHERE id_iteracion=$iterActualId AND valor_planificado IS NOT NULL"
-            )->fetch_assoc()['c'];
+        if ($iterActualId > 0) {
+            $sqlPlan = "SELECT COUNT(*) AS c 
+                    FROM metrica_iteracion 
+                    WHERE id_iteracion = $iterActualId";
+            $rowPlan = $cn->query($sqlPlan)->fetch_assoc();
+            $planificadasActual = (int)($rowPlan['c'] ?? 0);
         }
 
-        // Preparar detalle para tooltip: sólo la iteración ACTUAL
-        $detalle = '';
-        if ($iterActualId && $totalMetricas > 0 && $planificadasActual < $totalMetricas) {
-            $faltan = $totalMetricas - $planificadasActual;
-            $labelActual = trim(($iterActualFase !== '' ? ($iterActualFase . ' ') : '') . $iterActualNumero);
-            $detalle = 'Faltan ' . $faltan . ' valor(es) planificado(s) en la iteración actual:<br><b>' . htmlspecialchars($labelActual, ENT_QUOTES, 'UTF-8') . '</b>';
-        }
-
+        // =======================================================
+        // 🔹 Evaluación de condiciones
+        // =======================================================
         if ($totalMetricas === 0) {
             $next = [
                 'paso' => 5,
@@ -287,7 +311,7 @@ if ($next === null) {
                 'icono' => 'oi-calendar',
                 'estado' => 'pendiente'
             ];
-        } elseif (!$iterActualId) {
+        } elseif ($iterActualId === 0) {
             $next = [
                 'paso' => 5,
                 'texto' => 'No hay iteración actual en curso.',
@@ -297,6 +321,7 @@ if ($next === null) {
                 'estado' => 'pendiente'
             ];
         } elseif ($planificadasActual === 0) {
+            // 🔹 Este es tu caso actual
             $next = [
                 'paso' => 5,
                 'texto' => 'Sin métricas planificadas en la iteración actual.',
@@ -316,7 +341,6 @@ if ($next === null) {
                 'estado' => 'pendiente'
             ];
         } else {
-            // Todas las combinaciones métrica x iteración tienen valor planificado
             $completados++;
         }
     }
