@@ -7,7 +7,6 @@ if (session_status() === PHP_SESSION_NONE) {
 $formData = $_SESSION['form_data'] ?? [];
 unset($_SESSION['form_data']);
 
-
 ControlAcceso::verificaLogin();
 
 $cn = BDConexion::getInstancia();
@@ -73,55 +72,64 @@ $modelos = $rs ? $rs->fetch_all(MYSQLI_ASSOC) : [];
             </script>
         <?php endif; ?>
 
-        <form action="metrica.crear.procesar.php" method="post">
+        <?php if (empty($modelos)): ?>
+            <!-- 🔹 Mostrar mensaje si no hay modelos personalizados -->
             <div class="card shadow-sm">
-                <div class="card-header">
-                    <h3 class="mb-0">Crear Métrica <?= ($esAdmin || $esSuperAdmin) ? 'Base' : 'Personalizada'; ?></h3>
-                    <p class="text-muted mb-1 mt-1">
-                        <?= ($esAdmin || $esSuperAdmin)
-                            ? 'Las métricas base estarán disponibles para todos los modelos globales.'
-                            : 'Las métricas personalizadas se asociarán únicamente a tus proyectos.'; ?>
+                <div class="card-body text-center py-5">
+                    <p class="mb-2 text-secondary">
+                        <span class="oi oi-info mr-2 text-muted"></span>
+                        No tenés modelos personalizados asignados a tus proyectos.
                     </p>
-                    <hr class="my-2">
-                    <p class="mb-0">
-                        Complete los campos a continuación. Luego, presione el botón <b>Confirmar</b>.<br>
-                        Si desea cancelar, presione el botón <b>Cancelar</b>.
+                    <p class="text-muted mb-0">
+                        Para crear y asignar nuevas métricas, necesitás contar con un <strong>modelo de calidad personalizado</strong>, ya sea creado a partir de uno existente o definido desde cero.
+                        Si deseás modificar uno existente, accedé a la sección <a href="modelos.php">Modelos de Calidad</a>.
                     </p>
+
                 </div>
+            </div>
+        <?php else: ?>
 
-                <div class="card-body">
-                    <h5 class="mb-3">Propiedades de la Métrica</h5>
-                    <div class="form-group">
-                        <label for="nombre">Nombre</label>
-                        <input type="text" name="nombre" id="nombre" class="form-control"
-                            placeholder="Ejemplo: Revisiones de código"
-                            value="<?= htmlspecialchars($formData['nombre'] ?? '') ?>">
-
-                        <small class="form-text text-muted">
-                            Puede usar letras, números y los símbolos <b>. - _ / \ ( ) :</b>. No puede quedar vacío.
-                        </small>
+            <!-- 🔹 Formulario normal si hay modelos -->
+            <form action="metrica.crear.procesar.php" method="post">
+                <div class="card shadow-sm">
+                    <div class="card-header">
+                        <h3 class="mb-0">Crear Métrica <?= ($esAdmin || $esSuperAdmin) ? 'Base' : 'Personalizada'; ?></h3>
+                        <p class="text-muted mb-1 mt-1">
+                            <?= ($esAdmin || $esSuperAdmin)
+                                ? 'Las métricas base estarán disponibles para todos los modelos globales.'
+                                : 'Las métricas personalizadas se asociarán únicamente a tus proyectos.'; ?>
+                        </p>
+                        <hr class="my-2">
+                        <p class="mb-0">
+                            Complete los campos a continuación. Luego, presione el botón <b>Confirmar</b>.<br>
+                            Si desea cancelar, presione el botón <b>Cancelar</b>.
+                        </p>
                     </div>
 
-                    <div class="form-group">
-                        <label for="descripcion">Descripción</label>
-                        <textarea name="descripcion" id="descripcion" rows="3" class="form-control"
-                            placeholder="Describa brevemente la métrica"
-                            ><?= htmlspecialchars($formData['descripcion'] ?? '') ?></textarea>
+                    <div class="card-body">
+                        <h5 class="mb-3">Propiedades de la Métrica</h5>
 
-                        <small class="form-text text-muted">
-                            Puede usar letras, números y los símbolos <b>. - _ / \ ( ) :</b>. No puede quedar vacío.
-                        </small>
-                    </div>
+                        <div class="form-group">
+                            <label for="nombre">Nombre</label>
+                            <input type="text" name="nombre" id="nombre" class="form-control"
+                                placeholder="Ejemplo: Revisiones de código"
+                                value="<?= htmlspecialchars($formData['nombre'] ?? '') ?>">
+                            <small class="form-text text-muted">
+                                Puede usar letras, números y los símbolos <b>. - _ / \ ( ) :</b>. No puede quedar vacío.
+                            </small>
+                        </div>
 
-                    <div class="form-group">
-                        <label>Asociar a modelo<?= ($esAdmin || $esSuperAdmin) ? ' global' : ' de proyecto'; ?></label>
-                        <?php if (empty($modelos)): ?>
-                            <div class="text-muted mt-1">
-                                <?= ($esAdmin || $esSuperAdmin)
-                                    ? 'No hay modelos globales disponibles.'
-                                    : 'No tenés modelos personalizados en tus proyectos.'; ?>
-                            </div>
-                        <?php else: ?>
+                        <div class="form-group">
+                            <label for="descripcion">Descripción</label>
+                            <textarea name="descripcion" id="descripcion" rows="3" class="form-control"
+                                placeholder="Describa brevemente la métrica"><?= htmlspecialchars($formData['descripcion'] ?? '') ?></textarea>
+                            <small class="form-text text-muted">
+                                Puede usar letras, números y los símbolos <b>. - _ / \ ( ) :</b>. No puede quedar vacío.
+                            </small>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Asociar a modelo<?= ($esAdmin || $esSuperAdmin) ? ' global' : ' de proyecto'; ?></label>
                             <div class="border rounded p-2" style="max-height: 250px; overflow-y: auto;">
                                 <?php foreach ($modelos as $m): ?>
                                     <div class="form-check">
@@ -129,7 +137,6 @@ $modelos = $rs ? $rs->fetch_all(MYSQLI_ASSOC) : [];
                                             id="modelo<?= (int)$m['id']; ?>"
                                             name="modelos[]" value="<?= (int)$m['id']; ?>"
                                             <?= in_array($m['id'], $formData['modelos'] ?? []) ? 'checked' : ''; ?>>
-
                                         <label class="form-check-label" for="modelo<?= (int)$m['id']; ?>">
                                             <strong><?= htmlspecialchars($m['nombre']); ?></strong>
                                             <?php if (!$esAdmin): ?>
@@ -142,20 +149,20 @@ $modelos = $rs ? $rs->fetch_all(MYSQLI_ASSOC) : [];
                             <small class="form-text text-muted mt-2">
                                 Seleccione uno o más modelos para asociar la métrica.
                             </small>
-                        <?php endif; ?>
+                        </div>
+                    </div>
+
+                    <div class="card-footer text-right">
+                        <button type="submit" class="btn btn-success">
+                            <span class="oi oi-check"></span> Confirmar
+                        </button>
+                        <a href="metricas.php" class="btn btn-outline-secondary">
+                            <span class="oi oi-x"></span> Cancelar
+                        </a>
                     </div>
                 </div>
-
-                <div class="card-footer text-right">
-                    <button type="submit" class="btn btn-success">
-                        <span class="oi oi-check"></span> Confirmar
-                    </button>
-                    <a href="metricas.php" class="btn btn-outline-secondary">
-                        <span class="oi oi-x"></span> Cancelar
-                    </a>
-                </div>
-            </div>
-        </form>
+            </form>
+        <?php endif; ?>
     </div>
 
     <?php include_once '../gui/footer.php'; ?>

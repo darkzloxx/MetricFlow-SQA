@@ -375,9 +375,8 @@
           $('#modeloBaseSeleccionado').removeClass('d-none').text('Base seleccionada: ' + nombre);
           $('#btnLimpiarBase,#btnEditarBase').removeClass('d-none');
         });
-
         // ========================
-        //  Quitar modelo base
+        //  Quitar modelo base (versión mejorada)
         // ========================
         $('#btnLimpiarBase').on('click', function() {
           baseSeleccionada = null;
@@ -389,7 +388,24 @@
           $('input[name="metricas[]"]').prop('checked', false);
           $('#nombre,#descripcion').val('');
           actualizarCount();
+
+          // 🔹 Ocultar campos de edición si estaban visibles
+          $('#camposNuevoModelo').addClass('d-none');
+
+          // 🔹 Restaurar estado de botones principales
+          $('#btnOpcionBase').removeClass('active');
+          $('#btnOpcionCero').removeClass('active');
+
+          // 🔹 Ocultar la grilla de modelos base también
+          $('#seccionModelosBase').addClass('d-none');
+
+          // 🔹 Mostrar solo el selector inicial (opciones principales)
+          $('.card.mt-3.mb-3').removeClass('d-none');
+
+          // 🔔 Alerta visual
+          mostrarAlerta("Modelo base quitado correctamente.", "info");
         });
+
 
         // ========================
         //  Editar modelo base

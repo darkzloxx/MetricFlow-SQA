@@ -1,15 +1,21 @@
 <?php
 include_once '../lib/ControlAcceso.Class.php';
 include_once '../modelo/BDConexion.Class.php';
+
 ControlAcceso::verificaLogin();
 
-$cn = BDConexion::getInstancia();
 $usr = ControlAcceso::usuarioActual();
 $esSuperAdmin = ControlAcceso::esSuperAdminGlobal();
 $esAdminGlobal = ControlAcceso::esAdminGlobal();
 $tienePermGestionMetricas = ControlAcceso::verificaPermiso(PermisosSistema::GESTION_METRICAS);
-?>
 
+if (!($esSuperAdmin || $esAdminGlobal || $tienePermGestionMetricas)) {
+    header('Location: ../app/menu.php?msg=' . urlencode('Acceso denegado.') . '&type=danger');
+    exit;
+}
+
+$cn = BDConexion::getInstancia();
+?>
 <html lang="es">
 
 <head>
@@ -19,6 +25,7 @@ $tienePermGestionMetricas = ControlAcceso::verificaPermiso(PermisosSistema::GEST
     <link rel="stylesheet" href="../lib/open-iconic-master/font/css/open-iconic-bootstrap.css" />
     <script src="../lib/JQuery/jquery-3.3.1.js"></script>
     <script src="../lib/bootstrap-4.1.1-dist/js/bootstrap.min.js"></script>
+
     <style>
         .btn-outline-secondary {
             border-color: #dee2e6;
@@ -31,13 +38,11 @@ $tienePermGestionMetricas = ControlAcceso::verificaPermiso(PermisosSistema::GEST
             color: #212529;
         }
 
-        /* Texto truncado y expansión visual */
         .cell-ellipsis {
             max-width: 240px;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-            transition: all .2s ease-in-out;
         }
 
         .cell-ellipsis.large {
@@ -45,157 +50,116 @@ $tienePermGestionMetricas = ControlAcceso::verificaPermiso(PermisosSistema::GEST
         }
 
         .cell-ellipsis:hover {
-            position: relative;
             white-space: normal;
             word-break: break-word;
-            overflow: visible;
-            z-index: 4;
             background: #f8f9fa;
             border-radius: .25rem;
             padding: .2rem .4rem;
-        }
-
-        /* Hover visual coherente en disabled */
-        .btn.disabled,
-        .btn:disabled {
-            pointer-events: auto !important;
-            opacity: 0.8;
-            transition: all .2s;
-        }
-
-        .btn-outline-warning.disabled:hover,
-        .btn-outline-warning:disabled:hover {
-            background: #ffc107;
-            color: #212529;
-            border-color: #ffc107;
-        }
-
-        .btn-outline-danger.disabled:hover,
-        .btn-outline-danger:disabled:hover {
-            background: #dc3545;
-            color: #fff;
-            border-color: #dc3545;
-        }
-
-        .btn-outline-secondary.disabled:hover,
-        .btn-outline-secondary:disabled:hover {
-            background: #6c757d;
-            color: #fff;
-            border-color: #6c757d;
+            z-index: 4;
+            position: relative;
         }
     </style>
 </head>
 
 <body>
     <?php include_once '../gui/navbar.php'; ?>
-    <div class="container">
+
+    <div class="container mt-3">
         <div class="mb-3">
             <a href="proyectos.php" class="btn btn-outline-secondary">
                 <span class="oi oi-arrow-left mr-1"></span> Volver
             </a>
+            <?php if ($tienePermGestionMetricas): ?>
+                <a href="metrica.nueva.php" class="btn btn-success ml-2">
+                    <span class="oi oi-plus"></span> Nueva Métrica
+                </a>
+            <?php endif; ?>
         </div>
 
         <?php if (isset($_GET['msg'])): ?>
-            <div class="alert alert-<?= ($_GET['type'] ?? '') === 'success' ? 'success' : 'danger'; ?> alert-dismissible fade show" role="alert">
+            <div id="flash-alert" class="alert alert-<?= ($_GET['type'] ?? '') === 'success' ? 'success' : 'danger'; ?> alert-dismissible fade show" role="alert">
                 <?= htmlspecialchars($_GET['msg']); ?>
                 <button type="button" class="close" data-dismiss="alert" aria-label="Cerrar">
                     <span aria-hidden="true">&times;</span>
                 </button>
             </div>
             <script>
-                $('html, body').animate({
-                    scrollTop: 0
-                }, 'fast');
-                setTimeout(() => $('.alert').alert('close'), 3000);
+                // Solo cierra el mensaje flash, no las demás alertas
+                setTimeout(() => $('#flash-alert').alert('close'), 3000);
             </script>
         <?php endif; ?>
+
 
         <div class="card shadow-sm">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h3 class="mb-0">Gestión de Métricas</h3>
-                <?php if ($tienePermGestionMetricas): ?>
-                    <a href="metrica.nueva.php" class="btn btn-success btn-sm">
-                        <span class="oi oi-plus"></span> Agregar Métrica
-                    </a>
-                <?php endif; ?>
             </div>
-
             <div class="card-body">
+
                 <?php
-                if ($esAdminGlobal || $esSuperAdmin) {
-                    // Admin/SuperAdmin → listado global (solo Ver; no editar/eliminar personalizadas aquí)
-                    $sql = "SELECT id_metrica, nombre, descripcion, tipo FROM metrica ORDER BY nombre ASC";
+                /* ==========================================================
+           🧑‍💼 ADMIN / SUPERADMIN → Métricas base globales
+           ========================================================== */
+                if ($esAdminGlobal || $esSuperAdmin):
+                    $sql = "SELECT id_metrica, nombre, descripcion 
+                    FROM metrica 
+                    WHERE tipo='base' 
+                    ORDER BY nombre ASC";
                     $rs = $cn->query($sql);
                     $metricas = $rs ? $rs->fetch_all(MYSQLI_ASSOC) : [];
-
-                    if (empty($metricas)): ?>
-                        <div class="text-muted">No hay métricas registradas.</div>
+                ?>
+                    <h5 class="mb-3 text-secondary">Métricas base globales</h5>
+                    <?php if (empty($metricas)): ?>
+                        <div class="text-muted">No hay métricas base registradas en el sistema.</div>
                     <?php else: ?>
                         <table class="table table-hover table-sm">
                             <tr class="table-info">
                                 <th>Nombre</th>
                                 <th>Descripción</th>
-                                <th>Tipo</th>
                                 <th>Opciones</th>
                             </tr>
                             <tbody>
-                                <?php foreach ($metricas as $m):
-                                    $id  = (int)$m['id_metrica'];
-                                    $tipo = htmlspecialchars($m['tipo']);
-                                    $esBase = ($tipo === 'base');
-                                ?>
+                                <?php foreach ($metricas as $m): ?>
                                     <tr>
                                         <td class="font-weight-bold cell-ellipsis"><?= htmlspecialchars($m['nombre']); ?></td>
                                         <td class="cell-ellipsis large"><?= htmlspecialchars($m['descripcion']); ?></td>
                                         <td>
-                                            <span class="badge badge-<?= $esBase ? 'secondary' : 'info'; ?>">
-                                                <?= ucfirst($tipo); ?>
-                                            </span>
-                                        </td>
-                                        <td>
-                                            <!-- Admin/SuperAdmin: solo Ver en esta vista -->
-                                            <a href="metrica.ver.php?id=<?= $id; ?>" class="btn btn-outline-primary btn-sm" title="Ver">
+                                            <a href="metrica.ver.php?id=<?= $m['id_metrica']; ?>" class="btn btn-outline-primary" title="Ver">
                                                 <span class="oi oi-eye"></span>
                                             </a>
-                                            <?php if ($esBase): ?>
-                                                <button class="btn btn-outline-warning btn-sm" disabled title="Métrica base (bloqueado)">
-                                                    <span class="oi oi-lock-locked"></span>
+                                            <form action="metrica.eliminar.procesar.php" method="post" style="display:inline-block;"
+                                                onsubmit="return confirm('¿Confirma eliminar esta métrica base global?');">
+                                                <input type="hidden" name="id" value="<?= $m['id_metrica']; ?>">
+                                                <button type="submit" class="btn btn-outline-danger" title="Eliminar">
+                                                    <span class="oi oi-trash"></span>
                                                 </button>
-                                                <button class="btn btn-outline-danger btn-sm" disabled title="Métrica base (bloqueado)">
-                                                    <span class="oi oi-lock-locked"></span>
-                                                </button>
-                                            <?php else: ?>
-                                                <!-- Personalizadas: no editar/eliminar aquí; lo hacen líderes/gerentes en sus proyectos -->
-                                                <button class="btn btn-outline-secondary btn-sm" disabled title="Edición solo desde proyecto">
-                                                    <span class="oi oi-ban"></span>
-                                                </button>
-                                            <?php endif; ?>
+                                            </form>
                                         </td>
                                     </tr>
                                 <?php endforeach; ?>
                             </tbody>
                         </table>
-                    <?php endif;
-                } else {
-                    // Usuarios comunes → métricas agrupadas por proyecto y modelo
-                    $idUsuario = (int)$usr->id;
+                    <?php endif; ?>
 
+                    <?php
+                /* ==========================================================
+           👷‍♂️ LÍDER / GERENTE → Proyectos asignados y sus modelos
+           ========================================================== */
+                else:
+                    $idUsuario = (int)$usr->id;
                     $sqlProyectos = "
-                SELECT DISTINCT
-                    p.id_proyecto,
-                    p.nombre AS proyecto,
-                    COALESCE(mg.nombre, pmc.nombre) AS modelo,
-                    CASE WHEN mg.id_modelo IS NOT NULL THEN 'global' ELSE 'personalizado' END AS tipo_modelo,
-                    COALESCE(mg.id_modelo, pmc.id_proyecto_modelo) AS id_modelo
+                SELECT p.id_proyecto, p.nombre AS proyecto,
+                       COALESCE(mg.id_modelo, pmc.id_proyecto_modelo) AS id_modelo,
+                       COALESCE(mg.nombre, pmc.nombre) AS modelo,
+                       CASE WHEN mg.id_modelo IS NOT NULL THEN 'global' ELSE 'personalizado' END AS tipo_modelo
                 FROM proyecto p
                 JOIN usuario_proyecto up ON up.id_proyecto = p.id_proyecto
                 LEFT JOIN modelo_calidad mg ON mg.id_modelo = p.id_modelo_global
                 LEFT JOIN proyecto_modelo_calidad pmc ON pmc.id_proyecto_modelo = p.id_modelo_personalizado
                 WHERE up.id_usuario = {$idUsuario}
-                ORDER BY p.nombre ASC
-            ";
-
+                ORDER BY p.nombre ASC";
                     $resProy = $cn->query($sqlProyectos);
+
                     if (!$resProy || $resProy->num_rows === 0): ?>
                         <div class="alert alert-warning">
                             <span class="oi oi-warning"></span> No tenés proyectos con modelos de calidad asignados.
@@ -206,37 +170,34 @@ $tienePermGestionMetricas = ControlAcceso::verificaPermiso(PermisosSistema::GEST
                             $tipoModelo = $proy['tipo_modelo'];
                             $nombreModelo = htmlspecialchars($proy['modelo'] ?? 'Sin modelo');
                             $nombreProyecto = htmlspecialchars($proy['proyecto']);
+
+                            // Cargar métricas del modelo (aunque esté vacío)
+                            if ($tipoModelo === 'global') {
+                                $sqlM = "
+                            SELECT m.id_metrica, m.nombre, m.descripcion, m.tipo
+                            FROM metrica_modelo_calidad mmc
+                            JOIN metrica m ON m.id_metrica = mmc.id_metrica
+                            WHERE mmc.id_modelo = {$idModelo}
+                            ORDER BY m.nombre ASC";
+                            } else {
+                                $sqlM = "
+                            SELECT m.id_metrica, m.nombre, m.descripcion, m.tipo
+                            FROM metrica_proyecto_modelo mpm
+                            JOIN metrica m ON m.id_metrica = mpm.id_metrica
+                            WHERE mpm.id_proyecto_modelo = {$idModelo}
+                            ORDER BY m.nombre ASC";
+                            }
+
+                            $resM = $cn->query($sqlM);
+                            $metricas = $resM ? $resM->fetch_all(MYSQLI_ASSOC) : [];
                         ?>
-                            <!-- Banner del proyecto -->
+                            <!-- Banner del proyecto y modelo -->
                             <div class="alert alert-info mb-2">
                                 <h5 class="mb-0 font-weight-bold"><?= $nombreProyecto; ?></h5>
                                 <small>Modelo: <strong><?= $nombreModelo; ?></strong> (<?= ucfirst($tipoModelo); ?>)</small>
                             </div>
 
-                            <?php
-                            // Cargar métricas del modelo actual
-                            if ($tipoModelo === 'global') {
-                                $sqlM = "
-                        SELECT m.id_metrica, m.nombre, m.descripcion, m.tipo
-                        FROM metrica_modelo_calidad mmc
-                        JOIN metrica m ON m.id_metrica = mmc.id_metrica
-                        WHERE mmc.id_modelo = {$idModelo}
-                        ORDER BY m.nombre ASC
-                    ";
-                            } else { // personalizado
-                                $sqlM = "
-                        SELECT m.id_metrica, m.nombre, m.descripcion, m.tipo
-                        FROM metrica_proyecto_modelo mpm
-                        JOIN metrica m ON m.id_metrica = mpm.id_metrica
-                        WHERE mpm.id_proyecto_modelo = {$idModelo}
-                        ORDER BY m.nombre ASC
-                    ";
-                            }
-
-                            $resM = $cn->query($sqlM);
-                            $metricas = $resM ? $resM->fetch_all(MYSQLI_ASSOC) : [];
-
-                            if (empty($metricas)): ?>
+                            <?php if (empty($metricas)): ?>
                                 <div class="text-muted mb-4">No hay métricas definidas para este modelo.</div>
                             <?php else: ?>
                                 <table class="table table-hover table-sm">
@@ -249,34 +210,47 @@ $tienePermGestionMetricas = ControlAcceso::verificaPermiso(PermisosSistema::GEST
                                     <tbody>
                                         <?php foreach ($metricas as $m):
                                             $idM = (int)$m['id_metrica'];
-                                            $tipoM = htmlspecialchars($m['tipo']);
-                                            $esBase = ($tipoM === 'base');
+                                            $esBase = ($m['tipo'] === 'base');
                                         ?>
                                             <tr>
                                                 <td class="font-weight-bold cell-ellipsis"><?= htmlspecialchars($m['nombre']); ?></td>
                                                 <td class="cell-ellipsis large"><?= htmlspecialchars($m['descripcion']); ?></td>
+                                                <td><span class="badge badge-<?= $esBase ? 'secondary' : 'info'; ?>"><?= ucfirst($m['tipo']); ?></span></td>
                                                 <td>
-                                                    <span class="badge badge-<?= $esBase ? 'secondary' : 'info'; ?>">
-                                                        <?= ucfirst($tipoM); ?>
-                                                    </span>
-                                                </td>
-                                                <td>
-                                                    <!-- Ver (siempre) -->
                                                     <a href="metrica.ver.php?id=<?= $idM; ?>" class="btn btn-outline-primary btn-icon" title="Ver">
                                                         <span class="oi oi-eye"></span>
                                                     </a>
 
-                                                    <?php if ($tipoModelo === 'personalizado' && !$esBase && $tienePermGestionMetricas): ?>
-                                                        <!-- Editar / Eliminar SOLO para métricas personalizadas del modelo de este proyecto -->
-                                                        <a href="metrica.modificar.personalizado.php?id=<?= $idM; ?>" class="btn btn-outline-warning btn-icon" title="Editar métrica personalizada">
-                                                            <span class="oi oi-pencil"></span>
-                                                        </a>
-                                                        <a href="metrica.eliminar.personalizado.php?id=<?= $idM; ?>"
-                                                            class="btn btn-outline-danger btn-icon"
-                                                            onclick="return confirm('¿Confirma eliminar esta métrica personalizada? Esta acción no se puede deshacer.');"
-                                                            title="Eliminar métrica personalizada">
-                                                            <span class="oi oi-trash"></span>
-                                                        </a>
+                                                    <?php if ($tienePermGestionMetricas): ?>
+                                                        <?php if ($esBase && $tipoModelo === 'personalizado'): ?>
+                                                            <!-- Desvincular métrica base -->
+                                                            <form action="metrica.eliminar.procesar.php" method="post" style="display:inline-block;"
+                                                                onsubmit="return confirm('¿Desvincular esta métrica base del modelo personalizado?');">
+                                                                <input type="hidden" name="id" value="<?= $idM; ?>">
+                                                                <input type="hidden" name="modelo" value="<?= $idModelo; ?>">
+                                                                <button type="submit" class="btn btn-outline-warning ">
+                                                                    <span class="oi oi-x"></span>
+                                                                </button>
+                                                            </form>
+                                                        <?php elseif (!$esBase && $tipoModelo === 'personalizado'): ?>
+                                                            <!-- Editar métrica personalizada -->
+                                                            <a href="metrica.modificar.personalizado.php?id=<?= $idM; ?>"
+                                                                class="btn btn-outline-warning"
+                                                                title="Editar métrica personalizada">
+                                                                <span class="oi oi-pencil"></span>
+                                                            </a>
+
+                                                            <!-- Eliminar métrica personalizada -->
+                                                            <form action="metrica.eliminar.procesar.php" method="post" style="display:inline-block;"
+                                                                onsubmit="return confirm('¿Eliminar esta métrica personalizada? Esta acción no se puede deshacer.');">
+                                                                <input type="hidden" name="id" value="<?= $idM; ?>">
+                                                                <input type="hidden" name="modelo" value="<?= $idModelo; ?>">
+                                                                <button type="submit" class="btn btn-outline-danger" title="Eliminar métrica personalizada">
+                                                                    <span class="oi oi-trash"></span>
+                                                                </button>
+                                                            </form>
+                                                        <?php endif; ?>
+
                                                     <?php endif; ?>
                                                 </td>
                                             </tr>
@@ -284,14 +258,14 @@ $tienePermGestionMetricas = ControlAcceso::verificaPermiso(PermisosSistema::GEST
                                     </tbody>
                                 </table>
                             <?php endif; ?>
-                <?php
-                        endwhile;
+
+                <?php endwhile;
                     endif;
-                } // fin else usuarios
-                ?>
+                endif; ?>
             </div>
         </div>
     </div>
+
     <?php include_once '../gui/footer.php'; ?>
 </body>
 

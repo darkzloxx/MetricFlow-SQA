@@ -262,7 +262,7 @@ if (!empty($proyectos)) {
                     <?php else: ?>
                         <p>
                             <?php if ($hayElegiblePersonalizado): ?>
-                                <a href="modelo.nuevo.php" class="btn btn-success"><span class="oi oi-plus"></span> Crear/Asignar Modelo Personalizado</a>
+                                <a href="modelo.nuevo.php" class="btn btn-success"><span class="oi oi-plus"></span> Crear/Asignar/Editar Modelo</a>
                             <?php endif; ?>
                         </p>
 
