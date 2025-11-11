@@ -1679,13 +1679,6 @@ if (count($DATA) === 0) {
 
     // Aplicar un payload del servidor y re-renderizar todo preservando estado de UI
     function renderWithPayload(payload) {
-      function renderWithPayload(payload) {
-  console.log("📦 Payload recibido:", payload);
-  console.log("📊 Data:", payload.data);
-
-  // resto del código del renderizado...
-}
-
       if (!payload) return;
       const saved = collectUiState();
       window.__PHASE_RESTORE = saved.phases || null;
@@ -2495,7 +2488,7 @@ window.addEventListener('beforeunload', () => {
           });
 
           // Desactivar interactividad si solo hay una fase
-          const totalFases = letterToPhase.size;
+          /*const totalFases = letterToPhase.size;
           if (totalFases <= 1) {
             document.querySelectorAll('.phase-pill').forEach(chip => {
               chip.classList.add('no-filter');
@@ -2503,7 +2496,28 @@ window.addEventListener('beforeunload', () => {
               chip.removeAttribute('data-phase');
               chip.title = 'Solo existe una fase; el filtro no aplica.';
             });
-          }
+          }*/
+         // ==================================================
+// 🔹 Si solo hay una fase → mantenerla activa y fija
+// ==================================================
+const totalFases = letterToPhase.size;
+if (totalFases <= 1) {
+  const unicaFase = Array.from(letterToPhase.values())[0];
+  selectedPhases.clear();
+  selectedPhases.add(unicaFase);
+
+  document.querySelectorAll('.phase-pill').forEach(chip => {
+    chip.classList.add('active');
+    chip.disabled = true;
+    chip.style.cursor = 'default';
+    chip.title = 'Única fase — filtro no aplicable';
+  });
+
+  // ✅ Renderizar el gráfico con los datos completos
+  const filtered = Array.isArray(DATA) ? DATA : [];
+  rebuildTrendChart(filtered);
+}
+
 
           // Render inicial del gráfico acorde a selección (todas activas)
           const initialFiltered = filterDataByPhase(Array.isArray(DATA) ? DATA : []);
