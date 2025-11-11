@@ -195,7 +195,16 @@ if (!empty($proyectos)) {
                 <h3>Modelos de calidad</h3>
             </div>
             <div class="card-body">
-
+                <?php if (isset($_SESSION['flash_message'])): ?>
+                    <?php $flash = $_SESSION['flash_message'];
+                    unset($_SESSION['flash_message']); ?>
+                    <div class="alert alert-<?= htmlspecialchars($flash['type']); ?> alert-dismissible fade show" role="alert">
+                        <?= htmlspecialchars($flash['text']); ?>
+                        <button type="button" class="close" data-dismiss="alert" aria-label="Cerrar">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                <?php endif; ?>
                 <?php if ($esAdminGlobal || $esSuperAdmin): ?>
                     <!-- ===========================================
                  🧩 VISTA ADMIN/SUPERADMIN: SOLO MODELOS GLOBALES
@@ -209,12 +218,12 @@ if (!empty($proyectos)) {
                     <?php if (empty($modelos)): ?>
                         <div class="text-muted">No hay modelos globales registrados.</div>
                     <?php else: ?>
-                          <table class="table table-hover table-sm">
+                        <table class="table table-hover table-sm">
                             <tr class="table-info">
-                                    <th>Modelo</th>
-                                    <th>Usado por</th>
-                                    <th>Acciones</th>
-                                </tr>
+                                <th>Modelo</th>
+                                <th>Usado por</th>
+                                <th>Acciones</th>
+                            </tr>
                             <tbody>
                                 <?php foreach ($modelos as $m):
                                     $mid = (int)$m['id_modelo'];
@@ -262,7 +271,7 @@ if (!empty($proyectos)) {
                     <?php else: ?>
                         <p>
                             <?php if ($hayElegiblePersonalizado): ?>
-                                <a href="modelo.nuevo.php" class="btn btn-success"><span class="oi oi-plus"></span> Crear/Asignar/Editar Modelo</a>
+                                <a href="modelo.nuevo.php" class="btn btn-success"><span class="oi oi-plus"></span> Crear Personalizado/Asignar/Editar Modelo Base</a>
                             <?php endif; ?>
                         </p>
 
@@ -301,13 +310,25 @@ if (!empty($proyectos)) {
                                         <td>
                                             <a href="modelo.ver.php?id=<?= (int)$p['id_proyecto']; ?>" class="btn btn-outline-primary btn-icon" title="Ver detalles"><span class="oi oi-eye"></span></a>
                                             <?php if ($tipo === 'Predeterminado'): ?>
-                                                <button class="btn btn-outline-warning btn-icon" disabled title="Los modelos globales no pueden modificarse."><span class="oi oi-lock-locked"></span></button>
-                                                <button class="btn btn-outline-danger btn-icon" disabled title="Los modelos globales no pueden eliminarse."><span class="oi oi-lock-locked"></span></button>
+                                                <button class="btn btn-outline-warning btn-icon" disabled title="Los modelos globales no pueden modificarse.">
+                                                    <span class="oi oi-lock-locked"></span>
+                                                </button>
+                                                <a href="#"
+                                                    onclick="confirmarDesvinculacionModeloGlobal(<?= (int)$p['id_proyecto']; ?>, event)"
+                                                    class="btn btn-outline-danger btn-icon"
+                                                    title="Desvincular modelo predeterminado del proyecto">
+                                                    <span class="oi oi-x"></span>
+                                                </a>
+
                                             <?php elseif ($tipo === 'Personalizado'): ?>
                                                 <a href="modelo.editar.personalizado.php?id=<?= $modeloPersId; ?>" class="btn btn-outline-warning btn-icon" title="Editar modelo personalizado"><span class="oi oi-pencil"></span></a>
-                                                <a href="modelo.eliminar.personalizado.php?id=<?= $modeloPersId; ?>" class="btn btn-outline-danger btn-icon" title="Eliminar modelo personalizado" onclick="return confirm('¿Seguro que desea eliminar este modelo personalizado y sus métricas asociadas?');"><span class="oi oi-trash"></span></a>
-                                            <?php else: ?>
-                                                <a href="modelo.nuevo.php?proyecto=<?= (int)$p['id_proyecto']; ?>" class="btn btn-outline-success btn-icon" title="Asignar modelo"><span class="oi oi-plus"></span></a>
+                                                <a href="#" onclick="confirmarEliminacionPersonalizado(<?= (int)$modeloPersId; ?>, event)"
+                                                    class="btn btn-outline-danger btn-icon"
+                                                    title="Eliminar modelo personalizado">
+                                                    <span class="oi oi-trash"></span>
+                                                </a>
+
+
                                             <?php endif; ?>
                                         </td>
                                     </tr>
@@ -325,7 +346,72 @@ if (!empty($proyectos)) {
     <script>
         $(function() {
             $('[data-toggle="tooltip"]').tooltip();
+
+            // 🔹 Cierra automáticamente el flash después de 2 segundos
+            setTimeout(() => {
+                $('.alert').alert('close');
+            }, 2000);
         });
+
+        function confirmarEliminacionPersonalizado(idModelo, e) {
+            if (e) e.preventDefault(); // evita que el link recargue la página
+
+            if (!confirm('⚠️ ¿Confirma que desea eliminar este modelo personalizado y sus métricas asociadas? Esta acción no se puede deshacer.')) {
+                return;
+            }
+
+            $.ajax({
+                url: 'modelo.eliminar.personalizado.procesar.php',
+                type: 'POST',
+                data: {
+                    id: idModelo,
+                    ajax: true
+                },
+                dataType: 'json',
+                success: function(resp) {
+                    if (resp.success) {
+                        alert('✅ ' + resp.message);
+                        window.location.reload();
+                    } else {
+                        alert('❌ ' + (resp.error || 'Error al eliminar el modelo.'));
+                    }
+                },
+                error: function(xhr) {
+                    console.error("Respuesta servidor:", xhr.responseText);
+                    alert('⚠️ Error de comunicación con el servidor.');
+                }
+            });
+        }
+
+        function confirmarDesvinculacionModeloGlobal(idProyecto, e) {
+            if (e) e.preventDefault();
+
+            if (!confirm('⚠️ ¿Confirma que desea desvincular el modelo predeterminado de este proyecto?\n\nNo se eliminará el modelo, solo se quitará la asignación.')) {
+                return;
+            }
+
+            $.ajax({
+                url: 'modelo.desvincular.global.procesar.php',
+                type: 'POST',
+                data: {
+                    id_proyecto: idProyecto,
+                    ajax: true
+                },
+                dataType: 'json',
+                success: function(resp) {
+                    if (resp.success) {
+                        alert('✅ ' + resp.message);
+                        window.location.reload();
+                    } else {
+                        alert('❌ ' + (resp.error || 'Error al desvincular el modelo.'));
+                    }
+                },
+                error: function(xhr) {
+                    console.error("Respuesta servidor:", xhr.responseText);
+                    alert('⚠️ Error de comunicación con el servidor.');
+                }
+            });
+        }
     </script>
 </body>
 
