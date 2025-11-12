@@ -14,11 +14,15 @@ $usr = ControlAcceso::usuarioActual();
 $cn = BDConexion::getInstancia();
 
 // Helper: obtiene el nombre del rol del usuario en un proyecto específico
-function getRolUsuarioEnProyecto(mysqli $cn, int $idUsuario, int $idProyecto): ?string {
+function getRolUsuarioEnProyecto(mysqli $cn, int $idUsuario, int $idProyecto): ?string
+{
     $sql = "SELECT r.nombre AS rol_nombre FROM usuario_proyecto up JOIN rol r ON r.id = up.id_rol WHERE up.id_usuario = ? AND up.id_proyecto = ? LIMIT 1";
     if (!$stmt = $cn->prepare($sql)) return null;
     $stmt->bind_param('ii', $idUsuario, $idProyecto);
-    if (!$stmt->execute()) { $stmt->close(); return null; }
+    if (!$stmt->execute()) {
+        $stmt->close();
+        return null;
+    }
     $res = $stmt->get_result();
     $row = $res ? $res->fetch_assoc() : null;
     $stmt->close();
@@ -30,7 +34,10 @@ $esSuperAdmin = false;
 if (isset($usr->roles) && is_array($usr->roles)) {
     foreach ($usr->roles as $r) {
         $name = mb_strtolower(trim($r->nombre ?? ''), 'UTF-8');
-        if ($name === 'superadmin') { $esSuperAdmin = true; break; }
+        if ($name === 'superadmin') {
+            $esSuperAdmin = true;
+            break;
+        }
     }
 }
 $idUsuario = (int)$usr->id;
@@ -54,7 +61,7 @@ $next = null;
 $detalle = '';
 
 // Paso 2: usuarios asignados (debe evaluarse siempre, no solo para administradores del proyecto)
-$cantUsuarios = (int)$cn->query("SELECT COUNT(*) AS c FROM usuario_proyecto WHERE id_proyecto=$idP")->fetch_assoc()['c'];
+$cantUsuarios = (int)$cn->query("SELECT COUNT(*) AS c FROM usuario_proyecto WHERE id_proyecto=$idProyecto")->fetch_assoc()['c'];
 if ($cantUsuarios === 0) {
     $next = [
         'paso' => 2,
@@ -70,12 +77,51 @@ if ($cantUsuarios === 0) {
 
 // Paso 3: modelo
 if ($next === null) {
-    if (empty($pr['id_modelo'])) {
-        $next = ['paso' => 3, 'texto' => 'Sin modelo de calidad asignado.', 'accion' => 'Seleccioná o creá un modelo.', 'responsable' => 'Gerente de Calidad o Líder de Proyecto', 'icono' => 'oi-layers', 'estado' => 'pendiente'];
-    } else {
+    $idModeloGlobal = (int)($pr['id_modelo_global'] ?? 0);
+    $idModeloPers   = (int)($pr['id_modelo_personalizado'] ?? 0);
+
+    if (($idModeloGlobal ?? 0) <= 0 && ($idModeloPers ?? 0) <= 0) {
+        // ❌ Sin modelo → volver a "Registrado"
+        $next = [
+            'paso' => 3,
+            'texto' => 'Sin modelo de calidad asignado.',
+            'accion' => 'Seleccioná o creá un modelo personalizado basado en uno global existente (debe tener métricas).',
+            'responsable' => 'Gerente de Calidad o Líder de Proyecto',
+            'icono' => 'oi-layers',
+            'estado' => 'pendiente'
+        ];
+
+     
+
+    }
+
+    // ✅ Verificar existencia real del modelo
+    $existeModelo = false;
+
+    if ($idModeloGlobal > 0) {
+        $res = $cn->query("SELECT id_modelo FROM modelo_calidad WHERE id_modelo = $idModeloGlobal");
+        $existeModelo = ($res && $res->num_rows > 0);
+    }
+
+    if (!$existeModelo && $idModeloPers > 0) {
+        $res = $cn->query("SELECT id_proyecto_modelo FROM proyecto_modelo_calidad WHERE id_proyecto_modelo = $idModeloPers");
+        $existeModelo = ($res && $res->num_rows > 0);
+    }
+
+    if ($existeModelo) {
         $completados++;
+    } else {
+        $next = [
+            'paso' => 3,
+            'texto' => 'Modelo de calidad no válido o eliminado.',
+            'accion' => 'Verificá que el modelo asignado al proyecto exista o reasigná uno nuevo.',
+            'responsable' => 'Administrador o Gerente de Calidad',
+            'icono' => 'oi-warning',
+            'estado' => 'pendiente'
+        ];
     }
 }
+
 // Paso 4: iteraciones
 if ($next === null) {
     $cantIter = (int)$cn->query("SELECT COUNT(*) AS c FROM iteracion WHERE id_proyecto=$idProyecto")->fetch_assoc()['c'];
@@ -88,12 +134,19 @@ if ($next === null) {
 // Paso 5: planificación de métricas (solo iteración actual)
 if ($next === null) {
     $totalMetricasBase = 0;
-    if (!empty($pr['id_modelo'])) {
-        $totalMetricasBase = (int)$cn->query("SELECT COUNT(*) AS c FROM metrica_modelo_calidad WHERE id_modelo=" . (int)$pr['id_modelo'])->fetch_assoc()['c'];
+    if (!empty($pr['id_modelo_global'])) {
+        $totalMetricasBase = (int)$cn->query(
+            "
+        SELECT COUNT(*) AS c 
+        FROM metrica_modelo_calidad 
+        WHERE id_modelo = " . (int)$pr['id_modelo_global']
+        )->fetch_assoc()['c'];
     }
     $totalMetricasPers = (int)$cn->query("SELECT COUNT(DISTINCT mpm.id_metrica) AS c FROM metrica_proyecto_modelo mpm JOIN proyecto_modelo_calidad pmc ON pmc.id_proyecto_modelo = mpm.id_proyecto_modelo WHERE pmc.id_proyecto = $idProyecto")->fetch_assoc()['c'];
     $totalMetricas = $totalMetricasBase + $totalMetricasPers;
-    $iterActualId = 0; $iterActualFase = ''; $iterActualNumero = '';
+    $iterActualId = 0;
+    $iterActualFase = '';
+    $iterActualNumero = '';
     $sqlAct = "SELECT i.id_iteracion, i.numero_iteracion, f.nombre AS fase_nombre FROM iteracion i LEFT JOIN fase f ON f.id_fase = i.id_fase WHERE i.id_proyecto = $idProyecto AND CURDATE() BETWEEN i.fecha_inicio AND i.fecha_fin ORDER BY i.id_fase ASC, i.numero_iteracion ASC LIMIT 1";
     if ($rsAct = $cn->query($sqlAct)) {
         if ($ra = $rsAct->fetch_assoc()) {
@@ -131,7 +184,7 @@ if ($next === null) {
 $link = null;
 if ($next['estado'] === 'completo') {
     if (ControlAcceso::verificaPermiso(PermisosSistema::REGISTRO_METRICAS)) {
-        $link = "registro_metricas.php?proyecto=$idProyecto";
+        $link = "metricas.php";
     } else {
         $link = "dashboard.php?proyecto=$idProyecto";
     }

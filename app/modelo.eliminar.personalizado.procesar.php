@@ -55,38 +55,38 @@ try {
     }
 
     // =====================================================
-    // 🔍 Verificar si tiene métricas planificadas (en metrica_iteracion)
-    // =====================================================
-    // =====================================================
     // 🔍 Verificar si el modelo (personalizado) tiene métricas planificadas o ejecutadas
     // =====================================================
-    $sqlUso = "
+   $sqlUso = "
     SELECT 1
     FROM metrica_iteracion mi
-    WHERE mi.id_metrica IN (
-        -- Métricas personalizadas del modelo personalizado
-        SELECT mpm.id_metrica
-        FROM metrica_proyecto_modelo mpm
-        WHERE mpm.id_proyecto_modelo = {$idModelo}
+    JOIN iteracion i ON i.id_iteracion = mi.id_iteracion
+    WHERE i.id_proyecto = {$idProyecto}
+      AND mi.id_metrica IN (
+          -- Métricas personalizadas del modelo personalizado
+          SELECT mpm.id_metrica
+          FROM metrica_proyecto_modelo mpm
+          WHERE mpm.id_proyecto_modelo = {$idModelo}
 
-        UNION
+          UNION
 
-        -- Métricas base heredadas del modelo global del proyecto
-        SELECT mmc.id_metrica
-        FROM metrica_modelo_calidad mmc
-        JOIN proyecto p ON p.id_modelo_global = mmc.id_modelo
-        JOIN proyecto_modelo_calidad pmc ON pmc.id_proyecto = p.id_proyecto
-        WHERE pmc.id_proyecto_modelo = {$idModelo}
-    )
+          -- Métricas base heredadas del modelo global del proyecto
+          SELECT mmc.id_metrica
+          FROM metrica_modelo_calidad mmc
+          JOIN proyecto p ON p.id_modelo_global = mmc.id_modelo
+          JOIN proyecto_modelo_calidad pmc ON pmc.id_proyecto = p.id_proyecto
+          WHERE pmc.id_proyecto_modelo = {$idModelo}
+      )
     LIMIT 1
 ";
+
 
     $resUso = $cn->query($sqlUso);
     if ($resUso && $resUso->num_rows > 0) {
         throw new Exception('No se puede eliminar el modelo: contiene métricas base o personalizadas planificadas o en ejecución.');
     }
 
- 
+
 
     // =====================================================
     // 🔹 Iniciar transacción
@@ -162,7 +162,13 @@ try {
         $stmtCountIter->close();
         $stmtDelMet->close();
     }
-
+// 🟢 ACTUALIZAR PROYECTO A REGISTRADO
+    $cn->query("
+        UPDATE proyecto
+        SET id_modelo_personalizado = NULL,
+            estado = 'Registrado'
+        WHERE id_proyecto = {$idProyecto}
+    ");
     $cn->commit();
 
     // =====================================================
@@ -183,7 +189,7 @@ try {
 
 
     if ($__isAjax) {
-        header('Content-Type: application/json', true, 500);
+        header('Content-Type: application/json'); // sin código 500
         echo json_encode(['success' => false, 'error' => $ex->getMessage()]);
         exit;
     } else {

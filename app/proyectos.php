@@ -174,7 +174,7 @@ foreach ($proyectos as $pr) {
         $idModeloGlobal = (int)($pr['id_modelo_global'] ?? 0);
         $idModeloPers   = (int)($pr['id_modelo_personalizado'] ?? 0);
 
-        if ($idModeloGlobal === 0 && $idModeloPers === 0) {
+if (($idModeloGlobal ?? 0) == 0 && ($idModeloPers ?? 0) == 0) {
             // ❌ Sin modelo
             $next = [
                 'paso' => 3,

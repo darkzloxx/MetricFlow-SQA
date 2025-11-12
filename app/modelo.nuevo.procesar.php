@@ -26,8 +26,10 @@ try {
     if ($modeloBaseId > 0 && !$editarBase) {
         $cn->query("UPDATE proyecto 
                     SET id_modelo_global = {$modeloBaseId}, 
-                        id_modelo_personalizado = NULL 
-                    WHERE id_proyecto = {$proyectoId}");
+                        id_modelo_personalizado = NULL,
+                         estado = 'En Progreso'
+        WHERE id_proyecto = {$proyectoId}
+          AND (estado = 'Registrado' OR estado IS NULL)");
         $cn->commit();
         header('Location: modelos.php?msg=' . urlencode('Modelo base vinculado correctamente al proyecto.') . '&type=success');
         exit;
@@ -62,8 +64,10 @@ try {
             // No hubo cambios → solo vincular modelo global
             $cn->query("UPDATE proyecto 
                         SET id_modelo_global = {$modeloBaseId}, 
-                            id_modelo_personalizado = NULL 
-                        WHERE id_proyecto = {$proyectoId}");
+                            id_modelo_personalizado = NULL,
+                             estado = 'En Progreso'
+        WHERE id_proyecto = {$proyectoId}
+          AND (estado = 'Registrado' OR estado IS NULL)");
             $cn->commit();
             header('Location: modelos.php?msg=' . urlencode('Sin cambios: se vinculó el modelo base original.') . '&type=info');
             exit;
@@ -131,8 +135,10 @@ try {
     if ($proyectoId > 0 && $idProyectoModelo > 0) {
         $cn->query("UPDATE proyecto 
                     SET id_modelo_personalizado = {$idProyectoModelo}, 
-                        id_modelo_global = NULL 
-                    WHERE id_proyecto = {$proyectoId}");
+                        id_modelo_global = NULL,
+ estado = 'En Progreso'
+        WHERE id_proyecto = {$proyectoId}
+          AND (estado = 'Registrado' OR estado IS NULL)");
     }
 
     $cn->commit();
