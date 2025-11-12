@@ -18,7 +18,6 @@ session_destroy();
 
 <body>
 
-    <?php include_once '../gui/navbar.php'; ?>
 
     <div class="container">
         <div class="card">
