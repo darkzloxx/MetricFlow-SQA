@@ -1,13 +1,13 @@
 <?php
 include_once '../lib/ControlAcceso.class.php';
-ControlAcceso::requierePermiso(PermisosSistema::PERMISO_PERMISOS);
+ControlAcceso::requierePermiso(PermisosSistema::ABM_ITERACIONES);
 include_once '../modelo/BDConexion.Class.php';
 $DatosFormulario = $_POST;
 
 
 $query = "UPDATE iteracion "
         . "SET numero_iteracion = {$DatosFormulario["nombre"]},  objetivo = '{$DatosFormulario["objetivo"]}',fecha_inicio = '{$DatosFormulario["fecha_inicio"]}',
-        fecha_fin = '{$DatosFormulario["fecha_fin"]}',id_fase = {$DatosFormulario["fase"]}  "
+        fecha_fin = '{$DatosFormulario["fecha_fin"]}'"
         . "WHERE id_iteracion = {$DatosFormulario["id"]}";
 $consulta = BDConexion::getInstancia()->query($query);
 ?>
@@ -41,7 +41,7 @@ $consulta = BDConexion::getInstancia()->query($query);
                     <?php } ?>
                     <hr />
                     <h5 class="card-text">Opciones</h5>
-                    <a href="iteracion.php">
+                    <a href="iteraciones.php">
                         <button type="button" class="btn btn-primary">
                             <span class="oi oi-account-logout"></span> Salir
                         </button>

@@ -34,6 +34,7 @@ if ($rsM = $cn->query("SELECT m.id_metrica, m.nombre, m.descripcion
 }
 ?>
 <html>
+
 <head>
   <meta charset="UTF-8" />
   <link rel="stylesheet" href="../lib/bootstrap-4.1.1-dist/css/bootstrap.css" />
@@ -43,11 +44,18 @@ if ($rsM = $cn->query("SELECT m.id_metrica, m.nombre, m.descripcion
   <title><?= Constantes::NOMBRE_SISTEMA; ?> - Ver Modelo</title>
   <style>
     .btn-outline-secondary {
-      border-color: #dee2e6; color:#495057; background-color:#fff;
+      border-color: #dee2e6;
+      color: #495057;
+      background-color: #fff;
     }
-    .btn-outline-secondary:hover { background-color:#f8f9fa; color:#212529; }
+
+    .btn-outline-secondary:hover {
+      background-color: #f8f9fa;
+      color: #212529;
+    }
   </style>
 </head>
+
 <body>
   <?php include_once '../gui/navbar.php'; ?>
   <div class="container">
@@ -71,17 +79,21 @@ if ($rsM = $cn->query("SELECT m.id_metrica, m.nombre, m.descripcion
             <th>Descripción</th>
           </tr>
           <?php if (empty($metricas)): ?>
-            <tr><td colspan="2" class="text-muted">El modelo no tiene métricas asociadas.</td></tr>
-          <?php else: foreach ($metricas as $m): ?>
             <tr>
-              <td><?= htmlspecialchars($m['nombre']); ?></td>
-              <td><?= htmlspecialchars($m['descripcion'] ?? ''); ?></td>
+              <td colspan="2" class="text-muted">El modelo no tiene métricas asociadas.</td>
             </tr>
-          <?php endforeach; endif; ?>
+            <?php else: foreach ($metricas as $m): ?>
+              <tr>
+                <td><?= htmlspecialchars($m['nombre']); ?></td>
+                <td><?= htmlspecialchars($m['descripcion'] ?? ''); ?></td>
+              </tr>
+          <?php endforeach;
+          endif; ?>
         </table>
       </div>
     </div>
   </div>
   <?php include_once '../gui/footer.php'; ?>
 </body>
+
 </html>

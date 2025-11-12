@@ -1,86 +1,88 @@
 <?php
 include_once '../lib/ControlAcceso.Class.php';
-ControlAcceso::requierePermiso(PermisosSistema::PERMISO_USUARIOS);
+ControlAcceso::requierePermiso(PermisosSistema::ABM_ITERACIONES);
 include_once '../modelo/BDConexion.Class.php';
+
 $DatosFormulario = $_POST;
-BDConexion::getInstancia()->autocommit(false);
-BDConexion::getInstancia()->begin_transaction();
+$cn = BDConexion::getInstancia();
+$cn->autocommit(false);
+$cn->begin_transaction();
 
-$nombre = $DatosFormulario["nombre"];
-$fecha_inicio = $DatosFormulario["fecha_inicio"];
-$fecha_fin = $DatosFormulario["fecha_fin"];
-$objetivo = $DatosFormulario["objetivo"];
-$fase = $DatosFormulario["fase"];
-$idProyecto = 1;
+$idProyecto = (int)$DatosFormulario["id_proyecto"];
+$numero = (int)$DatosFormulario["numero"];
+$fecha_inicio = $cn->real_escape_string($DatosFormulario["fecha_inicio"]);
+$fecha_fin = $cn->real_escape_string($DatosFormulario["fecha_fin"]);
+$objetivo = $cn->real_escape_string(trim($DatosFormulario["objetivo"]));
+$fase = (int)$DatosFormulario["fase"];
 
-$resultado = "";
+$resultado = false;
 $mensaje = "Ha ocurrido un error.";
 
-$query = "select * from iteracion where numero_iteracion = {$nombre} and id_proyecto = {$idProyecto} and id_fase = ". $fase;
-$consulta = BDConexion::getInstancia()->query($query);
+// Verificar si ya existe el mismo número en esa fase/proyecto
+$sqlCheck = "
+    SELECT 1 FROM iteracion 
+    WHERE numero_iteracion = {$numero} 
+      AND id_proyecto = {$idProyecto} 
+      AND id_fase = {$fase}
+    LIMIT 1";
+$res = $cn->query($sqlCheck);
 
-if ($consulta->num_rows > 0){
-	$resultado = false;
-	$mensaje = "Ya existe el número de iteración para la fase seleccionada";
+if ($res && $res->num_rows > 0) {
+    $mensaje = "Ya existe una iteración con ese número en la fase seleccionada.";
 } else {
-		$query = "INSERT INTO iteracion "
-				. "VALUES (null,{$idProyecto},{$DatosFormulario["nombre"]},'{$DatosFormulario["fecha_inicio"]}','{$DatosFormulario["fecha_fin"]}','{$DatosFormulario["objetivo"]}',{$DatosFormulario["fase"]})";
-		$consulta = BDConexion::getInstancia()->query($query);
+    if ($numero === 0) {
+        $sqlNext = "
+        SELECT COALESCE(MAX(numero_iteracion), 0) + 1 AS siguiente
+        FROM iteracion
+        WHERE id_proyecto = {$idProyecto}";
+        $resNext = $cn->query($sqlNext);
+        $numero = (int)($resNext->fetch_assoc()['siguiente'] ?? 1);
+    }
 
-		if (!$consulta) {
-			BDConexion::getInstancia()->rollback();
-			//arrojar una excepcion
-			die(BDConexion::getInstancia()->errno);
-		}
-		
-		$idUsuario = BDConexion::getInstancia()->insert_id;
-		
-		
-		BDConexion::getInstancia()->commit();
-		BDConexion::getInstancia()->autocommit(true);
-		$resultado = true;
-		$mensaje = "Operación Realizada con Éxito";
+    $sqlInsert = "
+        INSERT INTO iteracion (id_proyecto, numero_iteracion, fecha_inicio, fecha_fin, objetivo, id_fase)
+        VALUES ({$idProyecto}, {$numero}, '{$fecha_inicio}', '{$fecha_fin}', '{$objetivo}', {$fase})";
+
+    if ($cn->query($sqlInsert)) {
+        $cn->commit();
+        $resultado = true;
+        $mensaje = "Iteración creada exitosamente.";
+    } else {
+        $cn->rollback();
+        $mensaje = "Error al crear la iteración: " . $cn->error;
+    }
 }
+$cn->autocommit(true);
 ?>
 <html>
-    <head>
-        <meta charset="UTF-8">
-        <link rel="stylesheet" href="../lib/bootstrap-4.1.1-dist/css/bootstrap.css" />
-        <link rel="stylesheet" href="../lib/open-iconic-master/font/css/open-iconic-bootstrap.css" />
-        <script type="text/javascript" src="../lib/JQuery/jquery-3.3.1.js"></script>
-        <script type="text/javascript" src="../lib/bootstrap-4.1.1-dist/js/bootstrap.min.js"></script>
-        <title><?= Constantes::NOMBRE_SISTEMA; ?> - Crear Iteración</title>
-    </head>
-    <body>
-        <?php include_once '../gui/navbar.php'; ?>
 
-        <div class="container">
-            <p></p>
-            <div class="card">
-                <div class="card-header">
-                    <h3>Crear Iteración</h3>
+<head>
+    <meta charset="UTF-8">
+    <title><?= Constantes::NOMBRE_SISTEMA; ?> - Crear Iteración</title>
+    <link rel="stylesheet" href="../lib/bootstrap-4.1.1-dist/css/bootstrap.css" />
+    <link rel="stylesheet" href="../lib/open-iconic-master/font/css/open-iconic-bootstrap.css" />
+</head>
+
+<body>
+    <?php include_once '../gui/navbar.php'; ?>
+
+    <div class="container mt-4">
+        <div class="card">
+            <div class="card-header">
+                <h3>Crear Iteración</h3>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-<?= $resultado ? 'success' : 'danger'; ?>">
+                    <?= htmlspecialchars($mensaje); ?>
                 </div>
-                <div class="card-body">
-                    <?php if ($resultado) { ?>
-                        <div class="alert alert-success" role="alert">
-                            <?= $mensaje; ?>
-                        </div>
-                    <?php } ?>   
-                    <?php if (!$resultado) { ?>
-                        <div class="alert alert-danger" role="alert">
-                            <?= $mensaje; ?>
-                        </div>
-                    <?php } ?>
-                    <hr />
-                    <h5 class="card-text">Opciones</h5>
-                    <a href="iteracion.php">
-                        <button type="button" class="btn btn-primary">
-                            <span class="oi oi-account-logout"></span> Salir
-                        </button>
-                    </a>
-                </div>
+                <a href="iteraciones.php" class="btn btn-primary">
+                    <span class="oi oi-arrow-left"></span> Volver
+                </a>
             </div>
         </div>
-        <?php include_once '../gui/footer.php'; ?>
-    </body>
+    </div>
+
+    <?php include_once '../gui/footer.php'; ?>
+</body>
+
 </html>

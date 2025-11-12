@@ -1,4 +1,3 @@
-</html>
 <?php
 /**
  * Dashboard de Calidad por Iteración/Métrica
@@ -337,6 +336,38 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
       line-height: 1.1;
       color: #212529
     }
+    /* ======== Proyecto: nombre largo con clamp + expand ======== */
+    .project-title-clamp {
+      display: -webkit-box;
+      -webkit-line-clamp: 2; /* Chrome/Safari */
+      line-clamp: 2; /* Estándar futuro */
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      word-break: break-word;
+      overflow-wrap: anywhere;
+      cursor: default;
+      transition: all .2s ease-in-out;
+    }
+    .project-title-clamp.expanded {
+      -webkit-line-clamp: initial;
+      line-clamp: initial;
+      max-height: none;
+      display: block;
+      white-space: normal;
+    }
+    .project-title-toggle {
+      font-size: .7rem;
+      font-weight: 600;
+      letter-spacing: .5px;
+      text-transform: uppercase;
+      display: inline-block;
+      margin-top: 4px;
+      color: #0d6efd;
+      cursor: pointer;
+      user-select: none;
+    }
+    .project-title-toggle:hover { text-decoration: underline; }
 
     .chip-dot {
       width: 14px;
@@ -633,7 +664,12 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
             <div class="stat-icon icon-bg-primary"><span class="oi oi-briefcase"></span></div>
             <div class="stat-content">
               <span class="stat-label">Proyecto</span>
-              <div id="projectName" class="stat-value"><?= htmlspecialchars($nombreProyecto) ?></div>
+              <div class="stat-value" style="max-width:100%">
+                <span id="projectName" class="project-title-clamp" title="<?= htmlspecialchars($nombreProyecto, ENT_QUOTES, 'UTF-8') ?>">
+                  <?= htmlspecialchars($nombreProyecto) ?>
+                </span>
+                <a id="projectNameToggle" href="#" class="project-title-toggle" aria-expanded="false" aria-controls="projectName" style="display:none">Expandir</a>
+              </div>
               <span class="status-line">Estado:
                 <span class="badge badge-pill <?= $estadoClass ?>"><?= htmlspecialchars($estadoProyecto) ?></span>
               </span>
@@ -2195,207 +2231,255 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
           togglePngOnlyOptions();
         });
 
-        // Interacciones jerárquicas
-        $phaseList.on('change', 'input[type="checkbox"]', function() {
-          buildIterChecklist();
-          buildMetricChecklist();
-          syncExportSelectionFromUI();
-        });
-        $iterList.on('change', 'input[type="checkbox"]', function() {
-          buildMetricChecklist();
-          syncExportSelectionFromUI();
-        });
-        $metricList.on('change', 'input[type="checkbox"]', function() {
-          syncExportSelectionFromUI();
-        });
-        $('#exportIncluirGlobal').on('change', function() {
-          syncExportSelectionFromUI();
-        });
-        $('#fmtPng, #fmtPdf').on('change', function() {
-          togglePngOnlyOptions();
-        });
+// === INTERACCIONES JERÁRQUICAS MEJORADAS ===
+$phaseList.on('change', 'input[type="checkbox"]', function() {
+  const fase = String(this.value);
+  const checked = this.checked;
 
-        // Confirmar exportación
-        const confirmBtn = document.getElementById('exportConfirmBtn');
+  // Obtener todas las iteraciones asociadas a la fase
+  const iters = getIterationsForPhases([fase]);
+  // Marcar/desmarcar solo las iteraciones asociadas
+  $iterList.find('input[type="checkbox"]').each(function() {
+    const iterVal = String(this.value);
+    if (iters.includes(iterVal)) {
+      $(this).prop('checked', checked);
+    }
+  });
 
-        function setModeAndRerender(newMode) {
-          const btnToggle = document.getElementById('modeToggle');
-          if (!btnToggle) return;
-          const prev = btnToggle.dataset.mode || 'donut';
-          if (prev === newMode) return;
-          btnToggle.dataset.mode = newMode;
-          btnToggle.classList.toggle('off', newMode === 'donut');
-          btnToggle.innerHTML = newMode === 'donut' ?
-            '<i class="oi oi-bar-chart"></i> Ver como barras' :
-            '<i class="oi oi-pie-chart"></i> Ver como donuts';
-          const active = document.querySelector('#iterFilter .iter-pill.active');
-          const iter = active ? active.dataset.iter : null;
-          renderIterCards(iter === 'ALL' ? null : iter);
-        }
+  // ⚙️ Si se desmarcan todas las fases → volver a marcar al menos una (la primera)
+  const totalCheckedFases = $phaseList.find('input[type="checkbox"]:checked').length;
+  if (totalCheckedFases === 0) {
+    const firstPhase = $phaseList.find('input[type="checkbox"]').first();
+    if (firstPhase.length) firstPhase.prop('checked', true);
+  }
 
-        if (confirmBtn) confirmBtn.addEventListener('click', async () => {
-          showAlert('');
-          syncExportSelectionFromUI();
-          const fmt = (document.querySelector('input[name="exportFmt"]:checked')?.value || 'png').toLowerCase();
-          const fases = exportSelection.fases.slice();
-          const iteraciones = exportSelection.iteraciones.slice();
-          const metricas = exportSelection.metricas.slice();
-          const incluirGlobal = !!exportSelection.incluirGlobal;
+  buildIterChecklist();
+  buildMetricChecklist();
+  syncExportSelectionFromUI();
+});
 
-          try {
-            if (fmt === 'png') {
-              const chartType = (document.querySelector('input[name="exportChartType"]:checked')?.value || 'donut');
-              const btnToggle = document.getElementById('modeToggle');
-              const prevMode = btnToggle ? (btnToggle.dataset.mode || 'donut') : 'donut';
-              const needSwitch = (chartType !== prevMode);
-              if (needSwitch) {
-                setModeAndRerender(chartType);
-                // esperar un instante para que los charts se preparen
-                await new Promise(r => setTimeout(r, 700));
-              }
-              await exportChartsToServerPNG({
-                fases,
-                iteraciones,
-                metricas,
-                incluirGlobal
-              });
-              if (needSwitch) {
-                setModeAndRerender(prevMode);
-                setTimeout(() => {}, 0);
-              }
-              $('#exportModal').modal('hide');
-            } else {
-              // PDF: construir URL con arrays GET
-              const p = new URLSearchParams();
-              p.set('proyecto', String(PROYECTO_ID));
-              fases.forEach(f => p.append('fase[]', f));
-              iteraciones.forEach(i => p.append('iteracion[]', i));
-              metricas.forEach(m => p.append('metrica[]', m));
-              // No aplica incluirGlobal en PDF
-              // compat: si solo hay una fase o métrica, enviar además los parámetros simples
-              if (fases.length === 1) p.set('fase', fases[0]);
-              if (metricas.length === 1) p.set('metricId', metricas[0]);
-              const url = 'api/exportar_pdf.php?' + p.toString();
-              const a = document.createElement('a');
-              a.href = url;
-              a.target = '_blank';
-              a.rel = 'noopener';
-              document.body.appendChild(a);
-              a.click();
-              setTimeout(() => {
-                try {
-                  a.remove();
-                } catch (_) {}
-              }, 0);
-              $('#exportModal').modal('hide');
-            }
-          } catch (err) {
-            showAlert('No se pudo iniciar la exportación: ' + (err && err.message ? err.message : String(err)));
-          }
-        });
+$iterList.on('change', 'input[type="checkbox"]', function() {
+  const iterSel = readCheckedValues($iterList);
+  const fasesConItersSel = new Set();
 
-        // Utilidades de exportación (PNG)
-        async function exportChartsToServerPNG(opts = {}) {
-          const {
-            fases = [], iteraciones = [], metricas = [], incluirGlobal = true
-          } = opts;
-          const canvas = await composeChartsCanvasGrid({
-            fases,
-            iteraciones,
-            metricas,
-            incluirGlobal
-          });
-          const pngDataUrl = canvas.toDataURL('image/png');
-          await postDataUrlForDownload('api/exportar_png.php', pngDataUrl, suggestedFileName('png'));
-        }
+  (DATA || []).forEach(d => {
+    if (iterSel.includes(String(d.iteracion))) fasesConItersSel.add(String(d.fase));
+  });
 
-        function loadImage(dataUrl) {
-          return new Promise((resolve, reject) => {
-            const img = new Image();
-            img.onload = () => resolve(img);
-            img.onerror = reject;
-            img.src = dataUrl;
-          });
-        }
+  // Actualizar las fases según iteraciones seleccionadas
+  $phaseList.find('input[type="checkbox"]').each(function() {
+    const f = String(this.value);
+    const anyIterForPhase = getIterationsForPhases([f]);
+    const tieneIterSel = anyIterForPhase.some(i => iterSel.includes(i));
+    $(this).prop('checked', tieneIterSel);
+  });
 
-        // Esperar 1 o más frames para asegurar pintura de canvas/DOM
-        function waitNextFrame(times = 1) {
-          return new Promise(resolve => {
-            const step = (n) => {
-              if (n <= 0) return resolve();
-              requestAnimationFrame(() => step(n - 1));
-            };
-            step(Math.max(1, times));
-          });
-        }
+  // ⚙️ Si se desmarcan todas las iteraciones → volver a marcar al menos una
+  const totalCheckedIters = $iterList.find('input[type="checkbox"]:checked').length;
+  if (totalCheckedIters === 0) {
+    const firstIter = $iterList.find('input[type="checkbox"]').first();
+    if (firstIter.length) firstIter.prop('checked', true);
+  }
 
-        // Espera a que un gráfico ECharts termine su render antes de capturar
-        function waitChartFinished(instance, timeout = 2000) {
-          return new Promise((resolve) => {
-            if (!instance || typeof instance.on !== 'function') return resolve();
-            let done = false;
-            const finish = () => {
-              if (!done) {
-                done = true;
-                try {
-                  instance.off('finished', finish);
-                } catch (_) {}
-                resolve();
-              }
-            };
-            try {
-              instance.on('finished', finish);
-            } catch (_) {
-              return resolve();
-            }
-            // Fallback por tiempo máximo
-            setTimeout(finish, timeout);
-            // Un resize suave ayuda a disparar el evento terminado
-            try {
-              instance.resize && instance.resize();
-            } catch (_) {}
-          });
-        }
+  buildMetricChecklist();
+  syncExportSelectionFromUI();
+});
 
-        // (duplicado eliminado)
+$metricList.on('change', 'input[type="checkbox"]', function() {
+  // ⚙️ Si se desmarcan todas las métricas → volver a marcar al menos una
+  const totalCheckedMet = $metricList.find('input[type="checkbox"]:checked').length;
+  if (totalCheckedMet === 0) {
+    const firstMet = $metricList.find('input[type="checkbox"]').first();
+    if (firstMet.length) firstMet.prop('checked', true);
+  }
+  syncExportSelectionFromUI();
+});
 
-        function suggestedFileName(ext) {
-          const name = (document.getElementById('projectName')?.textContent || 'proyecto').replace(/\s+/g, '_');
-          const ts = new Date().toISOString().replace(/[:T]/g, '-').slice(0, 16);
-          return `${name}_tablero_${ts}.${ext}`;
-        }
+$('#exportIncluirGlobal').on('change', function() {
+  syncExportSelectionFromUI();
+});
+$('#fmtPng, #fmtPdf').on('change', function() {
+  togglePngOnlyOptions();
+});
 
-        async function postDataUrlForDownload(url, dataUrl, filename) {
-          return new Promise(resolve => {
-            const form = document.createElement('form');
-            form.method = 'POST';
-            form.action = url;
-            form.style.display = 'none';
-            const input = document.createElement('input');
-            input.type = 'hidden';
-            input.name = 'image';
-            input.value = dataUrl;
-            const name = document.createElement('input');
-            name.type = 'hidden';
-            name.name = 'filename';
-            name.value = filename;
-            const proj = document.createElement('input');
-            proj.type = 'hidden';
-            proj.name = 'proyecto';
-            proj.value = String(PROYECTO_ID);
-            form.appendChild(input);
-            form.appendChild(name);
-            form.appendChild(proj);
-            document.body.appendChild(form);
-            form.submit();
-            setTimeout(() => {
-              try {
-                form.remove();
-              } catch (_) {}
-              resolve();
-            }, 250);
-          });
-        }
+// === CONFIRMAR EXPORTACIÓN CON VALIDACIÓN ===
+const confirmBtn = document.getElementById('exportConfirmBtn');
+if (confirmBtn) confirmBtn.addEventListener('click', async () => {
+  showAlert('');
+  syncExportSelectionFromUI();
+
+  const fasesSel = readCheckedValues($phaseList);
+  const itersSel = readCheckedValues($iterList);
+  const metsSel = readCheckedValues($metricList);
+
+  // ❌ Validar que haya al menos una selección en cada grupo
+  if (!fasesSel.length || !itersSel.length || !metsSel.length) {
+    showAlert('<div class="alert alert-danger text-center mb-2">Debe seleccionar al menos una fase, una iteración y una métrica antes de exportar.</div>');
+    return;
+  }
+
+  const fmt = (document.querySelector('input[name="exportFmt"]:checked')?.value || 'png').toLowerCase();
+  const incluirGlobal = !!exportSelection.incluirGlobal;
+  const fases = fasesSel.slice();
+  const iteraciones = itersSel.slice();
+  const metricas = metsSel.slice();
+
+  try {
+    if (fmt === 'png') {
+      const chartType = (document.querySelector('input[name="exportChartType"]:checked')?.value || 'donut');
+      const btnToggle = document.getElementById('modeToggle');
+      const prevMode = btnToggle ? (btnToggle.dataset.mode || 'donut') : 'donut';
+      const needSwitch = (chartType !== prevMode);
+      if (needSwitch) {
+        setModeAndRerender(chartType);
+        await new Promise(r => setTimeout(r, 700));
+      }
+      await exportChartsToServerPNG({
+        fases,
+        iteraciones,
+        metricas,
+        incluirGlobal
+      });
+      if (needSwitch) {
+        setModeAndRerender(prevMode);
+      }
+      $('#exportModal').modal('hide');
+    } else {
+      // PDF
+      const p = new URLSearchParams();
+      p.set('proyecto', String(PROYECTO_ID));
+      fases.forEach(f => p.append('fase[]', f));
+      iteraciones.forEach(i => p.append('iteracion[]', i));
+      metricas.forEach(m => p.append('metrica[]', m));
+      if (fases.length === 1) p.set('fase', fases[0]);
+      if (metricas.length === 1) p.set('metricId', metricas[0]);
+      const url = 'api/exportar_pdf.php?' + p.toString();
+      const a = document.createElement('a');
+      a.href = url;
+      a.target = '_blank';
+      a.rel = 'noopener';
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => a.remove(), 0);
+      $('#exportModal').modal('hide');
+    }
+  } catch (err) {
+    showAlert('No se pudo iniciar la exportación: ' + (err?.message || String(err)));
+  }
+});
+
+function setModeAndRerender(newMode) {
+  const btnToggle = document.getElementById('modeToggle');
+  if (!btnToggle) return;
+  const prev = btnToggle.dataset.mode || 'donut';
+  if (prev === newMode) return;
+  btnToggle.dataset.mode = newMode;
+  btnToggle.classList.toggle('off', newMode === 'donut');
+  btnToggle.innerHTML = newMode === 'donut'
+    ? '<i class="oi oi-bar-chart"></i> Ver como barras'
+    : '<i class="oi oi-pie-chart"></i> Ver como donuts';
+  const active = document.querySelector('#iterFilter .iter-pill.active');
+  const iter = active ? active.dataset.iter : null;
+  renderIterCards(iter === 'ALL' ? null : iter);
+}
+
+// === UTILIDADES DE EXPORTACIÓN (PNG) ===
+async function exportChartsToServerPNG(opts = {}) {
+  const {
+    fases = [], iteraciones = [], metricas = [], incluirGlobal = true
+  } = opts;
+  const canvas = await composeChartsCanvasGrid({
+    fases,
+    iteraciones,
+    metricas,
+    incluirGlobal
+  });
+  const pngDataUrl = canvas.toDataURL('image/png');
+  await postDataUrlForDownload('api/exportar_png.php', pngDataUrl, suggestedFileName('png'));
+}
+
+function loadImage(dataUrl) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = dataUrl;
+  });
+}
+
+function waitNextFrame(times = 1) {
+  return new Promise(resolve => {
+    const step = (n) => {
+      if (n <= 0) return resolve();
+      requestAnimationFrame(() => step(n - 1));
+    };
+    step(Math.max(1, times));
+  });
+}
+
+function waitChartFinished(instance, timeout = 2000) {
+  return new Promise((resolve) => {
+    if (!instance || typeof instance.on !== 'function') return resolve();
+    let done = false;
+    const finish = () => {
+      if (!done) {
+        done = true;
+        try {
+          instance.off('finished', finish);
+        } catch (_) {}
+        resolve();
+      }
+    };
+    try {
+      instance.on('finished', finish);
+    } catch (_) {
+      return resolve();
+    }
+    setTimeout(finish, timeout);
+    try {
+      instance.resize && instance.resize();
+    } catch (_) {}
+  });
+}
+
+function suggestedFileName(ext) {
+  const name = (document.getElementById('projectName')?.textContent || 'proyecto').replace(/\s+/g, '_');
+  const ts = new Date().toISOString().replace(/[:T]/g, '-').slice(0, 16);
+  return `${name}_tablero_${ts}.${ext}`;
+}
+
+async function postDataUrlForDownload(url, dataUrl, filename) {
+  return new Promise(resolve => {
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = url;
+    form.style.display = 'none';
+    const input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = 'image';
+    input.value = dataUrl;
+    const name = document.createElement('input');
+    name.type = 'hidden';
+    name.name = 'filename';
+    name.value = filename;
+    const proj = document.createElement('input');
+    proj.type = 'hidden';
+    proj.name = 'proyecto';
+    proj.value = String(PROYECTO_ID);
+    form.appendChild(input);
+    form.appendChild(name);
+    form.appendChild(proj);
+    document.body.appendChild(form);
+    form.submit();
+    setTimeout(() => {
+      try {
+        form.remove();
+      } catch (_) {}
+      resolve();
+    }, 250);
+  });
+}
+
 
         async function composeChartsCanvasGrid(params) {
           // Compat: aceptar nombres antiguos y nuevos
@@ -2835,6 +2919,24 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
         document.querySelector('.dashboard-toolbar')?.classList.add('d-none');
         document.getElementById('toolbarExpanded')?.classList.add('d-none');
       }
+    });
+  </script>
+  <script>
+    // ==== Toggle nombre proyecto (expand/collapse) ====
+    document.addEventListener('DOMContentLoaded', function(){
+      var nameEl = document.getElementById('projectName');
+      var toggleEl = document.getElementById('projectNameToggle');
+      if(!nameEl || !toggleEl) return;
+      var texto = nameEl.textContent.trim();
+      if(texto.length > 55){ // mostrar toggle solo para nombres largos
+        toggleEl.style.display = 'inline-block';
+      }
+      toggleEl.addEventListener('click', function(ev){
+        ev.preventDefault();
+        var expanded = nameEl.classList.toggle('expanded');
+        toggleEl.setAttribute('aria-expanded', expanded ? 'true':'false');
+        toggleEl.textContent = expanded ? 'Colapsar' : 'Expandir';
+      });
     });
   </script>
 

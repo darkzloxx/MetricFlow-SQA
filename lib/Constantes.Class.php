@@ -17,9 +17,9 @@ class Constantes {
     // Prefijo del servidor (para redirecciones simples)
     public const SERVER = '';
     // Ruta del login
-    public const HOMEURL = '/metricflow/app/index.php';
+    public const HOMEURL = '/MetricFlow-SQA/app/index.php';
     // Ruta por defecto luego del login
-    public const HOMEAUTH = '/metricflow/app/proyectos.php';
+    public const HOMEAUTH = '/MetricFlow-SQA/app/proyectos.php';
 
     // Base de datos unificada para toda la app
     public const DB_HOST = 'localhost';

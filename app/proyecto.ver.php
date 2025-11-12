@@ -14,12 +14,25 @@ ControlAcceso::requiereProyecto($idProyecto);
 
 // Cargar datos del proyecto (descripcion, estado, nombre)
 $cn = BDConexion::getConexion();
-$stmt = $cn->prepare('SELECT p.id_proyecto, p.nombre, p.estado, p.descripcion, p.objetivo FROM proyecto p WHERE p.id_proyecto = ?');
+
+$stmt = $cn->prepare('SELECT p.id_proyecto, p.nombre, p.estado, p.descripcion, p.objetivo, p.id_modelo, p.fecha_creacion FROM proyecto p WHERE p.id_proyecto = ?');
 $stmt->bind_param('i', $idProyecto);
 $stmt->execute();
 $res = $stmt->get_result();
 $Proyecto = $res->fetch_assoc();
 $stmt->close();
+
+// Obtener nombre del modelo asociado si existe
+$nombreModelo = null;
+if (!empty($Proyecto['id_modelo'])) {
+    $stmt = $cn->prepare('SELECT nombre FROM modelo_calidad WHERE id_modelo = ?');
+    $stmt->bind_param('i', $Proyecto['id_modelo']);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    $row = $res->fetch_assoc();
+    $nombreModelo = $row ? $row['nombre'] : null;
+    $stmt->close();
+}
 
 if (!$Proyecto) {
     header('Location: ' . Constantes::HOMEAUTH);
@@ -96,6 +109,10 @@ $urlDashboard = 'dashboard.php?proyecto=' . $idProyecto;
                     <h5 class="mb-1">Estado</h5>
                     <div><?= htmlspecialchars($Proyecto['estado'], ENT_QUOTES, 'UTF-8'); ?></div>
                 </div>
+                <div class="mb-3">
+                    <h5 class="mb-1">Fecha de Registro</h5>
+                    <div><?= htmlspecialchars(date('d/m/Y H:i', strtotime($Proyecto['fecha_creacion'])), ENT_QUOTES, 'UTF-8'); ?></div>
+                </div>
                 <?php if (!empty($Proyecto['descripcion'])) { ?>
                     <div class="mb-3">
                         <h5 class="mb-1">Descripción</h5>
@@ -109,6 +126,13 @@ $urlDashboard = 'dashboard.php?proyecto=' . $idProyecto;
                         <div><?= nl2br(htmlspecialchars((string)$Proyecto['objetivo'], ENT_QUOTES, 'UTF-8')); ?></div>
                     </div>
                 <?php } ?>
+                <?php if (!empty($nombreModelo)) { ?>
+                    <div class="mb-3">
+                        <h5 class="mb-1">Modelo Asociado</h5>
+                        <div><?= htmlspecialchars($nombreModelo, ENT_QUOTES, 'UTF-8'); ?></div>
+                    </div>
+                <?php } ?>
+
 
                 <hr />
                 <h5 class="card-text mb-3">Dashboard del proyecto</h5>

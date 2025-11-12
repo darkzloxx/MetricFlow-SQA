@@ -38,12 +38,12 @@ if (!ControlAcceso::esAdminGlobal()) {
 
             nameInput.on("input", function() {
                 const val = nameInput.val().trim();
-                const nameRegex = /^[A-Za-zÁÉÍÓÚáéíóúÑñ ]+$/;
+                const nameRegex = /^[A-Za-zÁÉÍÓÚáéíóúÑñ \-]+$/; // permite letras, espacios y guiones
                 if (val === "") {
                     errorName.text("El nombre es obligatorio.");
                     nameInput.addClass("is-invalid");
                 } else if (!nameRegex.test(val)) {
-                    errorName.text("El nombre solo puede contener letras y espacios.");
+                    errorName.text("El nombre solo puede contener letras, espacios y guiones.");
                     nameInput.addClass("is-invalid");
                 } else {
                     errorName.text("");
@@ -57,11 +57,10 @@ if (!ControlAcceso::esAdminGlobal()) {
                 const nombre = nameInput.val().trim();
                 const descripcion = $("#inputDescripcion").val().trim();
                 const objetivo = $("#inputObjetivo").val().trim();
-                const nameRegex = /^[A-Za-zÁÉÍÓÚáéíóúÑñ ]+$/;
-
+                const nameRegex = /^[A-Za-zÁÉÍÓÚáéíóúÑñ \-]+$/; // permite letras, espacios y guiones
                 // Validación básica
                 if (nombre === "" || !nameRegex.test(nombre)) {
-                    errorName.text(nombre === "" ? "El nombre es obligatorio." : "El nombre solo puede contener letras y espacios.");
+                    errorName.text(nombre === "" ? "El nombre es obligatorio." : "El nombre solo puede contener letras, espacios y guiones.");
                     nameInput.addClass("is-invalid");
                     return;
                 }

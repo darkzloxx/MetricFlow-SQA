@@ -3,7 +3,9 @@ header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 require_once __DIR__ . '/../../lib/ControlAcceso.Class.php';
 require_once __DIR__ . '/../../modelo/BDConexion.Class.php';
 
-// FPDF
+// ============================
+//  FPDF
+// ============================
 $fpdfPath = __DIR__ . '/../../lib/fpdf186/fpdf.php';
 if (!file_exists($fpdfPath)) {
     http_response_code(500);
@@ -12,15 +14,24 @@ if (!file_exists($fpdfPath)) {
 }
 require_once $fpdfPath;
 
+// ============================
+//  CLASE PDF
+// ============================
 class PDF extends FPDF
 {
+    public $proyectoNombre = '';
+    public $nombre = '';
+    public $fecha = '';
+    public $filtrosTexto = '';
+    public $data = null;
+    public $w;
+    public $txt;
 
     function Header()
     {
         $logoLeft = __DIR__ . '/../../lib/img/Logo-UNPA-UARG-azul.png';
         if (file_exists($logoLeft)) {
-            // Nuevo tamaño y posición
-            $this->Image($logoLeft, 16, 1, 32); // antes: (14,8,24)
+            $this->Image($logoLeft, 16, 1, 32);
         }
         $this->SetFont('Arial', 'B', 15);
         $this->SetTextColor(30, 30, 30);
@@ -29,7 +40,6 @@ class PDF extends FPDF
 
         $this->SetDrawColor(13, 110, 253);
         $this->SetLineWidth(0.8);
-        // Trazo superior con el mismo ancho que la tabla (270mm) y alineado a los márgenes actuales
         $tableWidth = 270.0;
         $x0 = $this->lMargin;
         $this->Line($x0, 26, $x0 + $tableWidth, 26);
@@ -39,173 +49,91 @@ class PDF extends FPDF
     function Footer()
     {
         $this->SetY(-15);
-        $this->SetFont('Arial', 'I', 8);
-        $this->SetTextColor(100, 100, 100);
-        $this->Cell(
-            0,
-            8,
-            utf8_decode('Generado automáticamente por MetricFlow-SQA | ') .
-                date('d/m/Y') . utf8_decode('  |  Página ') .
-                $this->PageNo() . '/{nb}',
-            0,
-            0,
-            'C'
-        );
+        $this->SetFont('Arial', '', 8);
+        $this->SetTextColor(90, 90, 90);
+        $this->SetDrawColor(200, 200, 200);
+        $this->SetLineWidth(0.2);
+        $this->Line($this->lMargin, $this->GetY(), $this->lMargin + 270, $this->GetY());
+        $this->Ln(2);
+$this->Cell(0, 8, utf8_decode('Proyecto: ' . $this->proyectoNombre), 0, 0, 'L');
+        $this->Cell(0, 8, utf8_decode('Página ') . $this->PageNo() . ' de {nb}', 0, 0, 'R');
     }
 
-    // Calcula cuántas líneas ocupará un texto en un ancho dado con la fuente actual
+    // ====== Helpers ======
     function NbLines($w, $txt)
     {
-        // Basado en ejemplo oficial de FPDF
         $cw = $this->CurrentFont['cw'];
-        if ($w == 0) {
-            $w = $this->w - $this->rMargin - $this->x;
-        }
+        if ($w == 0) $w = $this->w - $this->rMargin - $this->x;
         $wmax = ($w - 2 * $this->cMargin) * 1000 / $this->FontSize;
         $s = str_replace("\r", '', (string)$txt);
         $nb = strlen($s);
-        if ($nb > 0 && $s[$nb - 1] == "\n") {
-            $nb--;
-        }
-        $sep = -1;
-        $i = 0;
-        $j = 0;
-        $l = 0;
-        $nl = 1;
+        if ($nb > 0 && $s[$nb - 1] == "\n") $nb--;
+        $sep = -1; $i = 0; $j = 0; $l = 0; $nl = 1;
         while ($i < $nb) {
             $c = $s[$i];
             if ($c == "\n") {
-                $i++;
-                $sep = -1;
-                $j = $i;
-                $l = 0;
-                $nl++;
-                continue;
+                $i++; $sep = -1; $j = $i; $l = 0; $nl++; continue;
             }
-            if ($c == ' ') {
-                $sep = $i;
-            }
+            if ($c == ' ') $sep = $i;
             $l += $cw[$c] ?? 0;
             if ($l > $wmax) {
                 if ($sep == -1) {
-                    if ($i == $j) {
-                        $i++;
-                    }
-                } else {
-                    $i = $sep + 1;
-                }
-                $sep = -1;
-                $j = $i;
-                $l = 0;
-                $nl++;
-            } else {
-                $i++;
-            }
+                    if ($i == $j) $i++;
+                } else $i = $sep + 1;
+                $sep = -1; $j = $i; $l = 0; $nl++;
+            } else $i++;
         }
         return $nl;
     }
 
-    // Ellipsize helper to keep layout stable
-    function cellTextEllipsized($w, $h, $txt, $border = 1, $ln = 0, $align = 'L', $fill = false)
+    function seccionProyecto($nombre, $fecha, $kpis = [], $filtrosTexto = 'Fase: Todas | Iteraciones: Todas | Métricas: Todas')
     {
-        $margin = 1.6; // small padding
-        $max = $w - 2 * $margin;
-        $s = $this->GetStringWidth($txt);
-        if ($s > $max) {
-            $ellipsis = '...';
-            $eW = $this->GetStringWidth($ellipsis);
-            $cut = '';
-            for ($i = 0, $n = strlen($txt); $i < $n; $i++) {
-                $cut .= $txt[$i];
-                if ($this->GetStringWidth($cut) + $eW > $max) {
-                    $cut = rtrim($cut);
-                    $txt = $cut . $ellipsis;
-                    break;
-                }
-            }
-        }
-        $this->Cell($w, $h, utf8_decode($txt), $border, $ln, $align, $fill);
+        $this->Ln(1);
+        $TOTAL = 270.0;
+        $grisEtiqueta = [240, 240, 240];
+        $grisFondo = [245, 247, 250];
+
+        $this->SetFont('Arial', '', 9);
+        $labelFiltrosW = 50;
+        $valueFiltrosW = $TOTAL - $labelFiltrosW;
+        $lineH = 7;
+        $numLines = max(1, $this->NbLines($valueFiltrosW, utf8_decode($filtrosTexto)));
+        $filtrosRowH = $numLines * $lineH;
+
+        $altoBloque = 9 + 7 + $filtrosRowH + 7;
+        $yInicio = $this->GetY();
+        $this->SetFillColor(...$grisFondo);
+        $this->Rect($this->lMargin, $yInicio, $TOTAL, $altoBloque, 'F');
+
+        $this->SetFillColor(13, 110, 253);
+        $this->SetTextColor(255);
+        $this->SetFont('Arial', 'B', 11);
+        $this->Cell($TOTAL, 9, utf8_decode('DATOS GENERALES DEL PROYECTO'), 1, 1, 'C', true);
+
+        $this->SetFont('Arial', '', 9);
+        $this->SetTextColor(60, 60, 60);
+        $this->SetDrawColor(0);
+        $this->SetFillColor(...$grisEtiqueta);
+        $this->Cell(80, 7, utf8_decode('Nombre del Proyecto:'), 1, 0, 'L', true);
+        $this->Cell(105, 7, utf8_decode(mb_strimwidth($nombre ?: '—', 0, 55, '...')), 1, 0, 'L');
+        $this->SetFillColor(...$grisEtiqueta);
+        $this->Cell(50, 7, utf8_decode('Fecha del Informe:'), 1, 0, 'L', true);
+        $this->Cell(35, 7, utf8_decode($fecha ?: '—'), 1, 1, 'C');
+
+        $this->SetFillColor(...$grisEtiqueta);
+        $this->Cell($labelFiltrosW, $filtrosRowH, utf8_decode('Filtros aplicados:'), 1, 0, 'L', true);
+        $this->MultiCell($valueFiltrosW, $lineH, utf8_decode($filtrosTexto), 1, 'L');
+
+        $labelW = 60; $valueW = 30;
+        $this->SetFillColor(...$grisEtiqueta);
+        $this->Cell($labelW, 7, utf8_decode('Métricas planificadas:'), 1, 0, 'L', true);
+        $this->Cell($valueW, 7, (string)($kpis['metricas_planificadas'] ?? 0), 1, 0, 'C');
+        $this->Cell($labelW, 7, utf8_decode('Tipos de métricas distintas:'), 1, 0, 'L', true);
+        $this->Cell($valueW, 7, (string)($kpis['metricas_distintas'] ?? 0), 1, 0, 'C');
+        $this->Cell($labelW, 7, utf8_decode('Iteraciones con métricas:'), 1, 0, 'L', true);
+        $this->Cell($valueW, 7, (string)($kpis['iteraciones_con_metricas'] ?? 0), 1, 1, 'C');
+        $this->Ln(6);
     }
-
-    // Sección de datos generales con ancho total coherente al de las tablas
-    /**
-     * Bloque de Datos Generales del Proyecto
-     * Visual coherente con las tablas inferiores (ancho total 270 mm)
-     * Incluye control de textos largos y filtros dinámicos.
-     */
-   function seccionProyecto($nombre, $fecha, $kpis = [], $filtrosTexto = 'Fase: Todas | Iteraciones: Todas | Métricas: Todas')
-{
-    $this->Ln(1);
-
-    // --- Config ---
-    $TOTAL = 270.0;
-    $grisEtiqueta = [240, 240, 240];
-    $grisFondo    = [245, 247, 250];
-
-    // Debe usarse misma fuente para medir y luego dibujar
-    $this->SetFont('Arial', '', 9);
-
-    // Medición previa de la fila "Filtros aplicados"
-    $labelFiltrosW = 50;
-    $valueFiltrosW = $TOTAL - $labelFiltrosW;
-    $lineH         = 7;
-    $numLines      = max(1, $this->NbLines($valueFiltrosW, utf8_decode($filtrosTexto)));
-    $filtrosRowH   = $numLines * $lineH;
-
-    // Altura real del bloque SIN la separación final (la separación se hace con Ln())
-    // header(9) + fila1(7) + fila2(variable) + fila3(7)
-    $altoBloque = 9 + 7 + $filtrosRowH + 7;
-
-    // Fondo del bloque
-    $yInicio = $this->GetY();
-    $this->SetFillColor(...$grisFondo);
-    $this->Rect($this->lMargin, $yInicio, $TOTAL, $altoBloque, 'F');
-
-    // Encabezado azul
-    $this->SetFillColor(13, 110, 253);
-    $this->SetTextColor(255);
-    $this->SetFont('Arial', 'B', 11);
-    $this->SetX($this->lMargin);
-    $this->Cell($TOTAL, 9, utf8_decode('DATOS GENERALES DEL PROYECTO'), 1, 1, 'C', true);
-
-    // Filas
-    $this->SetFont('Arial', '', 9);
-    $this->SetTextColor(60, 60, 60);
-    $this->SetDrawColor(0);
-
-    // Fila 1: Proyecto y Fecha (270 = 80 + 105 + 50 + 35)
-    $this->SetFillColor(...$grisEtiqueta);
-    $this->Cell(80, 7, utf8_decode('Nombre del Proyecto:'), 1, 0, 'L', true);
-    $this->Cell(105, 7, utf8_decode(mb_strimwidth($nombre ?: '—', 0, 55, '...')), 1, 0, 'L');
-    $this->SetFillColor(...$grisEtiqueta);
-    $this->Cell(50, 7, utf8_decode('Fecha del Informe:'), 1, 0, 'L', true);
-    $this->Cell(35, 7, utf8_decode($fecha ?: '—'), 1, 1, 'C');
-
-    // Fila 2: Filtros aplicados (misma altura en etiqueta y valor)
-    $this->SetFillColor(...$grisEtiqueta);
-    $this->Cell($labelFiltrosW, $filtrosRowH, utf8_decode('Filtros aplicados:'), 1, 0, 'L', true);
-    $x = $this->GetX(); $y = $this->GetY();
-    $this->SetXY($x, $y);
-    $this->MultiCell($valueFiltrosW, $lineH, utf8_decode($filtrosTexto), 1, 'L');
-
-    // Fila 3: KPIs (270 = 3 * (60 etiqueta + 30 valor))
-    $labelW = 60; $valueW = 30;
-    $this->SetFillColor(...$grisEtiqueta);
-    $this->Cell($labelW, 7, utf8_decode('Métricas planificadas:'), 1, 0, 'L', true);
-    $this->Cell($valueW, 7, (string)($kpis['metricas_planificadas'] ?? 0), 1, 0, 'C');
-
-    $this->SetFillColor(...$grisEtiqueta);
-    $this->Cell($labelW, 7, utf8_decode('Tipos de métricas distintas:'), 1, 0, 'L', true);
-    $this->Cell($valueW, 7, (string)($kpis['metricas_distintas'] ?? 0), 1, 0, 'C');
-
-    $this->SetFillColor(...$grisEtiqueta);
-    $this->Cell($labelW, 7, utf8_decode('Iteraciones con métricas:'), 1, 0, 'L', true);
-    $this->Cell($valueW, 7, (string)($kpis['iteraciones_con_metricas'] ?? 0), 1, 1, 'C');
-
-    // Separación con el resto del contenido (fuera del fondo)
-    $this->Ln(6);
-}
-
 
     function tablaResultados($data)
     {
@@ -215,48 +143,67 @@ class PDF extends FPDF
 
         foreach ($data as $row) {
             $iterKey = $row['iteracion'] . $row['inicio'] . $row['fin'];
-
-            // Si cambia iteración, nueva cabecera y control de salto
             if ($iterKey !== $currentIter) {
                 if ($this->GetY() > 165) $this->AddPage();
-
                 $this->Ln(4);
                 $this->SetFont('Arial', 'B', 11);
                 $this->SetTextColor(13, 110, 253);
                 $this->SetFillColor(235, 243, 255);
-                // Encabezado de sección con el mismo ancho exacto de la tabla (270mm)
-                $this->SetX($this->lMargin);
                 $this->Cell(270.0, 9, utf8_decode("{$row['iteracion']}  ({$row['inicio']} - {$row['fin']})"), 0, 1, 'C', true);
 
-                // Cabecera de subtabla
                 $this->SetFont('Arial', 'B', 9);
                 $this->SetFillColor(13, 110, 253);
                 $this->SetTextColor(255);
-                $this->Cell($w[0], 7, utf8_decode('Métrica'), 1, 0, 'L', true);
-                $this->Cell($w[1], 7, utf8_decode('Planificación'), 1, 0, 'C', true);
-                $this->Cell($w[2], 7, utf8_decode('Ejecución'), 1, 0, 'C', true);
-                $this->Cell($w[3], 7, utf8_decode('Umbral (%)'), 1, 0, 'C', true);
-                $this->Cell($w[4], 7, utf8_decode('Cumplimiento (%)'), 1, 0, 'C', true);
-                $this->Cell($w[5], 7, utf8_decode('Nota'), 1, 1, 'L', true);
+                $headers = ['Métrica', 'Planificación', 'Ejecución', 'Umbral (%)', 'Cumplimiento (%)', 'Nota'];
+                foreach ($headers as $i => $h) $this->Cell($w[$i], 7, utf8_decode($h), 1, 0, $i > 0 && $i < 5 ? 'C' : 'L', true);
+                $this->Ln();
                 $this->SetFont('Arial', '', 8.5);
                 $this->SetTextColor(0);
                 $currentIter = $iterKey;
             }
 
-            // Control salto si tabla se corta
             if ($this->GetY() > 185) $this->AddPage();
-
             $this->SetFillColor($fill ? 248 : 255);
             $this->Cell($w[0], 6.5, utf8_decode($row['metrica']), 1, 0, 'L', $fill);
             $this->Cell($w[1], 6.5, $row['planificado'], 1, 0, 'C', $fill);
             $this->Cell($w[2], 6.5, $row['ejecutado'], 1, 0, 'C', $fill);
             $this->Cell($w[3], 6.5, $row['umbral'], 1, 0, 'C', $fill);
             $this->Cell($w[4], 6.5, $row['cumplimiento'], 1, 0, 'C', $fill);
-            $this->Cell($w[5], 6.5, utf8_decode($row['nota']), 1, 1, 'L', $fill);
+
+            $pctNum = (float)str_replace('%', '', $row['cumplimiento']);
+            $plan = (float)$row['planificado'];
+            $ejec = (float)$row['ejecutado'];
+            $umbral = (float)$row['umbral'];
+          // Asegurate de tener $pctNum como número (0..∞)
+// Ej: $pctNum = is_numeric($pct) ? (float)$pct : (float)rtrim((string)$pct, '%');
+$EPS = 1e-6;
+
+// Determinar color
+if ($plan == 0 && $ejec > 0) {
+    // Planificado 0, ejecutado >0 → azul pastel
+    $this->SetFillColor(173, 216, 230);
+} elseif (abs($pctNum - 100.0) <= $EPS) {
+    // Cumplió exactamente 100% → verde fuerte
+    $this->SetFillColor(144, 238, 144);
+} elseif ($pctNum > 100.0) {
+    // Superó el plan → verde translúcido
+    $this->SetFillColor(200, 255, 200);
+} elseif ($pctNum >= (100.0 - $umbral) && $pctNum < 100.0) {
+    // Dentro del umbral: [100 - umbral, 100) → amarillo
+    $this->SetFillColor(255, 255, 150);
+} else {
+    // Debajo del umbral → rojo
+    $this->SetFillColor(255, 160, 160);
+}
+
+
+            $this->Cell($w[5], 6.5, utf8_decode($row['nota']), 1, 1, 'L', true);
             $fill = !$fill;
         }
     }
 }
+
+
 
 // ==================== Lógica ==================== //
 $usr = ControlAcceso::usuarioActual();
@@ -432,7 +379,9 @@ while ($row = $res->fetch_assoc()) {
 // --- Generación PDF ---
 $pdf = new PDF('L', 'mm', 'A4');
 $pdf->AliasNbPages();
+$pdf->proyectoNombre = $proyNombre ?: 'Proyecto ' . $proyectoId;
 $pdf->AddPage();
+
 $faseLabel = $faseName !== '' ? $faseName : 'Todas';
 // Construir texto de filtros aplicado
 $labelFase = !empty($fases) ? implode(', ', $fases) : 'Todas';
@@ -468,5 +417,6 @@ if (empty($rows)) {
 }
 
 $base = preg_replace('/[^a-zA-Z0-9_-]+/', '_', $proyNombre ?: 'proyecto_' . $proyectoId);
-$pdf->Output('I', $base . '_informe_metricflow.pdf');
+$fechaActual = date('d-m-Y'); // ejemplo: 12-11-2025
+$pdf->Output('I', $base . "_Informe_Calidad_{$fechaActual}.pdf");
 exit;

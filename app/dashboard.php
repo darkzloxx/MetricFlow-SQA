@@ -204,10 +204,8 @@ if (!$hayIteraciones) {
   // Forzamos estado vacío para renderizar la pantalla con mensajes en lugar de responder JSON
   $DATA = [];
 }
+date_default_timezone_set('America/Argentina/Buenos_Aires');
 
-// ============================
-// Lógica de iteraciones actual y anterior
-// ============================
 $hoy = date('Y-m-d');
 $actualIter = null;
 $anteriorIter = null;
@@ -224,7 +222,9 @@ if (count($DATA) === 0) {
   // Buscar si hay iteración actual (por fechas)
   $actualIndex = null;
   foreach ($DATA as $idx => $it) {
-    if ($it['inicio'] <= $hoy && $it['fin'] >= $hoy) {
+    // ✅ Se suma 1 día al fin para incluir todo el día de cierre
+    $finMas1 = date('Y-m-d', strtotime($it['fin'] . ' +1 day'));
+    if ($it['inicio'] <= $hoy && $finMas1 > $hoy) {
       $actualIndex = $idx;
       break;
     }
@@ -254,6 +254,7 @@ if (count($DATA) === 0) {
     $mensajeActual = "La iteración <b>{$actualIter['iteracion']}</b> no tiene métricas planificadas aún.";
   }
 }
+
 
 
 // $conexion es singleton; no cerramos aquí para reuso.
@@ -378,6 +379,39 @@ if (count($DATA) === 0) {
       line-height: 1.1;
       color: #212529;
     }
+
+    /* ======== Proyecto: nombre largo con clamp + expand ======== */
+    .project-title-clamp {
+      display: -webkit-box;
+      -webkit-line-clamp: 2; /* Chrome/Safari */
+      line-clamp: 2; /* Estándar futuro */
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      word-break: break-word;
+      overflow-wrap: anywhere;
+      cursor: default;
+      transition: all .2s ease-in-out;
+    }
+    .project-title-clamp.expanded {
+      -webkit-line-clamp: initial;
+      line-clamp: initial;
+      max-height: none;
+      display: block;
+      white-space: normal;
+    }
+    .project-title-toggle {
+      font-size: .7rem;
+      font-weight: 600;
+      letter-spacing: .5px;
+      text-transform: uppercase;
+      display: inline-block;
+      margin-top: 4px;
+      color: #0d6efd;
+      cursor: pointer;
+      user-select: none;
+    }
+    .project-title-toggle:hover { text-decoration: underline; }
 
     .status-line {
       display: block;
@@ -780,7 +814,12 @@ if (count($DATA) === 0) {
             <div class="stat-icon icon-bg-primary"><span class="oi oi-briefcase"></span></div>
             <div class="stat-content">
               <span class="stat-label">Proyecto</span>
-              <div id="projectName" class="stat-value"><?= htmlspecialchars($nombreProyecto) ?></div>
+              <div class="stat-value" style="max-width:100%">
+                <span id="projectName" class="project-title-clamp" title="<?= htmlspecialchars($nombreProyecto, ENT_QUOTES, 'UTF-8') ?>">
+                  <?= htmlspecialchars($nombreProyecto) ?>
+                </span>
+                <a id="projectNameToggle" href="#" class="project-title-toggle" aria-expanded="false" aria-controls="projectName" style="display:none">Expandir</a>
+              </div>
               <span class="status-line">Estado:
                 <span id="projectStatusBadge" class="badge badge-pill <?= $estadoClass ?>"><?= htmlspecialchars($estadoProyecto) ?></span>
               </span>
@@ -1728,7 +1767,8 @@ if (count($DATA) === 0) {
     }
 
     // ===== Live updates via Server-Sent Events (preferido) =====
-    function startLiveUpdatesSSE() {
+    function startLiveUpdatesSSE() 
+    {
       if (!('EventSource' in window)) return false;
       if (window.__LIVE_SSE) return true;
       try {
@@ -1817,6 +1857,14 @@ if (count($DATA) === 0) {
         return false;
       }
     }
+window.addEventListener('beforeunload', () => {
+  if (window.__LIVE_SSE) {
+    try {
+      window.__LIVE_SSE.close();
+      window.__LIVE_SSE = null;
+    } catch (_) {}
+  }
+});
 
     function initDashboard() {
       if (typeof echarts === "undefined") {
@@ -2441,7 +2489,7 @@ if (count($DATA) === 0) {
           });
 
           // Desactivar interactividad si solo hay una fase
-          const totalFases = letterToPhase.size;
+          /*const totalFases = letterToPhase.size;
           if (totalFases <= 1) {
             document.querySelectorAll('.phase-pill').forEach(chip => {
               chip.classList.add('no-filter');
@@ -2449,7 +2497,28 @@ if (count($DATA) === 0) {
               chip.removeAttribute('data-phase');
               chip.title = 'Solo existe una fase; el filtro no aplica.';
             });
-          }
+          }*/
+         // ==================================================
+// 🔹 Si solo hay una fase → mantenerla activa y fija
+// ==================================================
+const totalFases = letterToPhase.size;
+if (totalFases <= 1) {
+  const unicaFase = Array.from(letterToPhase.values())[0];
+  selectedPhases.clear();
+  selectedPhases.add(unicaFase);
+
+  document.querySelectorAll('.phase-pill').forEach(chip => {
+    chip.classList.add('active');
+    chip.disabled = true;
+    chip.style.cursor = 'default';
+    chip.title = 'Única fase — filtro no aplicable';
+  });
+
+  // ✅ Renderizar el gráfico con los datos completos
+  const filtered = Array.isArray(DATA) ? DATA : [];
+  rebuildTrendChart(filtered);
+}
+
 
           // Render inicial del gráfico acorde a selección (todas activas)
           const initialFiltered = filterDataByPhase(Array.isArray(DATA) ? DATA : []);
@@ -3424,6 +3493,23 @@ if (count($DATA) === 0) {
       if (window.history.length <= 1) {
         document.getElementById('btnVolver').style.display = 'none';
       }
+    });
+    // ==== Toggle nombre proyecto (expand/collapse) ====
+    document.addEventListener('DOMContentLoaded', function(){
+      var nameEl = document.getElementById('projectName');
+      var toggleEl = document.getElementById('projectNameToggle');
+      if(!nameEl || !toggleEl) return;
+      var texto = nameEl.textContent.trim();
+      // Heurística: mostrar toggle si supera 55 caracteres
+      if(texto.length > 55){
+        toggleEl.style.display = 'inline-block';
+      }
+      toggleEl.addEventListener('click', function(ev){
+        ev.preventDefault();
+        var expanded = nameEl.classList.toggle('expanded');
+        toggleEl.setAttribute('aria-expanded', expanded ? 'true':'false');
+        toggleEl.textContent = expanded ? 'Colapsar' : 'Expandir';
+      });
     });
   </script>
   <?php include_once '../gui/footer.php'; ?>

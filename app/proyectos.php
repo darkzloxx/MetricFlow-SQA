@@ -51,6 +51,18 @@ if ($tieneAbmProyectos) {
     $stmt->close();
 }
 
+$archivados = [];
+$activos = [];
+foreach ($proyectos as $p) {
+    $estado = $p['estado'] ?? '';
+    if (in_array($estado, ['Cancelado', 'Finalizado'])) {
+        $archivados[] = $p;
+    } else {
+        $activos[] = $p;
+    }
+}
+$proyectos = $activos;
+
 // ===============================
 // 🧭 Construcción del WIZARD antes de usarlo en la vista
 // ===============================
@@ -81,43 +93,32 @@ if ($existenProyectos > 0 && $proySinUsuarios > 0) {
         'paso' => 2,
         'texto' => "$proySinUsuarios proyecto(s) sin usuarios asignados.",
         'accion' => 'Asigná usuarios a cada proyecto creado.',
-        'responsable' => 'Administrador o SuperAdmin',
+        'responsable' => 'Administrador',
         'icono' => 'oi-people',
         'estado' => 'pendiente',
     ];
 }
 
 // Paso 3: proyectos sin modelo de calidad seleccionado
+$idUsuario = (int)$usr->id;
+
 $proySinModelo = (int)$cn->query("
-    SELECT COUNT(*) AS c FROM proyecto WHERE id_modelo IS NULL
+    SELECT COUNT(*) AS c
+    FROM proyecto p
+    JOIN usuario_proyecto up ON up.id_proyecto = p.id_proyecto
+    WHERE up.id_usuario = $idUsuario
+      AND p.id_modelo IS NULL
 ")->fetch_assoc()['c'];
-if ($proySinModelo > 0) {
-    $wizard[] = [
-        'paso' => 3,
-        'texto' => "$proySinModelo proyecto(s) sin modelo de calidad asignado.",
-        'accion' => 'Seleccioná o creá un modelo personalizado para cada proyecto.',
-        'responsable' => 'Gerente de Calidad o Líder de Proyecto',
-        'icono' => 'oi-layers',
-        'estado' => 'pendiente',
-    ];
-}
 
 // Paso 4: proyectos sin iteraciones
 $sinIteraciones = (int)$cn->query("
-    SELECT COUNT(*) AS c FROM proyecto p
-    LEFT JOIN iteracion i ON i.id_proyecto=p.id_proyecto
-    WHERE i.id_iteracion IS NULL
+    SELECT COUNT(*) AS c
+    FROM proyecto p
+    JOIN usuario_proyecto up ON up.id_proyecto = p.id_proyecto
+    LEFT JOIN iteracion i ON i.id_proyecto = p.id_proyecto
+    WHERE up.id_usuario = $idUsuario
+      AND i.id_iteracion IS NULL
 ")->fetch_assoc()['c'];
-if ($sinIteraciones > 0) {
-    $wizard[] = [
-        'paso' => 4,
-        'texto' => "$sinIteraciones proyecto(s) sin iteraciones creadas.",
-        'accion' => 'Definí las iteraciones del proyecto.',
-        'responsable' => 'Líder de Proyecto',
-        'icono' => 'oi-loop-circular',
-        'estado' => 'pendiente',
-    ];
-}
 
 // Si no hay pendientes, mostrar completado
 if (empty($wizard)) {
@@ -130,42 +131,215 @@ if (empty($wizard)) {
         'estado' => 'completo',
     ];
 }
+$esAdminGlobal = ControlAcceso::esAdminGlobal();
+
 foreach ($proyectos as $pr) {
     $idP = (int)$pr['id_proyecto'];
     $nombreP = $pr['nombre'];
     $rolProyecto = $esSuperAdmin ? 'SuperAdmin' : (getRolUsuarioEnProyecto($cn, (int)$usr->id, $idP) ?? '');
     $rolLower = mb_strtolower($rolProyecto, 'UTF-8');
-    $esAdminProyecto = $esSuperAdmin || ($rolLower === 'administrador');
-    $esGerenteOLider = $esSuperAdmin || in_array($rolLower, ['gerente de calidad', 'líder de proyecto', 'lider de proyecto'], true);
+    $esAdminProyecto = $esAdminGlobal || ($rolLower === 'administrador');
+    $esGerenteOLider =  in_array($rolLower, ['gerente de calidad', 'líder de proyecto', 'lider de proyecto'], true);
+    // Para planificación/ejecución de métricas: solo Gerente/Líder (excluye Admin y SuperAdmin)
+    $esGerenteOLiderSolo = in_array($rolLower, ['gerente de calidad', 'líder de proyecto', 'lider de proyecto'], true);
+    // Solo líder (sin gerente, sin superadmin) para acceso a edición de iteraciones
+    $esLiderProyecto = in_array($rolLower, ['líder de proyecto', 'lider de proyecto'], true);
 
-    $totalSteps = $esAdminProyecto ? 3 : 2; // Ajustado: Admin (2,3,4) - Otros (3,4)
+    // Total de pasos esperados del flujo:
+    // Admin proyecto: 2 (usuarios) + 3 (modelo) + 4 (iteraciones) + 5 (planificar métricas) = 4
+    // Otros roles (Gerente / Líder): 3 (modelo) + 4 (iteraciones) + 5 (planificar métricas) = 3
+    $totalSteps = $esAdminProyecto ? 4 : 3;
     $completados = 0;
     $next = null;
     // Aseguramos que exista la variable $detalle aunque no haya detalle que mostrar
     $detalle = '';
 
-    // Paso 2 (solo admin): usuarios asignados
-    if ($esAdminProyecto) {
-        $cantUsuarios = (int)$cn->query("SELECT COUNT(*) AS c FROM usuario_proyecto WHERE id_proyecto=$idP")->fetch_assoc()['c'];
-        if ($cantUsuarios === 0) {
-            $next = ['paso' => 2, 'texto' => 'Sin usuarios asignados.', 'accion' => 'Asigná usuarios al proyecto.', 'responsable' => 'Administrador o SuperAdmin', 'icono' => 'oi-people', 'estado' => 'pendiente'];
-        } else {
-            $completados++;
-        }
+    // Paso 2: usuarios asignados (debe evaluarse siempre, no solo para administradores del proyecto)
+    $cantUsuarios = (int)$cn->query("SELECT COUNT(*) AS c FROM usuario_proyecto WHERE id_proyecto=$idP")->fetch_assoc()['c'];
+    if ($cantUsuarios === 0) {
+        $next = [
+            'paso' => 2,
+            'texto' => 'Sin usuarios asignados.',
+            'accion' => 'Asigná usuarios al proyecto.',
+            'responsable' => 'Administrador',
+            'icono' => 'oi-people',
+            'estado' => 'pendiente'
+        ];
+    } else {
+        $completados++;
     }
+
     // Paso 3: modelo
     if ($next === null) {
-        if (empty($pr['id_modelo'])) {
-            $next = ['paso' => 3, 'texto' => 'Sin modelo de calidad asignado.', 'accion' => 'Seleccioná o creá un modelo.', 'responsable' => 'Gerente de Calidad o Líder de Proyecto', 'icono' => 'oi-layers', 'estado' => 'pendiente'];
+        $idModeloGlobal = (int)($pr['id_modelo_global'] ?? 0);
+        $idModeloPers   = (int)($pr['id_modelo_personalizado'] ?? 0);
+
+if (($idModeloGlobal ?? 0) == 0 && ($idModeloPers ?? 0) == 0) {
+            // ❌ Sin modelo
+            $next = [
+                'paso' => 3,
+                'texto' => 'Sin modelo de calidad asignado.',
+                'accion' => 'Seleccioná o creá un modelo personalizado basado en uno global existente (debe tener métricas).',
+                'responsable' => 'Gerente de Calidad o Líder de Proyecto',
+                'icono' => 'oi-layers',
+                'estado' => 'pendiente'
+            ];
         } else {
-            $completados++;
+            // ✅ Verificar existencia real
+            $existeModelo = false;
+
+            if ($idModeloGlobal > 0) {
+                $res = $cn->query("SELECT id_modelo FROM modelo_calidad WHERE id_modelo = $idModeloGlobal");
+                $existeModelo = ($res && $res->num_rows > 0);
+            }
+
+            if (!$existeModelo && $idModeloPers > 0) {
+                $res = $cn->query("
+                SELECT id_proyecto_modelo
+                FROM proyecto_modelo_calidad
+                WHERE id_proyecto_modelo = $idModeloPers
+            ");
+                $existeModelo = ($res && $res->num_rows > 0);
+            }
+
+            if ($existeModelo) {
+                $completados++;
+            } else {
+                $next = [
+                    'paso' => 3,
+                    'texto' => 'Modelo de calidad no válido o eliminado.',
+                    'accion' => 'Verificá que el modelo asignado al proyecto exista o reasigná uno nuevo.',
+                    'responsable' => 'Administrador o Gerente de Calidad',
+                    'icono' => 'oi-warning',
+                    'estado' => 'pendiente'
+                ];
+            }
         }
     }
+
+
     // Paso 4: iteraciones
     if ($next === null) {
         $cantIter = (int)$cn->query("SELECT COUNT(*) AS c FROM iteracion WHERE id_proyecto=$idP")->fetch_assoc()['c'];
         if ($cantIter === 0) {
             $next = ['paso' => 4, 'texto' => 'Sin iteraciones creadas.', 'accion' => 'Definí las iteraciones del proyecto y planificá métricas.', 'responsable' => 'Líder de Proyecto', 'icono' => 'oi-loop-circular', 'estado' => 'pendiente'];
+        } else {
+            $completados++;
+        }
+    }
+
+    // =======================================================
+    // PASO 5 — Planificación de métricas
+    // =======================================================
+    if ($next === null) {
+
+        // =======================================================
+        // 🔹 Determinar modelo global y/o personalizado
+        // =======================================================
+        $idModeloGlobal = (int)($pr['id_modelo_global'] ?? 0);
+        $idModeloPersonalizado = (int)($pr['id_modelo_personalizado'] ?? 0);
+
+        $totalMetricasBase = 0;
+        $totalMetricasPers = 0;
+
+        // 🔸 Si el proyecto tiene modelo global (base)
+        if ($idModeloGlobal > 0) {
+            $sqlBase = "SELECT COUNT(*) AS c 
+                    FROM metrica_modelo_calidad 
+                    WHERE id_modelo = $idModeloGlobal";
+            $rowBase = $cn->query($sqlBase)->fetch_assoc();
+            $totalMetricasBase = (int)($rowBase['c'] ?? 0);
+        }
+
+        // 🔸 Si tiene modelo personalizado (modificado o propio)
+        if ($idModeloPersonalizado > 0) {
+            $sqlPers = "
+            SELECT COUNT(DISTINCT mpm.id_metrica) AS c
+            FROM metrica_proyecto_modelo mpm
+            WHERE mpm.id_proyecto_modelo = $idModeloPersonalizado";
+            $rowPers = $cn->query($sqlPers)->fetch_assoc();
+            $totalMetricasPers = (int)($rowPers['c'] ?? 0);
+        }
+
+        // 🔸 Total de métricas visibles (base + personalizadas)
+        $totalMetricas = $totalMetricasBase + $totalMetricasPers;
+
+        // =======================================================
+        // 🔹 Buscar iteración activa
+        // =======================================================
+        $iterActualId = 0;
+        $iterActualFase = '';
+        $iterActualNumero = '';
+
+        $sqlAct = "
+        SELECT i.id_iteracion, i.numero_iteracion, f.nombre AS fase_nombre
+        FROM iteracion i
+        LEFT JOIN fase f ON f.id_fase = i.id_fase
+        WHERE i.id_proyecto = $idP 
+          AND CURDATE() BETWEEN i.fecha_inicio AND i.fecha_fin
+        ORDER BY i.id_fase ASC, i.numero_iteracion ASC
+        LIMIT 1";
+        if ($rsAct = $cn->query($sqlAct)) {
+            if ($ra = $rsAct->fetch_assoc()) {
+                $iterActualId = (int)$ra['id_iteracion'];
+                $iterActualFase = $ra['fase_nombre'] ?? '';
+                $iterActualNumero = $ra['numero_iteracion'] ?? '';
+            }
+        }
+
+        // =======================================================
+        // 🔹 Contar métricas planificadas en la iteración actual
+        // =======================================================
+        $planificadasActual = 0;
+        if ($iterActualId > 0) {
+            $sqlPlan = "SELECT COUNT(*) AS c 
+                    FROM metrica_iteracion 
+                    WHERE id_iteracion = $iterActualId";
+            $rowPlan = $cn->query($sqlPlan)->fetch_assoc();
+            $planificadasActual = (int)($rowPlan['c'] ?? 0);
+        }
+
+        // =======================================================
+        // 🔹 Evaluación de condiciones
+        // =======================================================
+        if ($totalMetricas === 0) {
+            $next = [
+                'paso' => 5,
+                'texto' => 'Sin métricas definidas en el modelo/proyecto.',
+                'accion' => 'Asociá métricas al modelo o creá métricas personalizadas.',
+                'responsable' => 'Gerente de Calidad o Líder de Proyecto',
+                'icono' => 'oi-calendar',
+                'estado' => 'pendiente'
+            ];
+        } elseif ($iterActualId === 0) {
+            $next = [
+                'paso' => 5,
+                'texto' => 'No hay iteración actual en curso.',
+                'accion' => 'Verificá fechas de iteraciones o creá una nueva iteración activa.',
+                'responsable' => 'Líder de Proyecto',
+                'icono' => 'oi-loop-circular',
+                'estado' => 'pendiente'
+            ];
+        } elseif ($planificadasActual === 0) {
+            // 🔹 Este es tu caso actual
+            $next = [
+                'paso' => 5,
+                'texto' => 'Sin métricas planificadas en la iteración actual.',
+                'accion' => 'Asigná valores planificados a todas las métricas de la iteración actual.',
+                'responsable' => 'Gerente de Calidad o Líder de Proyecto',
+                'icono' => 'oi-calendar',
+                'estado' => 'pendiente'
+            ];
+        } elseif ($planificadasActual < $totalMetricas) {
+            $etiquetaIter = trim(($iterActualFase !== '' ? ($iterActualFase . ' ') : '') . $iterActualNumero);
+            $next = [
+                'paso' => 5,
+                'texto' => 'Planificación parcial — Iteración actual: ' . htmlspecialchars($etiquetaIter, ENT_QUOTES, 'UTF-8') . '.',
+                'accion' => 'Planificá las métricas restantes para completar esta iteración.',
+                'responsable' => 'Gerente de Calidad o Líder de Proyecto',
+                'icono' => 'oi-calendar',
+                'estado' => 'pendiente'
+            ];
         } else {
             $completados++;
         }
@@ -187,20 +361,26 @@ foreach ($proyectos as $pr) {
     $link = null;
     if ($next['estado'] === 'completo') {
         if (ControlAcceso::verificaPermiso(PermisosSistema::REGISTRO_METRICAS)) {
-            $link = "registro_metricas.php?proyecto=$idP";
+            $link = "metricas.php";
         } else {
             $link = "dashboard.php?proyecto=$idP";
         }
     } else {
         switch ($next['paso']) {
             case 2: // Usuarios asignados
-                if ($esAdminProyecto) $link = "proyecto.modificar.php?id=$idP#usuarios";
+                if (ControlAcceso::verificaPermiso(PermisosSistema::ABM_PROYECTOS)) {
+                    $link = "usuarios.php";
+                }
                 break;
-            case 3:
-                if ($esGerenteOLider || $esSuperAdmin) $link = "proyecto.modificar.php?id=$idP#modelo";
+            case 3: // Modelo de calidad
+                if ($esGerenteOLider) $link = "modelos.php";
                 break;
-            case 4:
-                if ($esGerenteOLider || $esSuperAdmin) $link = "proyecto.modificar.php?id=$idP#iteraciones";
+            case 4: // Iteraciones (solo líder de proyecto)
+                if ($esLiderProyecto) $link = "iteraciones.php";
+                break;
+            case 5:
+                // Ir a la pantalla de métricas para planificar valores → solo Gerente/Líder
+                if ($esGerenteOLiderSolo) $link = "metricas.php"; // llevar contexto de proyecto para facilitar planificación
                 break;
         }
     }
@@ -286,6 +466,172 @@ foreach ($proyectos as $pr) {
             flex-wrap: wrap;
         }
 
+        /* ===============================
+   📋 Nombre de proyecto (tabla)
+   =============================== */
+        .table td.nombre-proyecto {
+            max-width: 180px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            vertical-align: middle;
+            font-weight: 500;
+        }
+
+        .table td.nombre-proyecto:hover {
+            position: relative;
+            white-space: normal;
+            word-break: break-word;
+            overflow: visible;
+            z-index: 2;
+            background: #f8f9fa;
+            border-radius: .25rem;
+            padding: .1rem .2rem;
+        }
+
+        .wizard-card .card-header .header-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: .5rem;
+            flex-wrap: nowrap;
+            min-width: 0;
+            /* ✅ NECESARIO para que text-overflow funcione dentro del flex */
+        }
+
+
+        /* ============================================
+📌 Título del proyecto (con truncado y hover)
+=============================================== */
+        .wizard-card .project-title {
+            display: flex;
+            align-items: center;
+            gap: .4rem;
+            flex: 1 1 0%;
+            flex-shrink: 1;
+            /* fuerza al título a respetar su límite */
+            min-width: 0;
+            /* permite truncado dentro de flex */
+            max-width: 210px;
+            /* define límite visible */
+            font-weight: 600;
+            color: #007bff;
+            font-size: 0.9rem;
+            line-height: 1.3;
+        }
+
+        /* Texto del título con ellipsis en una sola línea */
+        .wizard-card .project-title-text {
+            flex: 1 1 auto;
+            min-width: 0;
+            /* imprescindible para ellipsis en flex */
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            /* … */
+        }
+
+
+        .wizard-card .project-title .oi {
+            flex-shrink: 0;
+            margin-right: .4rem;
+            color: #17a2b8;
+        }
+
+        /* Hover: mostrar todo el texto (expande sobre el card) */
+        .wizard-card .project-title:hover .project-title-text {
+            position: relative;
+            white-space: normal;
+            word-break: break-word;
+            overflow: visible;
+            z-index: 5;
+            background: rgba(248, 249, 250, 0.95);
+            border-radius: .25rem;
+            padding: .15rem .3rem;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+        }
+
+
+        /* Porcentaje completado */
+        .wizard-card .progress-label {
+            flex-shrink: 0;
+            white-space: nowrap;
+            color: #6c757d;
+            font-size: .8rem;
+            margin-left: auto;
+        }
+
+        /* 🧭 Scroll interno para wizard si hay muchos proyectos */
+        #wizardFlujo {
+            max-height: calc(100vh - 180px);
+            /* deja espacio para el header y footer */
+            overflow-y: auto;
+            padding-right: 4px;
+        }
+
+        #wizardFlujo::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        #wizardFlujo::-webkit-scrollbar-thumb {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 3px;
+        }
+
+        #wizardFlujo::-webkit-scrollbar-thumb:hover {
+            background: rgba(0, 0, 0, 0.35);
+        }
+
+        .card.archivados {
+            background: #f8f9fa;
+            /* gris muy suave */
+            border-left: 4px solid #adb5bd;
+            /* gris medio */
+            opacity: 0.95;
+            transition: all 0.2s ease-in-out;
+        }
+
+        .card.archivados:hover {
+            opacity: 1;
+            border-left-color: #17a2b8;
+            /* azul info al hover */
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+        }
+
+        .card.archivados .card-header {
+            background: #e9ecef;
+            /* un gris más claro que los activos */
+            color: #495057;
+            font-weight: 600;
+        }
+
+        /* Permitir hover visual, aunque siga sin ser clickeable */
+        .card.archivados .btn.disabled,
+        .card.archivados .btn:disabled {
+            pointer-events: auto !important;
+            /* Permite hover visual */
+            opacity: 0.8;
+        }
+
+        /* Colores hover coherentes */
+        .card.archivados .btn-outline-secondary:hover {
+            background-color: #6c757d;
+            color: #fff;
+            border-color: #6c757d;
+        }
+
+        .card.archivados .btn-outline-warning:hover {
+            background-color: #ffc107;
+            color: #212529;
+            border-color: #ffc107;
+        }
+
+        .card.archivados .btn-outline-danger:hover {
+            background-color: #dc3545;
+            color: #fff;
+            border-color: #dc3545;
+        }
+
         .wizard-step .titulo-paso .chevron {
             color: #17a2b8;
             font-weight: 700;
@@ -329,6 +675,54 @@ foreach ($proyectos as $pr) {
         .tooltip-inner {
             max-width: 360px;
             text-align: left;
+        }
+
+        @media (max-width: 480px) {
+            .wizard-card .card-header .header-row {
+                flex-wrap: wrap;
+            }
+
+            .wizard-card .project-title {
+                width: 100%;
+            }
+
+            .wizard-card .project-title-toggle,
+            .wizard-card .progress-label {
+                margin-top: .25rem;
+            }
+        }
+
+        /* ===============================
+   🔒 Hover visual para botones deshabilitados
+   =============================== */
+        .btn.disabled,
+        .btn:disabled {
+            pointer-events: auto !important;
+            /* Permite hover visual */
+            opacity: 0.8;
+            transition: all 0.2s ease-in-out;
+        }
+
+        /* Colores hover coherentes con sus variantes */
+        .btn-outline-warning.disabled:hover,
+        .btn-outline-warning:disabled:hover {
+            background-color: #ffc107;
+            color: #212529;
+            border-color: #ffc107;
+        }
+
+        .btn-outline-danger.disabled:hover,
+        .btn-outline-danger:disabled:hover {
+            background-color: #dc3545;
+            color: #fff;
+            border-color: #dc3545;
+        }
+
+        .btn-outline-secondary.disabled:hover,
+        .btn-outline-secondary:disabled:hover {
+            background-color: #6c757d;
+            color: #fff;
+            border-color: #6c757d;
         }
     </style>
 </head>
@@ -374,15 +768,17 @@ foreach ($proyectos as $pr) {
                 <div id="wizardFlujo">
                     <?php if (!empty($wizardsPorProyecto)): ?>
                         <?php foreach ($wizardsPorProyecto as $idP => $wiz): $w = $wiz['step']; ?>
-                            <div class="card shadow-sm border-0 mb-3 wizard-card">
+                            <div class="card shadow-sm border-0 mb-3 wizard-card" data-id-proyecto="<?= (int)$idP ?>">
                                 <div class="card-header bg-white border-bottom-0 py-3">
-                                    <div class="d-flex align-items-center justify-content-between">
-                                        <h6 class="mb-0 text-primary">
-                                            <span class="oi oi-list-rich mr-1"></span>
-                                            Preparación
-                                        </h6>
-                                        <span class="small text-muted"><?= (int)$wiz['progreso']; ?>% completado</span>
+                                    <div class="header-row">
+                                        <div class="project-title" title="<?= htmlspecialchars($wiz['proyecto']); ?>">
+                                            <span class="oi oi-list-rich"></span>
+                                            <span class="project-title-text"><?= htmlspecialchars($wiz['proyecto']); ?></span>
+                                        </div>
+                                        <span class="progress-label"><?= (int)$wiz['progreso']; ?>% completado</span>
                                     </div>
+
+
                                     <div class="progress mt-2" style="height: 6px;">
                                         <div class="progress-bar bg-info" role="progressbar"
                                             style="width: <?= (int)$wiz['progreso']; ?>%;" aria-valuenow="<?= (int)$wiz['progreso']; ?>"
@@ -400,6 +796,7 @@ foreach ($proyectos as $pr) {
                                             <div class="contenido-paso">
                                                 <div class="titulo-paso">
                                                     <strong><?= $w['paso'] === '✓' ? 'Completado' : ('Paso ' . htmlspecialchars((string)$w['paso'])); ?> — <?= htmlspecialchars($w['texto']); ?></strong>
+
                                                     <?php if (!empty($wiz['detalle'])): ?>
                                                         <span class="ml-2 text-secondary wiz-info" data-toggle="tooltip" data-html="true" title="<?= htmlspecialchars($wiz['detalle'], ENT_QUOTES, 'UTF-8'); ?>" aria-label="Más información"><span class="oi oi-info"></span></span>
                                                         <span class="chevron ml-2">›</span>
@@ -431,7 +828,7 @@ foreach ($proyectos as $pr) {
                     <?php else: ?>
                         <div class="card shadow-sm border-0">
                             <div class="card-body py-3 text-center text-muted">
-                                No tenés proyectos asignados.
+                                No tenés proyectos asignados ni rol.
                             </div>
                         </div>
                     <?php endif; ?>
@@ -446,22 +843,33 @@ foreach ($proyectos as $pr) {
                             <a href="proyecto.crear.php" class="btn btn-success btn-sm" title="Crear nuevo proyecto">
                                 <span class="oi oi-plus"></span> Nuevo
                             </a>
+                        <?php else: ?>
+                            <button class="btn btn-outline-secondary btn-sm" disabled data-toggle="tooltip" title="Requiere rol: Administrador" aria-label="Crear proyecto bloqueado">
+                                <span class="oi oi-lock-locked"></span>
+                            </button>
                         <?php endif; ?>
                     </div>
                     <div class="card-body">
-                        <?php if ($tieneAbmProyectos): ?>
-                            <!-- Botón ya movido al header -->
-                        <?php endif; ?>
 
                         <?php if (empty($proyectos)): ?>
-                            <div class="card my-4 text-center"
-                                style="border:1px dashed rgba(23,162,184,0.15); background:rgba(23,162,184,0.03);">
-                                <div class="card-body p-4">
-                                    <i class="oi oi-info mb-2" style="font-size:2rem; color:#17a2b8;"></i>
-                                    <h5 class="text-info font-weight-bold mb-2">No tenés proyectos asignados</h5>
-                                    <p class="text-muted mb-3">Aún no fuiste asignado a ningún proyecto. Si creés que esto es un error, contactá a un administrador.</p>
+                            <?php if ($tieneAbmProyectos && $existenProyectos === 0): ?>
+                                <div class="card my-4 text-center" style="border:1px dashed #ffc107; background:rgba(255,193,7,0.07);">
+                                    <div class="card-body p-4">
+                                        <i class="oi oi-plus mb-2" style="font-size:2rem; color:#ffc107;"></i>
+                                        <h5 class="text-warning font-weight-bold mb-2">Todavía no existen proyectos</h5>
+                                        <p class="text-muted mb-3">Crea un nuevo proyecto para comenzar a gestionar métricas de calidad.</p>
+                                    </div>
                                 </div>
-                            </div>
+                            <?php else: ?>
+                                <div class="card my-4 text-center"
+                                    style="border:1px dashed rgba(23,162,184,0.15); background:rgba(23,162,184,0.03);">
+                                    <div class="card-body p-4">
+                                        <i class="oi oi-info mb-2" style="font-size:2rem; color:#17a2b8;"></i>
+                                        <h5 class="text-info font-weight-bold mb-2">No tenés proyectos asignados ni rol</h5>
+                                        <p class="text-muted mb-3">Aún no fuiste asignado a ningún proyecto. Si creés que esto es un error, contactá a un administrador.</p>
+                                    </div>
+                                </div>
+                            <?php endif; ?>
                         <?php else: ?>
                             <table class="table table-hover table-sm">
                                 <tr class="table-info">
@@ -473,8 +881,10 @@ foreach ($proyectos as $pr) {
                                 </tr>
                                 <?php foreach ($proyectos as $Proyec): ?>
                                     <tr>
-                                        <td><?= htmlspecialchars($Proyec['nombre'], ENT_QUOTES, 'UTF-8'); ?></td>
-                                        <td>2025</td>
+                                        <td class="nombre-proyecto" title="<?= htmlspecialchars($Proyec['nombre'], ENT_QUOTES, 'UTF-8'); ?>">
+                                            <?= htmlspecialchars($Proyec['nombre'], ENT_QUOTES, 'UTF-8'); ?>
+                                        </td>
+                                        <td><?= htmlspecialchars($Proyec['anio'], ENT_QUOTES, 'UTF-8'); ?></td>
                                         <td><?= htmlspecialchars($Proyec['estado'], ENT_QUOTES, 'UTF-8'); ?></td>
                                         <td>
                                             <?php
@@ -509,10 +919,14 @@ foreach ($proyectos as $pr) {
                                                     aria-label="Dashboard de Calidad del proyecto <?= htmlspecialchars($Proyec['nombre'], ENT_QUOTES, 'UTF-8'); ?>">
                                                     <span class="oi oi-pie-chart" aria-hidden="true"></span>
                                                 </a>
+                                            <?php else: ?>
+                                                <button class="btn btn-outline-secondary btn-icon" disabled data-toggle="tooltip" title="Requiere rol: Gerente de Calidad o Líder de Proyecto" aria-label="Dashboard de Calidad bloqueado">
+                                                    <span class="oi oi-lock-locked" aria-hidden="true"></span>
+                                                </button>
                                             <?php endif; ?>
 
                                             <!-- Modificar / Eliminar: SuperAdmin o Administrador del proyecto -->
-                                            <?php if ($esSuperAdmin || $esAdminProyecto): ?>
+                                            <?php if (ControlAcceso::verificaPermiso(PermisosSistema::ABM_PROYECTOS)): ?>
                                                 <a title="Modificar" href="proyecto.modificar.php?id=<?= (int)$Proyec['id_proyecto']; ?>"
                                                     class="btn btn-outline-warning" role="button" aria-label="Modificar proyecto <?= htmlspecialchars($Proyec['nombre'], ENT_QUOTES, 'UTF-8'); ?>">
                                                     <span class="oi oi-pencil" aria-hidden="true"></span>
@@ -522,19 +936,138 @@ foreach ($proyectos as $pr) {
                                                     data-nombre="<?= htmlspecialchars($Proyec['nombre'], ENT_QUOTES, 'UTF-8'); ?>">
                                                     <span class="oi oi-trash"></span>
                                                 </button>
+                                            <?php else: ?>
+                                                <button class="btn btn-outline-warning btn-icon disabled" data-toggle="tooltip" title="Solo Administrador puede modificar" aria-label="Modificar bloqueado">
+                                                    <span class="oi oi-lock-locked" aria-hidden="true"></span>
+                                                </button>
+                                                <button class="btn btn-outline-danger btn-icon disabled" data-toggle="tooltip" title="Solo Administrador puede eliminar" aria-label="Eliminar bloqueado">
+                                                    <span class="oi oi-lock-locked" aria-hidden="true"></span>
+                                                </button>
+                                                </button>
                                             <?php endif; ?>
                                         </td>
                                     </tr>
                                 <?php endforeach; ?>
                             </table>
                         <?php endif; ?>
+
                     </div> <!-- card-body proyectos -->
-                </div> <!-- card proyectos -->
-            </div> <!-- col-lg-8 -->
-        </div> <!-- row -->
+                </div> <!-- card-body proyectos -->
+            </div> <!-- card proyectos -->
+
+            <!-- 🗃️ NUEVO CARD: Proyectos finalizados/cancelados -->
+            <?php if ($tieneAbmProyectos && !empty($archivados)): ?>
+                <div class="card shadow-sm border-0 mt-4 archivados">
+                    <div class="card-header d-flex align-items-center justify-content-between">
+                        <h4 class="mb-0 text-secondary">
+                            <span class="oi oi-archive mr-1"></span>
+                            Proyectos Finalizados/Cancelados
+                        </h4>
+                    </div>
+                    <div class="card-body">
+                        <table class="table table-hover table-sm mb-0">
+                            <thead class="table-info">
+                                <tr>
+                                    <th>Nombre</th>
+                                    <th>Año</th>
+                                    <th>Estado</th>
+                                    <th>Rol</th>
+                                    <th>Opciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($archivados as $p): ?>
+                                    <tr>
+                                        <td class="nombre-proyecto"><?= htmlspecialchars($p['nombre']); ?></td>
+                                        <td><?= htmlspecialchars($p['anio']); ?></td>
+                                        <td><?= htmlspecialchars($p['estado']); ?></td>
+                                        <td>
+                                            <?php
+                                            $rolProyectoArchivado = $esSuperAdmin
+                                                ? 'SuperAdmin'
+                                                : (getRolUsuarioEnProyecto($cn, (int)$usr->id, (int)$p['id_proyecto']) ?? '—');
+                                            ?>
+                                            <span class="badge badge-secondary"><?= htmlspecialchars($rolProyectoArchivado); ?></span>
+                                        </td>
+                                        <td>
+                                            <!-- Tus botones de Ver / Dashboard / Bloqueados -->
+                                            <a title="Ver" href="proyecto.ver.php?id=<?= (int)$p['id_proyecto']; ?>" class="btn btn-outline-primary btn-icon">
+                                                <span class="oi oi-eye"></span>
+                                            </a>
+                                            <a title="Dashboard Inicial" href="dashboard.php?proyecto=<?= (int)$p['id_proyecto']; ?>" class="btn btn-outline-info btn-icon">
+                                                <span class="oi oi-bar-chart"></span>
+                                            </a>
+                                            <button class="btn btn-outline-secondary btn-icon disabled" title="No disponible">
+                                                <span class="oi oi-lock-locked"></span>
+                                            </button>
+                                            <button class="btn btn-outline-warning btn-icon disabled" title="No disponible">
+                                                <span class="oi oi-lock-locked"></span>
+                                            </button>
+                                            <button class="btn btn-outline-danger btn-icon disabled" title="No disponible">
+                                                <span class="oi oi-lock-locked"></span>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            <?php endif; ?>
+            <!-- 🗃️ FIN NUEVO CARD -->
+
+        </div> <!-- card proyectos -->
+    </div> <!-- col-lg-8 -->
+    </div> <!-- row -->
     </div>
     <?php include_once '../gui/footer.php'; ?>
+
     <script>
+        // Actualiza visualmente el wizard de un proyecto según el JSON recibido
+        function actualizarWizardVisual(idProyecto, data) {
+            var $card = $('.wizard-card[data-id-proyecto="' + idProyecto + '"]');
+            if ($card.length === 0) return;
+            // Actualizar porcentaje
+            $card.find('.progress-bar').css('width', (parseInt(data.progreso) || 0) + '%').attr('aria-valuenow', (parseInt(data.progreso) || 0));
+            $card.find('.progress-label').text((parseInt(data.progreso) || 0) + '% completado');
+            // Actualizar icono y texto del paso
+            var $step = $card.find('.wizard-step');
+            var $contenido = $step.find('.contenido-paso');
+            $step.removeClass('disabled');
+            $step.find('.icono-paso').attr('class', 'oi ' + data.icono + ' text-info mr-3 mt-1 icono-paso');
+            $contenido.find('.titulo-paso strong').html((data.paso === '✓' ? 'Completado' : ('Paso ' + data.paso)) + ' — ' + data.texto);
+            $contenido.find('.descripcion-paso').text(data.accion);
+            $contenido.find('.responsable-paso').text('👤 ' + data.responsable);
+            // Detalle/tooltip
+            $contenido.find('.wiz-info').remove();
+            if (data.detalle && data.detalle.length > 0) {
+                var $info = $('<span class="ml-2 text-secondary wiz-info" data-toggle="tooltip" data-html="true" title="' + data.detalle + '" aria-label="Más información"><span class="oi oi-info"></span></span>');
+                $contenido.find('.titulo-paso').append($info);
+                $info.tooltip();
+            }
+            // Link de acción
+            if (data.link && data.link.length > 0 && data.estado !== 'completo') {
+                // Si no es completo, el paso es clickable
+                if (!$step.is('a')) {
+                    // Reemplazar div por <a>
+                    var $newStep = $('<a href="' + data.link + '" class="wizard-step d-flex align-items-start"></a>');
+                    $newStep.append($contenido);
+                    $step.replaceWith($newStep);
+                } else {
+                    $step.attr('href', data.link);
+                }
+            } else {
+                // Si es completo o no hay link, el paso es div y disabled
+                if (!$step.is('div')) {
+                    var $newStep = $('<div class="wizard-step d-flex align-items-start disabled"></div>');
+                    $newStep.append($contenido);
+                    $step.replaceWith($newStep);
+                } else {
+                    $step.addClass('disabled');
+                }
+            }
+        }
+
         (function($) {
             // Inicializar tooltips (incluye los de info en cada wizard)
             $('[data-toggle="tooltip"]').tooltip();
@@ -569,9 +1102,15 @@ foreach ($proyectos as $pr) {
                                 $(this).remove();
                             });
                             mostrarAlerta(json.message || 'Proyecto eliminado correctamente.', 'success');
+                            // Eliminar wizard visual del DOM
+                            $('.wizard-card[data-id-proyecto="' + id + '"]').fadeOut(300, function() {
+                                $(this).remove();
+                            });
+                            // Ya no llamar a wizard_estado.php
                         } else {
                             mostrarAlerta(json.message || 'No se pudo eliminar el proyecto.', 'danger');
                         }
+
                     })
                     .fail(function() {
                         mostrarAlerta('⚠️ Error en la comunicación con el servidor.', 'danger');
@@ -580,13 +1119,13 @@ foreach ($proyectos as $pr) {
 
             function mostrarAlerta(mensaje, tipo) {
                 const $alert = $(`
-                    <div class="alert alert-${tipo} alert-dismissible fade show mt-3" role="alert">
-                        ${mensaje}
-                        <button type="button" class="close" data-dismiss="alert" aria-label="Cerrar">
-                            <span aria-hidden="true">&times;</span>
-                        </button>
-                    </div>
-                `);
+                <div class="alert alert-${tipo} alert-dismissible fade show mt-3" role="alert">
+                    ${mensaje}
+                    <button type="button" class="close" data-dismiss="alert" aria-label="Cerrar">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+            `);
                 $('#alertContainer').html($alert);
                 $('html, body').animate({
                     scrollTop: 0

@@ -1,356 +1,683 @@
-<?php
-include_once '../lib/ControlAcceso.Class.php';
-include_once '../modelo/BDConexion.Class.php';
-// Acceso: Admin/SuperAdmin o permiso de gestión de modelo
-if (!ControlAcceso::esAdminGlobal() && !ControlAcceso::verificaPermiso(PermisosSistema::GESTION_MODELO_CALIDAD)) {
-  header('Location: modelos.php?msg=' . urlencode('Acceso restringido para crear modelos.') . '&type=danger');
-  exit;
-}
+  <?php
+  include_once '../lib/ControlAcceso.Class.php';
+  include_once '../modelo/BDConexion.Class.php';
 
-$rsM = BDConexion::getInstancia()->query("SELECT id_metrica, nombre, descripcion FROM metrica ORDER BY nombre");
-$metricas = $rsM ? $rsM->fetch_all(MYSQLI_ASSOC) : [];
-// Modelos base disponibles para prefijar métricas
-$rsMb = BDConexion::getInstancia()->query("SELECT id_modelo, nombre, descripcion FROM modelo_calidad ORDER BY nombre");
-$modelosBase = $rsMb ? $rsMb->fetch_all(MYSQLI_ASSOC) : [];
-
-// Proyectos disponibles: Admin/SuperAdmin ve todos, el resto solo los propios
-$esAdmin = ControlAcceso::esAdminGlobal() || ControlAcceso::esSuperAdminGlobal();
-if ($esAdmin) {
-  $rsP = BDConexion::getInstancia()->query("SELECT id_proyecto, nombre FROM proyecto ORDER BY nombre");
-} else {
-  $usr = ControlAcceso::usuarioActual();
-  $stmt = BDConexion::getInstancia()->prepare(
-    "SELECT p.id_proyecto, p.nombre 
-         FROM usuario_proyecto up
-         JOIN proyecto p ON p.id_proyecto = up.id_proyecto
-         WHERE up.id_usuario = ?
-         ORDER BY p.nombre"
-  );
-  $uid = (int)$usr->id;
-  $stmt->bind_param('i', $uid);
-  $stmt->execute();
-  $rsP = $stmt->get_result();
-}
-$proyectos = $rsP ? $rsP->fetch_all(MYSQLI_ASSOC) : [];
-
-// Filtrar proyectos elegibles (sin métricas planificadas) para usuarios no admin
-if (!$esAdmin && !empty($proyectos)) {
-  $idsAll = array_map(function($r){ return (int)$r['id_proyecto']; }, $proyectos);
-  $idsAll = array_filter($idsAll, function($v){ return $v > 0; });
-  $mapPlan = [];
-  if (!empty($idsAll)) {
-    $in = implode(',', $idsAll);
-    $sqlPlan = "SELECT i.id_proyecto AS id, COUNT(*) AS c
-                FROM metrica_iteracion mi
-                JOIN iteracion i ON i.id_iteracion = mi.id_iteracion
-                WHERE mi.valor_planificado IS NOT NULL AND i.id_proyecto IN ($in)
-                GROUP BY i.id_proyecto";
-    if ($rs = BDConexion::getInstancia()->query($sqlPlan)) {
-      while ($row = $rs->fetch_assoc()) { $mapPlan[(int)$row['id']] = (int)$row['c']; }
-    }
-  }
-  $proyectos = array_values(array_filter($proyectos, function($p) use ($mapPlan){
-    $pid = (int)$p['id_proyecto'];
-    return empty($mapPlan[$pid]); // elegible si NO tiene planificación
-  }));
-  if (empty($proyectos)) {
-    header('Location: modelos.php?msg=' . urlencode('No hay proyectos elegibles para crear un modelo personalizado (ya tienen métricas planificadas).') . '&type=danger');
+  // 🔒 Acceso
+  if (!ControlAcceso::esAdminGlobal() && !ControlAcceso::verificaPermiso(PermisosSistema::GESTION_MODELO_CALIDAD)) {
+    header('Location: modelos.php?msg=' . urlencode('Acceso restringido para crear modelos.') . '&type=danger');
     exit;
   }
-}
-?>
-<html>
 
-<head>
-  <meta charset="UTF-8">
-  <link rel="stylesheet" href="../lib/bootstrap-4.1.1-dist/css/bootstrap.css" />
-  <link rel="stylesheet" href="../lib/open-iconic-master/font/css/open-iconic-bootstrap.css" />
-  <script type="text/javascript" src="../lib/JQuery/jquery-3.3.1.js"></script>
-  <script type="text/javascript" src="../lib/bootstrap-4.1.1-dist/js/bootstrap.min.js"></script>
-  <title><?= Constantes::NOMBRE_SISTEMA; ?> - Crear Modelo</title>
-  <style>
-    .chip {
-      display: inline-flex;
-      align-items: center;
-      padding: 0 .5rem;
-      border: 1px solid #ced4da;
-      border-radius: 16px;
-      margin: 2px;
-      background: #f8f9fa;
+  $cn = BDConexion::getInstancia();
+
+  // 🔹 Datos base
+  $rsM = $cn->query("SELECT id_metrica, nombre, descripcion FROM metrica ORDER BY nombre");
+  $metricas = $rsM ? $rsM->fetch_all(MYSQLI_ASSOC) : [];
+
+  $rsMb = $cn->query("SELECT id_modelo, nombre, descripcion FROM modelo_calidad ORDER BY nombre");
+  $modelosBase = $rsMb ? $rsMb->fetch_all(MYSQLI_ASSOC) : [];
+
+  $esAdmin = ControlAcceso::esAdminGlobal() || ControlAcceso::esSuperAdminGlobal();
+
+  // 🔹 Detectar si se accede desde "Cambiar modelo" con ?proyecto=ID
+  $proyectoCambioId = isset($_GET['proyecto']) ? (int)$_GET['proyecto'] : 0;
+  $nombreProyectoActual = null;
+  $modeloActual = null;
+
+  if ($proyectoCambioId > 0) {
+    $sqlInfo = "SELECT p.nombre AS proyecto, m.nombre AS modelo
+                FROM proyecto p
+                LEFT JOIN modelo_calidad m ON p.id_modelo = m.id_modelo
+                WHERE p.id_proyecto = $proyectoCambioId
+                LIMIT 1";
+    if ($rsInfo = $cn->query($sqlInfo)) {
+      if ($info = $rsInfo->fetch_assoc()) {
+        $nombreProyectoActual = $info['proyecto'];
+        $modeloActual = $info['modelo'];
+      }
     }
+  }
+  ?>
+  <html>
 
-    .chip .remove {
-      border: 0;
-      background: transparent;
-      color: #6c757d;
-      margin-left: .25rem;
-      cursor: pointer;
-    }
+  <head>
+    <meta charset="UTF-8">
+    <link rel="stylesheet" href="../lib/bootstrap-4.1.1-dist/css/bootstrap.css" />
+    <link rel="stylesheet" href="../lib/open-iconic-master/font/css/open-iconic-bootstrap.css" />
+    <script src="../lib/JQuery/jquery-3.3.1.js"></script>
+    <script src="../lib/bootstrap-4.1.1-dist/js/bootstrap.min.js"></script>
+    <title><?= Constantes::NOMBRE_SISTEMA; ?> - Crear Modelo</title>
+    <style>
+      .btn-outline-secondary {
+        border-color: #dee2e6;
+        color: #495057;
+        background-color: #fff;
+      }
 
-    .btn-outline-secondary {
-      border-color: #dee2e6;
-      color: #495057;
-      background-color: #fff;
-    }
+      .btn-outline-secondary:hover {
+        background-color: #f8f9fa;
+        color: #212529;
+      }
 
-    .btn-outline-secondary:hover {
-      background-color: #f8f9fa;
-      color: #212529;
-    }
-    .modelo-card { cursor:pointer; transition: box-shadow .2s ease; }
-    .modelo-card:hover { box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,.075); }
-    .modelo-card.active { border: 2px solid #17a2b8; }
-    .modelo-card.disabled { opacity:.6; cursor:not-allowed; pointer-events:none; }
-  </style>
-</head>
+      .btn-outline-danger:hover {
+        background-color: #f8d7da;
+        color: #721c24;
+      }
 
-<body>
-  <?php include_once '../gui/navbar.php'; ?>
-  <div class="container">
-    <div class="mb-3">
-      <a id="btnVolver" href="modelos.php" class="btn btn-outline-secondary">
-        <span class="oi oi-arrow-left mr-1"></span> Volver
-      </a>
-    </div>
-    <form action="modelo.nuevo.procesar.php" method="post">
-      <div class="card mt-3">
+      .modelo-card {
+        cursor: pointer;
+        transition: box-shadow .2s ease;
+      }
+
+      .modelo-card:hover {
+        box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, .075);
+      }
+
+      .modelo-card.active {
+        border: 2px solid #17a2b8;
+      }
+
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        padding: 0 .5rem;
+        border: 1px solid #ced4da;
+        border-radius: 16px;
+        margin: 2px;
+        background: #f8f9fa;
+      }
+
+      .chip .remove {
+        border: 0;
+        background: transparent;
+        color: #6c757d;
+        margin-left: .25rem;
+        cursor: pointer;
+      }
+
+      .btn-toggle.active {
+        background-color: #e9f7fd;
+        border-color: #17a2b8;
+        color: #0c5460;
+      }
+    </style>
+  </head>
+
+  <body>
+    <?php include_once '../gui/navbar.php'; ?>
+    <div class="container">
+      <div id="alertContainer"></div>
+      <div class="mb-3">
+        <a id="btnVolver" href="modelos.php" class="btn btn-outline-secondary">
+          <span class="oi oi-arrow-left mr-1"></span> Volver
+        </a>
+      </div>
+
+      <!-- 🔹 Selector inicial -->
+      <div class="card mt-3 mb-3">
         <div class="card-header">
-          <h3>Crear modelo de calidad</h3>
+          <h5 class="mb-0">Elegí cómo crear el modelo</h5>
         </div>
-        <div class="card-body">
-          <?php if ($esAdmin) { ?>
-            <div class="form-group form-check">
-              <input type="checkbox" class="form-check-input" id="global" name="global" value="1" checked>
-              <label class="form-check-label" for="global">Modelo predeterminado (global para todos los proyectos)</label>
-            </div>
-          <?php } ?>
-          <div class="form-group" id="grpProyecto" style="<?= $esAdmin ? '' : '' ?>">
-            <label for="proyecto">Asignar al proyecto</label>
-            <select class="form-control" id="proyecto" name="proyecto" <?= $esAdmin ? 'disabled' : '' ?>>
-              <?php if (empty($proyectos)) { ?>
-                <option value="">No tiene proyectos asignados</option>
-                <?php } else {
-                foreach ($proyectos as $p) { ?>
-                  <option value="<?= (int)$p['id_proyecto'] ?>"><?= htmlspecialchars($p['nombre']) ?></option>
-              <?php }
-              } ?>
-            </select>
-            <small class="form-text text-muted">Si es global, no se asignará automáticamente a un proyecto.</small>
+        <div class="card-body d-flex flex-wrap">
+          <button type="button" id="btnOpcionBase" class="btn btn-outline-info btn-toggle mr-3 mb-2">
+            <span class="oi oi-layers"></span> Usar modelo base existente
+          </button>
+          <button type="button" id="btnOpcionCero" class="btn btn-outline-primary btn-toggle mb-2">
+            <span class="oi oi-plus"></span> Crear modelo desde cero
+          </button>
+        </div>
+      </div>
+
+      <form action="modelo.nuevo.procesar.php" method="post">
+        <input type="hidden" name="modelo_base_id" id="modelo_base_id" value="">
+        <input type="hidden" name="editar_base" id="editar_base" value="0">
+
+        <div class="card mt-3">
+          <div class="card-header">
+            <h3>Crear modelo de calidad</h3>
           </div>
-          <div class="form-group">
-            <label for="nombre">Nombre</label>
-            <input type="text" class="form-control" id="nombre" name="nombre" maxlength="100" required />
-          </div>
-          <div class="form-group">
-            <label for="descripcion">Descripción</label>
-            <textarea class="form-control" id="descripcion" name="descripcion" rows="3"></textarea>
-          </div>
-          <?php if (!empty($modelosBase)) { ?>
-          <div class="form-group">
-            <label>Modelo base (opcional)</label>
-            <?php if ($esAdmin) { ?>
-              <div class="mb-2 text-muted small">
-                Como Administrador/SuperAdmin, los modelos predeterminados deben crearse desde cero. La selección de un modelo base está deshabilitada.
-              </div>
-            <?php } else { ?>
-              <div class="mb-2 text-muted small">Seleccioná un modelo existente para tomar sus métricas como punto de partida. Luego podés ajustar la lista.</div>
-            <?php } ?>
-            <div class="row">
-              <?php foreach ($modelosBase as $mb): ?>
-                <div class="col-md-4 mb-3">
-                  <div class="card modelo-card <?= $esAdmin ? 'disabled' : '' ?>" data-id="<?= (int)$mb['id_modelo']; ?>" title="<?= $esAdmin ? 'Solo disponible para Gerentes/Líderes' : 'Click para seleccionar' ?>">
-                    <div class="card-body p-3">
-                      <h6 class="card-title mb-1"><?= htmlspecialchars($mb['nombre']); ?></h6>
-                      <div class="text-muted small" style="min-height:2.5em;">
-                        <?= htmlspecialchars(mb_strimwidth($mb['descripcion'] ?? '', 0, 120, '…', 'UTF-8')); ?>
+          <div class="card-body">
+
+            <!-- 🔹 MODELOS BASE -->
+            <div id="seccionModelosBase" class="d-none">
+              <div class="form-group">
+                <label>Seleccionar modelo base</label>
+                <div class="text-muted small mb-2">
+                  Elegí un modelo existente. Si lo editás, se creará un nuevo modelo derivado.
+                </div>
+                <div class="row">
+                  <?php foreach ($modelosBase as $mb): ?>
+                    <div class="col-md-4 mb-3">
+                      <div class="card modelo-card" data-id="<?= (int)$mb['id_modelo']; ?>">
+                        <div class="card-body p-3">
+                          <h6 class="card-title mb-1"><?= htmlspecialchars($mb['nombre']); ?></h6>
+                          <div class="text-muted small"><?= htmlspecialchars(mb_strimwidth($mb['descripcion'] ?? '', 0, 100, '…')); ?></div>
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  <?php endforeach; ?>
                 </div>
-              <?php endforeach; ?>
-            </div>
-            <?php if (!$esAdmin) { ?>
-              <div class="mt-1">
-                <span id="modeloBaseSeleccionado" class="badge badge-info d-none"></span>
-                <button type="button" id="btnLimpiarBase" class="btn btn-sm btn-outline-secondary d-none">Quitar modelo base</button>
+                <div class="mt-2 d-flex align-items-center">
+                  <span id="modeloBaseSeleccionado" class="badge badge-info d-none mr-2"></span>
+                  <button type="button" id="btnLimpiarBase" class="btn btn-sm btn-outline-secondary d-none">Quitar modelo base</button>
+                  <button type="button" id="btnEditarBase" class="btn btn-sm btn-outline-warning d-none ml-2">
+                    <span class="oi oi-pencil"></span> Editar modelo base
+                  </button>
+                </div>
               </div>
-            <?php } ?>
-          </div>
-          <?php } ?>
-          <div class="form-group">
-            <label>Métricas asociadas</label>
-            <div class="border rounded p-2" style="max-height: 260px; overflow:auto;">
-              <?php if (empty($metricas)) { ?>
-                <div class="text-muted">No hay métricas definidas.</div>
-                <?php } else {
-                foreach ($metricas as $met) { ?>
-                  <div class="form-check">
-                    <input class="form-check-input" type="checkbox" value="<?= (int)$met['id_metrica'] ?>" id="m<?= (int)$met['id_metrica'] ?>" name="metricas[]">
-                    <label class="form-check-label" for="m<?= (int)$met['id_metrica'] ?>" title="<?= htmlspecialchars($met['descripcion']) ?>">
-                      <?= htmlspecialchars($met['nombre']) ?>
-                    </label>
+            </div>
+
+            <!-- 🔹 CAMPOS NUEVO MODELO -->
+            <div id="camposNuevoModelo" class="d-none mt-3">
+              <div class="form-group">
+                <label for="nombre">Nombre</label>
+                <input type="text" class="form-control" id="nombre" name="nombre" maxlength="100">
+                <div class="invalid-feedback d-block text-danger mt-1" id="errorNombre"></div>
+              </div>
+
+              <div class="form-group">
+                <label for="descripcion">Descripción</label>
+                <textarea class="form-control" id="descripcion" name="descripcion" rows="3"></textarea>
+                <div class="invalid-feedback d-block text-danger mt-1" id="errorDesc"></div>
+              </div>
+
+              <hr />
+              <h5 class="mb-2">Métricas asociadas</h5>
+              <div class="border rounded p-2" style="max-height:300px;overflow:auto;">
+                <?php if (empty($metricas)): ?>
+                  <div class="text-muted">No hay métricas definidas.</div>
+                <?php else: ?>
+                  <?php foreach ($metricas as $met): $mid = (int)$met['id_metrica']; ?>
+                    <div class="form-check">
+                      <input class="form-check-input" type="checkbox" value="<?= $mid; ?>" id="m<?= $mid; ?>" name="metricas[]">
+                      <label class="form-check-label" for="m<?= $mid; ?>"><strong><?= htmlspecialchars($met['nombre']); ?></strong></label>
+                    </div>
+                  <?php endforeach; ?>
+                <?php endif; ?>
+              </div>
+
+              <div class="mt-2 d-flex align-items-center flex-wrap">
+                <button type="button" id="btnAbrirModalMetrica" class="btn btn-outline-primary mr-2">
+                  <span class="oi oi-plus"></span> Nueva métrica
+                </button>
+                <button type="button" id="btnLimpiarMetricas" class="btn btn-outline-secondary">Limpiar selección</button>
+                <span id="metricasSeleccionadasCount" class="badge badge-info ml-3 d-none"></span>
+              </div>
+              <div id="metricasNuevasChips" class="mt-2"></div>
+            </div>
+
+            <?php
+            // =====================================================
+            // 🔹 Mostrar contexto si viene desde “Cambiar modelo”
+            // =====================================================
+            if ($proyectoCambioId > 0 && $nombreProyectoActual): ?>
+              <div class="alert alert-info mt-3">
+                <span class="oi oi-info mr-2"></span>
+                Proyecto: <strong><?= htmlspecialchars($nombreProyectoActual); ?></strong><br>
+                Modelo actual: <em><?= htmlspecialchars($modeloActual ?? '—'); ?></em><br>
+                <small class="text-muted">Si confirmás la creación, el nuevo modelo reemplazará al actual en este proyecto.</small>
+              </div>
+              <input type="hidden" name="proyecto" value="<?= $proyectoCambioId; ?>">
+              <?php
+            // =====================================================
+            // 🔹 Si no viene desde cambio, aplicar lógica de proyectos elegibles
+            // =====================================================
+            else:
+              $uid = (int)$_SESSION['usuario']->id;
+              $proyectosElegibles = [];
+
+              $sqlProy = "SELECT p.id_proyecto, p.nombre
+                FROM usuario_proyecto up
+                JOIN proyecto p ON p.id_proyecto = up.id_proyecto
+                WHERE up.id_usuario = {$uid}
+                ORDER BY p.nombre";
+              $resProy = $cn->query($sqlProy);
+
+              if ($resProy) {
+                while ($p = $resProy->fetch_assoc()) {
+                  $pid = (int)$p['id_proyecto'];
+                  $sqlCheck = "SELECT COUNT(*) AS c
+                    FROM metrica_iteracion mi
+                    JOIN iteracion i ON mi.id_iteracion = i.id_iteracion
+                    WHERE i.id_proyecto = {$pid}";
+                  $resCheck = $cn->query($sqlCheck);
+                  $hasMetrics = false;
+                  if ($resCheck && $rowC = $resCheck->fetch_assoc()) {
+                    $hasMetrics = ((int)$rowC['c'] > 0);
+                  }
+                  if (!$hasMetrics) {
+                    $proyectosElegibles[] = ['id' => $pid, 'nombre' => $p['nombre']];
+                  }
+                }
+              }
+
+              if (empty($proyectosElegibles)): ?>
+                <div class="alert alert-warning mt-3">
+                  <span class="oi oi-warning mr-2"></span>
+                  No hay proyectos elegibles para asignar un modelo de calidad.<br>
+                  Todos los proyectos del usuario ya tienen métricas planificadas.
+                </div>
+                <script>
+                  $(function() {
+                    $('form button[type="submit"]').prop('disabled', true);
+                  });
+                </script>
+              <?php elseif (count($proyectosElegibles) === 1):
+                $p = $proyectosElegibles[0]; ?>
+                <div class="form-group mt-3">
+                  <label>Se asigna a proyecto</label>
+                  <div class="form-control-plaintext font-weight-bold">
+                    <?= htmlspecialchars($p['nombre']); ?>
                   </div>
-              <?php }
-              } ?>
+                  <input type="hidden" name="proyecto" value="<?= (int)$p['id']; ?>">
+                </div>
+              <?php else: ?>
+                <div class="form-group mt-3">
+                  <label for="proyecto">Asignar a proyecto</label>
+                  <select class="form-control" id="proyecto" name="proyecto" required>
+                    <option value="">Seleccione un proyecto...</option>
+                    <?php foreach ($proyectosElegibles as $p): ?>
+                      <option value="<?= (int)$p['id']; ?>"><?= htmlspecialchars($p['nombre']); ?></option>
+                    <?php endforeach; ?>
+                  </select>
+                  <small class="text-muted">Solo se muestran los proyectos sin métricas planificadas.</small>
+                </div>
+            <?php endif;
+            endif; ?>
+
+          </div>
+
+          <div class="card-footer">
+            <button type="submit" class="btn btn-outline-success"><span class="oi oi-check"></span> Confirmar</button>
+            <a href="modelos.php" onclick="return confirm('¿Cancelar la creación del modelo? Se perderán los cambios no guardados.');">
+              <button type="button" class="btn btn-outline-danger"><span class="oi oi-x"></span> Cancelar</button>
+            </a>
+            <div id="metricasNuevasInputs"></div>
+          </div>
+        </div>
+      </form>
+    </div>
+
+    <!-- 🔹 Modal Nueva Métrica -->
+    <div class="modal fade" id="modalNuevaMetrica" tabindex="-1" role="dialog" aria-hidden="true">
+      <div class="modal-dialog" role="document">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Nueva métrica</h5>
+          </div>
+          <div class="modal-body">
+            <div class="form-group">
+              <label for="nmNombre">Nombre</label>
+              <input type="text" id="nmNombre" class="form-control" maxlength="120">
+              <div class="invalid-feedback">El nombre es obligatorio.</div>
             </div>
-            <small class="form-text text-muted">Podrá ajustar métricas luego desde Configurar modelo (CU07).</small>
-            <div class="mt-2 d-flex align-items-center flex-wrap">
-              <button type="button" class="btn btn-outline-primary mr-2" data-toggle="modal" data-target="#modalNuevaMetrica">
-                <span class="oi oi-plus"></span> Nueva métrica
-              </button>
-              <button type="button" id="btnLimpiarMetricas" class="btn btn-outline-secondary">Limpiar selección</button>
-              <span id="metricasSeleccionadasCount" class="badge badge-info ml-3 d-none"></span>
+            <div class="form-group">
+              <label for="nmDescripcion">Descripción</label>
+              <textarea id="nmDescripcion" class="form-control" rows="3"></textarea>
+              <div class="invalid-feedback">La descripción es obligatoria.</div>
             </div>
-            <div id="metricasNuevasChips" class="mt-2"></div>
           </div>
-        </div>
-        <div class="card-footer">
-          <button type="submit" class="btn btn-outline-success">
-            <span class="oi oi-check"></span> Confirmar
-          </button>
-          <a href="modelos.php" onclick="return confirm('¿Cancelar la creación del modelo? Se perderán los cambios no guardados.');"><button type="button" class="btn btn-outline-danger">
-              <span class="oi oi-x"></span> Cancelar
-            </button></a>
-          
-          <!-- inputs ocultos donde agregamos las nuevas métricas -->
-          <div id="metricasNuevasInputs"></div>
-        </div>
-      </div>
-    </form>
-  </div>
-  <!-- Modal Nueva Métrica -->
-  <div class="modal fade" id="modalNuevaMetrica" tabindex="-1" role="dialog" aria-labelledby="modalNuevaMetricaLabel" aria-hidden="true">
-    <div class="modal-dialog" role="document">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title" id="modalNuevaMetricaLabel">Nueva métrica</h5>
-          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-            <span aria-hidden="true">&times;</span>
-          </button>
-        </div>
-        <div class="modal-body">
-          <div class="form-group">
-            <label for="nmNombre">Nombre</label>
-            <input type="text" id="nmNombre" class="form-control" maxlength="120" />
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+            <button type="button" id="btnAgregarMetrica" class="btn btn-primary"><span class="oi oi-check"></span> Agregar</button>
           </div>
-          <div class="form-group">
-            <label for="nmDescripcion">Descripción</label>
-            <textarea id="nmDescripcion" class="form-control" rows="3"></textarea>
-          </div>
-          <div class="text-muted small">Se agregará al enviar el formulario y quedará vinculada a este modelo.</div>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
-          <button type="button" id="btnAgregarMetrica" class="btn btn-primary">
-            <span class="oi oi-check"></span> Agregar
-          </button>
         </div>
       </div>
     </div>
-  </div>
-  <script>
-    // Si es admin, alternar campo proyecto según el check de global
-    $(function() {
-      // Contador dinámico: checkeadas existentes + nuevas agregadas por modal
-      function actualizarCount(){
-        var total = $('input[name="metricas[]"]:checked').length + $('input[name="metricas_nuevas[nombre][]"]').length;
-        var $b = $('#metricasSeleccionadasCount');
-        if (total>0){ $b.text(total+' seleccionadas').removeClass('d-none'); } else { $b.addClass('d-none').text(''); }
-      }
 
-      var ES_ADMIN = <?= $esAdmin ? 'true' : 'false' ?>;
-      var $global = $('#global');
-      var $proy = $('#proyecto');
-      if ($global.length) {
-        function toggleProyecto() {
-          var g = $global.is(':checked');
-          $proy.prop('disabled', g);
-        }
-        $global.on('change', toggleProyecto);
-        toggleProyecto();
-      }
+    <script>
+      $(function() {
+        let baseSeleccionada = null;
 
-      $('#btnAgregarMetrica').on('click', function() {
-        var nombre = ($('#nmNombre').val() || '').trim();
-        var desc = ($('#nmDescripcion').val() || '').trim();
-        if (!nombre) {
-          $('#nmNombre').focus();
-          return;
-        }
-        // Crear inputs ocultos
-        var idx = $('#metricasNuevasInputs .nm-item').length;
-        var $wrap = $('<div class="nm-item"></div>');
-        $wrap.append('<input type="hidden" name="metricas_nuevas[nombre][]" value="' + $('<div/>').text(nombre).html() + '" />');
-        $wrap.append('<input type="hidden" name="metricas_nuevas[descripcion][]" value="' + $('<div/>').text(desc).html() + '" />');
-        $('#metricasNuevasInputs').append($wrap);
-
-        // Mostrar chip y permitir quitar
-        var $chip = $('<span class="chip" title="' + desc.replace(/\"/g, '&quot;') + '">' + nombre + '<button type="button" class="remove" aria-label="Quitar">&times;</button></span>');
-        $chip.find('.remove').on('click', function() {
-          var i = $chip.index();
-          $('#metricasNuevasInputs .nm-item').eq(i).remove();
-          $chip.remove();
-          actualizarCount();
+        // ========================
+        //  Mostrar / ocultar secciones
+        // ========================
+        $('#btnOpcionBase').on('click', function() {
+          $('#btnOpcionCero').removeClass('active');
+          $(this).addClass('active');
+          $('#seccionModelosBase').removeClass('d-none');
+          $('#camposNuevoModelo').addClass('d-none');
         });
-        $('#metricasNuevasChips').append($chip);
+        $('#btnOpcionCero').on('click', function() {
+          $('#btnOpcionBase').removeClass('active');
+          $(this).addClass('active');
+          $('#seccionModelosBase').addClass('d-none');
+          $('#camposNuevoModelo').removeClass('d-none');
+          $('#modelo_base_id').val('');
+          $('#editar_base').val('0');
+        });
 
-        // limpiar y cerrar
-        $('#nmNombre').val('');
-        $('#nmDescripcion').val('');
-        actualizarCount();
-        $('#modalNuevaMetrica').modal('hide');
-      });
+        // ========================
+        //  Conteo dinámico de métricas
+        // ========================
+        function actualizarCount() {
+          const total = $('input[name="metricas[]"]:checked').length + $('input[name="metricas_nuevas[nombre][]"]').length;
+          const $b = $('#metricasSeleccionadasCount');
+          if (total > 0) {
+            $b.text(total + ' seleccionadas').removeClass('d-none');
+          } else {
+            $b.addClass('d-none').text('');
+          }
+        }
 
-      // UI: seleccionar modelo base y pre-chequear métricas
-      var baseSeleccionada = null;
-      function marcarCard($card, active) {
-        $('.modelo-card').removeClass('active');
-        if (active) $card.addClass('active');
-      }
-      function setModeloBase(nombre, id) {
-        baseSeleccionada = id;
-        $('#modeloBaseSeleccionado').removeClass('d-none').text('Base: ' + nombre);
-        $('#btnLimpiarBase').removeClass('d-none');
-      }
-      function limpiarModeloBase() {
-        baseSeleccionada = null;
-        $('#modeloBaseSeleccionado').addClass('d-none').text('');
-        $('#btnLimpiarBase').addClass('d-none');
-        marcarCard($(), false);
-      }
-      if (!ES_ADMIN) {
+        // ========================
+        //  Selección modelo base
+        // ========================
         $('.modelo-card').on('click', function() {
-          var $c = $(this);
-          if ($c.hasClass('disabled')) return;
-          var id = parseInt($c.data('id')) || 0;
-          var nombre = $.trim($c.find('.card-title').text());
+          const $c = $(this);
+          const id = parseInt($c.data('id')) || 0;
+          const nombre = $.trim($c.find('.card-title').text());
           if (!id) return;
-          marcarCard($c, true);
-          setModeloBase(nombre, id);
-          // Cargar métricas del modelo base
-          $.getJSON('api/modelo_metricas.php', { id_modelo: id })
-            .done(function(resp) {
-              if (!resp || !resp.ok) return;
-              // limpiar selección previa
-              $('input[name="metricas[]"]').prop('checked', false);
-              // marcar métricas
-              (resp.metricas || []).forEach(function(m){
-                var idm = parseInt(m.id_metrica) || 0;
-                if (idm) $('#m' + idm).prop('checked', true);
+          $('.modelo-card').removeClass('active');
+          $c.addClass('active');
+          baseSeleccionada = id;
+          $('#modelo_base_id').val(id);
+          $('#modeloBaseSeleccionado').removeClass('d-none').text('Base seleccionada: ' + nombre);
+          $('#btnLimpiarBase,#btnEditarBase').removeClass('d-none');
+        });
+        // ========================
+        //  Quitar modelo base (versión mejorada)
+        // ========================
+        $('#btnLimpiarBase').on('click', function() {
+          baseSeleccionada = null;
+          $('#modelo_base_id').val('');
+          $('#editar_base').val('0');
+          $('#modeloBaseSeleccionado').addClass('d-none').text('');
+          $('#btnLimpiarBase,#btnEditarBase').addClass('d-none');
+          $('.modelo-card').removeClass('active');
+          $('input[name="metricas[]"]').prop('checked', false);
+          $('#nombre,#descripcion').val('');
+          actualizarCount();
+
+          // 🔹 Ocultar campos de edición si estaban visibles
+          $('#camposNuevoModelo').addClass('d-none');
+
+          // 🔹 Restaurar estado de botones principales
+          $('#btnOpcionBase').removeClass('active');
+          $('#btnOpcionCero').removeClass('active');
+
+          // 🔹 Ocultar la grilla de modelos base también
+          $('#seccionModelosBase').addClass('d-none');
+
+          // 🔹 Mostrar solo el selector inicial (opciones principales)
+          $('.card.mt-3.mb-3').removeClass('d-none');
+
+          // 🔔 Alerta visual
+          mostrarAlerta("Modelo base quitado correctamente.", "info");
+        });
+
+
+        // ========================
+        //  Editar modelo base
+        // ========================
+        $('#btnEditarBase').on('click', function() {
+          const id = baseSeleccionada;
+          if (!id) return;
+          $('#editar_base').val('1');
+          $('#camposNuevoModelo').removeClass('d-none');
+          $('input[name="metricas[]"]').prop('checked', false);
+          $.getJSON('api/modelo_metricas.php', {
+            id_modelo: id
+          }, function(r) {
+            if (r && r.ok) {
+              (r.metricas || []).forEach(function(m) {
+                $('#m' + m.id_metrica).prop('checked', true);
               });
               actualizarCount();
-            });
+            }
+          });
+          $('#nombre,#descripcion').val('');
         });
-        $('#btnLimpiarBase').on('click', function(){ limpiarModeloBase(); actualizarCount(); });
-      }
-      $('#btnLimpiarMetricas').on('click', function(){ $('input[name="metricas[]"]').prop('checked', false); actualizarCount(); });
-      $(document).on('change','input[name="metricas[]"]', actualizarCount);
 
-      // Inicializar contador al cargar
-      actualizarCount();
-    });
-  </script>
-  <?php include_once '../gui/footer.php'; ?>
-</body>
+        // ========================
+        //  Modal Nueva Métrica (estilo predeterminado)
+        // ========================
+        $('#btnAbrirModalMetrica').on('click', function(e) {
+          e.preventDefault();
+          $('#modalNuevaMetrica').modal('show');
+        });
 
-</html>
+        $('#btnAgregarMetrica').on('click', function() {
+          const n = $('#nmNombre').val().trim();
+          const d = $('#nmDescripcion').val().trim();
+          const regex = /^[A-Za-zÁÉÍÓÚáéíóúÑñ0-9 _.\-\/\\():]+$/;
+
+          // Validaciones simples
+          if (n === '' || !regex.test(n)) {
+            $('#nmNombre').addClass('is-invalid');
+            return;
+          } else {
+            $('#nmNombre').removeClass('is-invalid');
+          }
+          if (d === '' || !regex.test(d)) {
+            $('#nmDescripcion').addClass('is-invalid');
+            return;
+          } else {
+            $('#nmDescripcion').removeClass('is-invalid');
+          }
+
+          // Crear inputs ocultos
+          const $wrap = $('<div class="nm-item"></div>');
+          $wrap.append(`<input type="hidden" name="metricas_nuevas[nombre][]" value="${$('<div/>').text(n).html()}" />`);
+          $wrap.append(`<input type="hidden" name="metricas_nuevas[descripcion][]" value="${$('<div/>').text(d).html()}" />`);
+          $('#metricasNuevasInputs').append($wrap);
+
+          // Crear chip visible con botón eliminar
+          const $chip = $(`
+    <span class="chip" data-nombre="${n}" title="${d.replace(/\"/g, '&quot;')}">
+      ${n}
+      <button type="button" class="remove" aria-label="Quitar">&times;</button>
+    </span>
+  `);
+          $chip.find('.remove').on('click', function() {
+            $chip.remove();
+            $wrap.remove();
+            actualizarCount();
+          });
+          $('#metricasNuevasChips').append($chip);
+
+          // Limpiar modal y cerrar
+          $('#nmNombre,#nmDescripcion').val('');
+          $('#modalNuevaMetrica').modal('hide');
+          actualizarCount();
+        });
+
+        $(document).on('change', 'input[name="metricas[]"]', actualizarCount);
+
+        // ========================
+        //  Validaciones visuales
+        // ========================
+        const regex = /^[A-Za-zÁÉÍÓÚáéíóúÑñ0-9 _.\-\/\\():]+$/;
+        $('#nombre').on('input', function() {
+          const v = $(this).val().trim(),
+            $e = $('#errorNombre');
+          if (v === '') {
+            $e.text('El nombre del modelo es obligatorio.');
+            $(this).addClass('is-invalid');
+          } else if (!regex.test(v)) {
+            $e.text('Solo se permiten letras, números y los símbolos . - _ / \\ ( ) :');
+            $(this).addClass('is-invalid');
+          } else {
+            $e.text('');
+            $(this).removeClass('is-invalid');
+          }
+        });
+        $('#descripcion').on('input', function() {
+          const v = $(this).val().trim(),
+            $e = $('#errorDesc');
+          if (v === '') {
+            $e.text('La descripción es obligatoria.');
+            $(this).addClass('is-invalid');
+          } else if (!regex.test(v)) {
+            $e.text('Solo se permiten letras, números y los símbolos . - _ / \\ ( ) :');
+            $(this).addClass('is-invalid');
+          } else {
+            $e.text('');
+            $(this).removeClass('is-invalid');
+          }
+        });
+
+        actualizarCount();
+
+        // ========================
+        // 🚨 Confirmación antes de reemplazar modelo existente
+        // ========================
+        const tieneModeloActual = <?php echo json_encode($modeloActual !== null); ?>;
+        if (tieneModeloActual) {
+          $('form').on('submit', function(e) {
+            const ok = confirm("⚠️ Este proyecto ya tiene un modelo asignado.\n\n¿Deseás reemplazarlo por el nuevo modelo?\nEsta acción no se puede deshacer.");
+            if (!ok) e.preventDefault();
+          });
+        }
+
+        // ========================
+        // ⚙️ Validación final al enviar (duplicados y mensaje al final)
+        // ========================
+        $('form').on('submit', function(e) {
+          e.preventDefault();
+
+          // Detectar modo actual (base o cero)
+          const usandoBase = $('#btnOpcionBase').hasClass('active');
+          const usandoCero = $('#btnOpcionCero').hasClass('active');
+          const editandoBase = $('#editar_base').val() === '1';
+          // 🚫 Validar que se haya elegido alguna acción antes de continuar
+          if (!usandoBase && !usandoCero) {
+            mostrarAlerta("⚠️ Debe elegir una opción: usar un modelo base existente o crear un modelo desde cero.", "danger");
+            return;
+          }
+
+
+          // === Caso 1: Usar modelo base existente (sin editar)
+          if (usandoBase && !editandoBase) {
+            const idBase = parseInt($('#modelo_base_id').val()) || 0;
+            if (!idBase) {
+              mostrarAlerta("Debe seleccionar un modelo base antes de confirmar.", "danger");
+              return;
+            }
+
+            // Enviar directamente sin validar campos
+            this.submit();
+            return;
+          }
+
+          // === Caso 2: Crear desde cero o derivado de modelo base editado
+          if (usandoCero || editandoBase) {
+            const nombreVal = $('#nombre').val().trim();
+            const descVal = $('#descripcion').val().trim();
+            const regex = /^[A-Za-zÁÉÍÓÚáéíóúÑñ0-9 _.\-\/\\():]+$/;
+            let valido = true;
+
+            if (nombreVal === '' || !regex.test(nombreVal)) {
+              $('#errorNombre').text('El nombre del modelo es obligatorio o contiene caracteres inválidos.');
+              $('#nombre').addClass('is-invalid');
+              valido = false;
+            } else {
+              $('#errorNombre').text('');
+              $('#nombre').removeClass('is-invalid');
+            }
+
+            if (descVal === '' || !regex.test(descVal)) {
+              $('#errorDesc').text('La descripción es obligatoria o contiene caracteres inválidos.');
+              $('#descripcion').addClass('is-invalid');
+              valido = false;
+            } else {
+              $('#errorDesc').text('');
+              $('#descripcion').removeClass('is-invalid');
+            }
+
+            if (!valido) {
+              mostrarAlerta("Debe completar correctamente los campos obligatorios antes de confirmar.", "danger");
+              return;
+            }
+          }
+
+
+          // 🧮 Continuar con la validación de métricas nuevas (solo si crea desde cero)
+          const nuevas = $('input[name="metricas_nuevas[nombre][]"]').map(function() {
+            return $(this).val().trim();
+          }).get().filter(Boolean);
+
+          // 🔒 Bloquear botón y mostrar aviso
+          const $btn = $(this).find('button[type="submit"]');
+          $btn.prop('disabled', true).text('Procesando...');
+          mostrarAlerta("✅ Procesando solicitud, por favor espere...", "info");
+
+          // Si no hay métricas nuevas → enviar directamente
+          if (nuevas.length === 0) {
+            this.submit();
+            return;
+          }
+
+          // Validar duplicadas antes de enviar
+          $.post('api/validar_metricas.php', {
+            nombres: nuevas
+          }, function(resp) {
+            if (!resp.ok) {
+              mostrarAlerta("Error al validar métricas.", "danger");
+              $btn.prop('disabled', false).text('Confirmar');
+              return;
+            }
+
+            const duplicadas = resp.existentes || [];
+            if (duplicadas.length > 0) {
+              mostrarAlerta(
+                "⚠️ Las siguientes métricas ya existen y fueron eliminadas:<br><strong>" +
+                duplicadas.join(', ') + "</strong>", "warning"
+              );
+
+              $('input[name="metricas_nuevas[nombre][]"]').each(function() {
+                const val = $(this).val().trim();
+                if (duplicadas.includes(val)) $(this).closest('.nm-item').remove();
+              });
+              $('#metricasNuevasChips .chip').each(function() {
+                if (duplicadas.includes($(this).data('nombre'))) $(this).remove();
+              });
+              actualizarCount();
+              $btn.prop('disabled', false).text('Confirmar');
+              return;
+            }
+
+            // ✅ Enviar formulario (mensaje final será mostrado tras redirect del servidor)
+            e.target.submit();
+          }, 'json').fail(() => {
+            mostrarAlerta("Error de comunicación con el servidor.", "danger");
+            $btn.prop('disabled', false).text('Confirmar');
+          });
+        });
+
+
+
+
+        // ========================
+        // 🔔 Función para alertas Bootstrap
+        // ========================
+        function mostrarAlerta(mensaje, tipo = "info") {
+          $(".alert-dinamica").alert("close");
+          const $alert = $(`
+      <div class="alert alert-${tipo} alert-dismissible fade show mt-3 alert-dinamica" role="alert" style="opacity: 0;">
+        ${mensaje}
+        <button type="button" class="close" data-dismiss="alert" aria-label="Cerrar">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>`);
+          $("#alertContainer").append($alert);
+          $("html, body").animate({
+            scrollTop: 0
+          }, "fast");
+          $alert.animate({
+            opacity: 1
+          }, 300);
+          setTimeout(() => {
+            $alert.animate({
+              opacity: 0
+            }, 800, function() {
+              $(this).alert("close");
+            });
+          }, 12000);
+        }
+      });
+    </script>
+    <?php include_once '../gui/footer.php'; ?>
+  </body>
+
+  </html>

@@ -9,7 +9,9 @@ header('Content-Type: text/event-stream');
 header('Cache-Control: no-cache, no-store, must-revalidate');
 header('Connection: keep-alive');
 // Disable buffering if possible
-if (function_exists('apache_setenv')) { @apache_setenv('no-gzip', '1'); }
+if (function_exists('apache_setenv')) {
+  @apache_setenv('no-gzip', '1');
+}
 ini_set('output_buffering', 'off');
 ini_set('zlib.output_compression', '0');
 
@@ -19,17 +21,25 @@ require_once __DIR__ . '/../../lib/ControlAcceso.Class.php';
 // BD centralizada
 // BDConexion ya es cargado por ControlAcceso
 // Función liviana para enviar evento SSE inmediatamente
-function sse_error($msg, $code = 403) {
-  if (function_exists('http_response_code')) { @http_response_code($code); }
+function sse_error($msg, $code = 403)
+{
+  if (function_exists('http_response_code')) {
+    @http_response_code($code);
+  }
   echo "event: error\n";
   echo 'data: ' . json_encode(['error' => $msg], JSON_UNESCAPED_UNICODE) . "\n\n";
-  @ob_flush(); @flush();
+  @ob_flush();
+  @flush();
   exit;
 }
 
 $usr = ControlAcceso::usuarioActual();
-if (!$usr) { sse_error('No autenticado', 401); }
-if ($proyectoId <= 0) { sse_error('Acceso denegado al proyecto', 403); }
+if (!$usr) {
+  sse_error('No autenticado', 401);
+}
+if ($proyectoId <= 0) {
+  sse_error('Acceso denegado al proyecto', 403);
+}
 
 // Autorización consistente con requiereProyecto():
 // admin/superadmin o ABM_PROYECTOS acceden; si no, debe pertenecer al proyecto
@@ -37,7 +47,10 @@ $esAdminGlobal = false;
 if (isset($usr->roles) && is_array($usr->roles)) {
   foreach ($usr->roles as $r) {
     $rolName = mb_strtolower(trim($r->nombre ?? ''), 'UTF-8');
-    if (in_array($rolName, ['administrador', 'superadmin'], true)) { $esAdminGlobal = true; break; }
+    if (in_array($rolName, ['administrador', 'superadmin'], true)) {
+      $esAdminGlobal = true;
+      break;
+    }
   }
 }
 if (!$esAdminGlobal && !ControlAcceso::verificaPermiso(PermisosSistema::DASHBOARD)) {
@@ -46,14 +59,19 @@ if (!$esAdminGlobal && !ControlAcceso::verificaPermiso(PermisosSistema::DASHBOAR
   }
 }
 
-function build_payload_and_version(mysqli $conexion, int $proyectoId) {
+function build_payload_and_version(mysqli $conexion, int $proyectoId)
+{
 
   // Detectar si la tabla iteracion tiene columna id_proyecto para armar consultas compatibles
   $hasIteracionProyecto = false;
   try {
     $chk = $conexion->query("SELECT COUNT(*) AS c FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'iteracion' AND COLUMN_NAME = 'id_proyecto'");
-    if ($chk && $row = $chk->fetch_assoc()) { $hasIteracionProyecto = ((int)$row['c'] > 0); }
-  } catch (Throwable $e) { $hasIteracionProyecto = false; }
+    if ($chk && $row = $chk->fetch_assoc()) {
+      $hasIteracionProyecto = ((int)$row['c'] > 0);
+    }
+  } catch (Throwable $e) {
+    $hasIteracionProyecto = false;
+  }
 
   // Proyecto existe?
   $sqlProyecto = "SELECT nombre, estado FROM proyecto WHERE id_proyecto = $proyectoId";
@@ -151,13 +169,17 @@ function build_payload_and_version(mysqli $conexion, int $proyectoId) {
       $plan = (float)($r['planificado'] ?? 0);
       $ejec = (float)($r['ejecutado'] ?? 0);
       if ($plan == 0 && $ejec == 0) {
-        $pct = 100; $nota = 'Se cumplió';
+        $pct = 100;
+        $nota = 'Se cumplió';
       } elseif ($plan == 0 && $ejec > 0) {
-        $pct = 100; $nota = 'Se planificó 0 (' . $ejec . ')';
+        $pct = 100;
+        $nota = 'Se planificó 0 (' . $ejec . ')';
       } elseif ($ejec > $plan) {
-        $pct = round(($ejec / $plan) * 100); $nota = 'Supera planificado (+' . ($ejec - $plan) . ')';
+        $pct = round(($ejec / $plan) * 100);
+        $nota = 'Supera planificado (+' . ($ejec - $plan) . ')';
       } else {
-        $pct = round(($ejec / $plan) * 100); $nota = '';
+        $pct = round(($ejec / $plan) * 100);
+        $nota = '';
       }
 
       $iterMap[$key]['metricas'][] = [
@@ -178,21 +200,27 @@ function build_payload_and_version(mysqli $conexion, int $proyectoId) {
   if (!$hasIteracionProyecto) {
     $DATA = [];
   }
+  // ✅ Forzar zona horaria local (Argentina)
+  date_default_timezone_set('America/Argentina/Buenos_Aires');
 
-  // Actual / anterior
   $hoy = date('Y-m-d');
-  $actualIter = null;
-  $anteriorIter = null;
-  if (count($DATA) > 0) {
-    $actualIndex = null;
-    foreach ($DATA as $idx => $it) {
-      if ($it['inicio'] <= $hoy && $it['fin'] >= $hoy) { $actualIndex = $idx; break; }
+$actualIter = null;
+$anteriorIter = null;
+if (count($DATA) > 0) {
+  $actualIndex = null;
+  foreach ($DATA as $idx => $it) {
+    $finMas1 = date('Y-m-d', strtotime($it['fin'] . ' +1 day'));
+    if ($it['inicio'] <= $hoy && $finMas1 > $hoy) {
+      $actualIndex = $idx;
+      break;
     }
-    if ($actualIndex !== null) { $actualIter = $DATA[$actualIndex]; }
-    $fechaReferencia = $actualIter ? $actualIter['inicio'] : $hoy;
-    $anteriores = array_filter($DATA, fn($it) => $it['fin'] < $fechaReferencia);
-    if (count($anteriores) > 0) { $anteriorIter = end($anteriores); }
   }
+  if ($actualIndex !== null) { $actualIter = $DATA[$actualIndex]; }
+  $fechaReferencia = $actualIter ? $actualIter['inicio'] : $hoy;
+  $anteriores = array_filter($DATA, fn($it) => $it['fin'] < $fechaReferencia);
+  if (count($anteriores) > 0) { $anteriorIter = end($anteriores); }
+}
+
 
   $payload = [
     'data' => $DATA,
@@ -203,13 +231,15 @@ function build_payload_and_version(mysqli $conexion, int $proyectoId) {
     'totalIteraciones' => $totalIteraciones,
     'proyecto' => $proyectoInfo,
   ];
+
   $version = md5(json_encode($payload));
   $payload['version'] = $version;
   $payload['serverTime'] = date('c');
   return [$payload, $version];
 }
 
-function send_event($event, $data) {
+function send_event($event, $data)
+{
   echo "event: {$event}\n";
   echo 'data: ' . json_encode($data, JSON_UNESCAPED_UNICODE | JSON_NUMERIC_CHECK) . "\n\n";
   @ob_flush();
@@ -255,4 +285,3 @@ while (!connection_aborted()) {
 }
 
 exit;
-?>

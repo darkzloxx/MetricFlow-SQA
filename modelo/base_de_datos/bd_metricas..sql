@@ -349,15 +349,19 @@ CREATE TABLE `proyecto` (
   `descripcion` text DEFAULT NULL,
   `estado` enum('Registrado','En Progreso','Finalizado','Cancelado') NOT NULL DEFAULT 'Registrado',
   `nombre` varchar(100) NOT NULL,
-  `id_modelo` int(11) DEFAULT NULL
+  `id_modelo` int(11) DEFAULT NULL,
+  `fecha_creacion` datetime NOT NULL DEFAULT current_timestamp(),
+  `anio` int(4) GENERATED ALWAYS AS (year(`fecha_creacion`)) STORED,
+  `id_modelo_global` int(11) DEFAULT NULL,
+  `id_modelo_personalizado` int(11) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Volcado de datos para la tabla `proyecto`
 --
 
-INSERT INTO `proyecto` (`id_proyecto`, `objetivo`, `descripcion`, `estado`, `nombre`, `id_modelo`) VALUES
-(1, 'MetricFlow SQA es un software web para registrar, seguir y analizar métricas de calidad durante las iteraciones del proyecto.', 'Permite el seguimiento de estándares de calidad mediante métricas e indicadores definidos en el plan de SQA.', 'En Progreso', 'MetricFlow-SQA', 7);
+INSERT INTO `proyecto` (`id_proyecto`, `objetivo`, `descripcion`, `estado`, `nombre`, `id_modelo`, `id_modelo_global`, `id_modelo_personalizado`) VALUES
+(1, 'MetricFlow SQA es un software web para registrar, seguir y analizar métricas de calidad durante las iteraciones del proyecto.', 'Permite el seguimiento de estándares de calidad mediante métricas e indicadores definidos en el plan de SQA.', 'En Progreso', 'MetricFlow-SQA', 7, NULL, NULL);
 
 -- --------------------------------------------------------
 

@@ -177,20 +177,34 @@ $DATA = array_values($iterMap);
 if (!$hasIteracionProyecto) {
   $DATA = [];
 }
+date_default_timezone_set('America/Argentina/Buenos_Aires');
 
 // Determine current/previous iteration similar to dashboard.php
 $hoy = date('Y-m-d');
 $actualIter = null;
 $anteriorIter = null;
+
 if (count($DATA) > 0) {
   $actualIndex = null;
+
   foreach ($DATA as $idx => $it) {
-    if ($it['inicio'] <= $hoy && $it['fin'] >= $hoy) { $actualIndex = $idx; break; }
+    // ✅ Se suma un día al fin para incluir todo el día de cierre
+    $finMas1 = date('Y-m-d', strtotime($it['fin'] . ' +1 day'));
+    if ($it['inicio'] <= $hoy && $finMas1 > $hoy) {
+      $actualIndex = $idx;
+      break;
+    }
   }
-  if ($actualIndex !== null) { $actualIter = $DATA[$actualIndex]; }
+
+  if ($actualIndex !== null) {
+    $actualIter = $DATA[$actualIndex];
+  }
+
   $fechaReferencia = $actualIter ? $actualIter['inicio'] : $hoy;
   $anteriores = array_filter($DATA, fn($it) => $it['fin'] < $fechaReferencia);
-  if (count($anteriores) > 0) { $anteriorIter = end($anteriores); }
+  if (count($anteriores) > 0) {
+    $anteriorIter = end($anteriores);
+  }
 }
 
 // No cerramos la conexión del singleton; el request termina acá.

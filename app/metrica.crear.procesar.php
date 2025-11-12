@@ -2,153 +2,90 @@
 include_once '../lib/ControlAcceso.Class.php';
 include_once '../modelo/BDConexion.Class.php';
 
-// Acceso: Admin/SuperAdmin bypass; otros requieren permiso Gestión de Métricas
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
 ControlAcceso::verificaLogin();
-$esAdmin = ControlAcceso::esAdminGlobal() || ControlAcceso::esSuperAdminGlobal();
-if (!$esAdmin && !ControlAcceso::verificaPermiso(PermisosSistema::GESTION_METRICAS)) {
-    http_response_code(403);
-    echo 'Acceso denegado';
-    exit;
-}
 
-$DatosFormulario = $_POST;
 $cn = BDConexion::getInstancia();
-$cn->autocommit(false);
-$cn->begin_transaction();
+$usr = ControlAcceso::usuarioActual();
+$esAdmin = ControlAcceso::esAdminGlobal() || ControlAcceso::esSuperAdminGlobal();
 
-$nombre = trim((string)($DatosFormulario["nombre"] ?? ''));
-$descripcion = trim((string)($DatosFormulario["descripcion"] ?? ''));
+$nombre = trim($_POST['nombre'] ?? '');
+$descripcion = trim($_POST['descripcion'] ?? '');
+$modelos = $_POST['modelos'] ?? [];
 
-$resultado = "";
-$mensaje = "Ha ocurrido un error.";
+// Guardar datos del formulario en sesión (para repoblar si hay error)
+$_SESSION['form_data'] = [
+    'nombre' => $nombre,
+    'descripcion' => $descripcion,
+    'modelos' => $modelos
+];
 
-if ($nombre === '') {
-    http_response_code(400);
-    echo 'El nombre es obligatorio';
+// ===============================
+// 🔹 Validaciones básicas
+// ===============================
+if ($nombre === '' || $descripcion === '' || empty($modelos)) {
+    header('Location: metrica.crear.php?msg=' . urlencode('Debe completar todos los campos y seleccionar al menos un modelo.') . '&type=danger');
     exit;
 }
 
-$nombreEsc = $cn->real_escape_string($nombre);
-$qDup = "SELECT 1 FROM metrica WHERE nombre = '{$nombreEsc}' LIMIT 1";
-$rsDup = $cn->query($qDup);
-if ($rsDup && $rsDup->num_rows > 0){
-    $resultado = false;
-    $mensaje = "Ya existe una métrica con el nombre ingresado";
-} else {
+// ===============================
+// 🔹 Validar formato de nombre y descripción
+// ===============================
+$pattern = '/^[a-zA-Z0-9ÁÉÍÓÚáéíóúüÜñÑ_\-\(\)\.\/ ]{3,255}$/u';
 
-    // Detectar si existe columna 'tipo'
-    $hasTipo = false;
-    try {
-        if ($rsCols = $cn->query("SHOW COLUMNS FROM metrica LIKE 'tipo'")) {
-            $hasTipo = (bool)$rsCols->num_rows;
-        }
-    } catch (Throwable $e) { $hasTipo = false; }
-
-    $tipo = $esAdmin ? 'base' : 'personalizada';
-    $descEsc = $cn->real_escape_string($descripcion);
-    if ($hasTipo) {
-        $tipoEsc = $cn->real_escape_string($tipo);
-        $query = "INSERT INTO metrica (nombre, descripcion, tipo) VALUES ('{$nombreEsc}', '{$descEsc}', '{$tipoEsc}')";
-    } else {
-        $query = "INSERT INTO metrica (nombre, descripcion) VALUES ('{$nombreEsc}', '{$descEsc}')";
-    }
-    $okIns = $cn->query($query);
-    if (!$okIns) {
-        $cn->rollback();
-        $cn->autocommit(true);
-        die($cn->errno);
-    }
-
-    $idMetrica = (int)$cn->insert_id;
-
-    if ($esAdmin) {
-        // Asociar a modelos globales seleccionados
-        $sel = isset($DatosFormulario['modelos_globales']) && is_array($DatosFormulario['modelos_globales']) ? $DatosFormulario['modelos_globales'] : [];
-        foreach ($sel as $idMod) {
-            $id = (int)$idMod; if ($id <= 0) continue;
-            $qL = "INSERT INTO metrica_modelo_calidad (id_metrica, id_modelo) VALUES ({$idMetrica}, {$id})";
-            if (!$cn->query($qL)) {
-                $cn->rollback();
-                $cn->autocommit(true);
-                die($cn->errno);
-            }
-        }
-    } else {
-        // Asociar a modelos personalizados de proyecto seleccionados
-        $sel = isset($DatosFormulario['modelos_proyecto']) && is_array($DatosFormulario['modelos_proyecto']) ? $DatosFormulario['modelos_proyecto'] : [];
-        if (!empty($sel)) {
-            // Validar que pertenecen al usuario
-            $usr = ControlAcceso::usuarioActual();
-            $ids = array_map('intval', $sel);
-            $ids = array_filter($ids, function($v){ return $v>0;});
-            if (!empty($ids)) {
-                $in = implode(',', $ids);
-                $sqlCheck = "SELECT pmc.id_proyecto_modelo
-                             FROM proyecto_modelo_calidad pmc
-                             JOIN usuario_proyecto up ON up.id_proyecto = pmc.id_proyecto
-                             WHERE up.id_usuario = ".(int)$usr->id." AND pmc.id_proyecto_modelo IN ($in)";
-                $valid = [];
-                if ($rsV = $cn->query($sqlCheck)) {
-                    while ($r = $rsV->fetch_assoc()) { $valid[] = (int)$r['id_proyecto_modelo']; }
-                }
-                foreach ($ids as $idpm) {
-                    if (!in_array($idpm, $valid, true)) continue;
-                    $qLp = "INSERT INTO metrica_proyecto_modelo (id_metrica, id_proyecto_modelo) VALUES ({$idMetrica}, {$idpm})";
-                    if (!$cn->query($qLp)) {
-                        $cn->rollback();
-                        $cn->autocommit(true);
-                        die($cn->errno);
-                    }
-                }
-            }
-        }
-    }
-
-    $cn->commit();
-    $cn->autocommit(true);
-    $resultado = true;
-    $mensaje = "Operación realizada con éxito";
+if (!preg_match($pattern, $nombre) || !preg_match($pattern, $descripcion)) {
+    header('Location: metrica.crear.php?msg=' . urlencode('El nombre o la descripción contienen caracteres no permitidos. Solo se admiten letras, números y los símbolos . - _ / ( )') . '&type=danger');
+    exit;
 }
-?>
-<html>
-    <head>
-        <meta charset="UTF-8">
-        <link rel="stylesheet" href="../lib/bootstrap-4.1.1-dist/css/bootstrap.css" />
-        <link rel="stylesheet" href="../lib/open-iconic-master/font/css/open-iconic-bootstrap.css" />
-        <script type="text/javascript" src="../lib/JQuery/jquery-3.3.1.js"></script>
-        <script type="text/javascript" src="../lib/bootstrap-4.1.1-dist/js/bootstrap.min.js"></script>
-        <title><?= Constantes::NOMBRE_SISTEMA; ?> - Crear Metrica</title>
-    </head>
-    <body>
-        <?php include_once '../gui/navbar.php'; ?>
 
-        <div class="container">
-            <p></p>
-            <div class="card">
-                <div class="card-header">
-                    <h3>Crear Metrica</h3>
-                </div>
-                <div class="card-body">
-                    <?php if ($resultado) { ?>
-                        <div class="alert alert-success" role="alert">
-                            <?= $mensaje; ?>
-                        </div>
-                    <?php } ?>   
-                    <?php if (!$resultado) { ?>
-                        <div class="alert alert-danger" role="alert">
-                            <?= $mensaje; ?>
-                        </div>
-                    <?php } ?>
-                    <hr />
-                    <h5 class="card-text">Opciones</h5>
-                    <a href="metricas.php">
-                        <button type="button" class="btn btn-primary">
-                            <span class="oi oi-account-logout"></span> Salir
-                        </button>
-                    </a>
-                </div>
-            </div>
-        </div>
-        <?php include_once '../gui/footer.php'; ?>
-    </body>
-</html>
+// ===============================
+// 🔹 Verificar nombre duplicado (en base o personalizada)
+// ===============================
+$sqlDup = "SELECT COUNT(*) AS c FROM metrica WHERE LOWER(nombre) = LOWER(?)";
+$stmt = $cn->prepare($sqlDup);
+$stmt->bind_param('s', $nombre);
+$stmt->execute();
+$res = $stmt->get_result()->fetch_assoc();
+$stmt->close();
+
+if ($res['c'] > 0) {
+    header('Location: metrica.crear.php?msg=' . urlencode('⚠️ Ya existe una métrica con ese nombre en el sistema. Si desea usarla, puede vincularla desde la opción “Vincular existente”.') . '&type=danger');
+    exit;
+}
+
+// ===============================
+// 🔹 Insertar nueva métrica
+// ===============================
+$tipo = $esAdmin ? 'base' : 'personalizada';
+$sqlInsert = "INSERT INTO metrica (nombre, descripcion, tipo) VALUES (?, ?, ?)";
+$stmt = $cn->prepare($sqlInsert);
+$stmt->bind_param('sss', $nombre, $descripcion, $tipo);
+$stmt->execute();
+$idMetrica = $stmt->insert_id;
+$stmt->close();
+
+// ===============================
+// 🔹 Asociar la métrica a modelos
+// ===============================
+if ($esAdmin) {
+    foreach ($modelos as $idModelo) {
+        $idModelo = (int)$idModelo;
+        $cn->query("INSERT INTO metrica_modelo_calidad (id_metrica, id_modelo) VALUES ($idMetrica, $idModelo)");
+    }
+} else {
+    foreach ($modelos as $idPM) {
+        $idPM = (int)$idPM;
+        $cn->query("INSERT INTO metrica_proyecto_modelo (id_metrica, id_proyecto_modelo) VALUES ($idMetrica, $idPM)");
+    }
+}
+
+// ✅ Limpiar la sesión temporal
+unset($_SESSION['form_data']);
+
+// Redirigir con éxito
+header('Location: metricas.php?msg=' . urlencode('✅ Métrica creada y asociada correctamente.') . '&type=success');
+exit;
+?>
