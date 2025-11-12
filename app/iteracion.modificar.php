@@ -95,18 +95,6 @@ $fases = $fasesRes ? $fasesRes->fetch_all(MYSQLI_ASSOC) : [];
                             required>
                     </div>
 
-                    <!-- 🔹 Fase -->
-                    <div class="form-group">
-                        <label for="fase">Fase</label>
-                        <select id="fase" name="fase" class="form-control">
-                            <?php foreach ($fases as $fase): ?>
-                                <option value="<?= $fase['id_fase']; ?>"
-                                    <?= $fase['id_fase'] == $iteracion['id_fase'] ? 'selected' : ''; ?>>
-                                    <?= htmlspecialchars($fase['nombre']); ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
 
                     <input type="hidden" name="id" value="<?= $id; ?>">
 

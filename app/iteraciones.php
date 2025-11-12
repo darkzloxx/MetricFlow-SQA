@@ -31,6 +31,7 @@ $rs = $cn->query($sqlIter);
 $iteraciones = $rs ? $rs->fetch_all(MYSQLI_ASSOC) : [];
 ?>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
     <title><?= Constantes::NOMBRE_SISTEMA; ?> - Iteraciones</title>
@@ -45,6 +46,7 @@ $iteraciones = $rs ? $rs->fetch_all(MYSQLI_ASSOC) : [];
             overflow: hidden;
             text-overflow: ellipsis;
         }
+
         .cell-ellipsis:hover {
             white-space: normal;
             word-break: break-word;
@@ -52,41 +54,60 @@ $iteraciones = $rs ? $rs->fetch_all(MYSQLI_ASSOC) : [];
             border-radius: .25rem;
             padding: .2rem .4rem;
         }
+
         .table thead th {
             background-color: #f1f3f5;
+        }
+
+        .btn-outline-secondary {
+            border-color: #dee2e6;
+            color: #495057;
+            background: #fff;
+        }
+
+        .btn-outline-secondary:hover {
+            background: #f8f9fa;
+            color: #212529;
         }
     </style>
 </head>
 
 <body>
-<?php include_once '../gui/navbar.php'; ?>
+    <?php include_once '../gui/navbar.php'; ?>
 
-<div class="container mt-4">
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <h3 class="mb-0">Iteraciones de mis Proyectos</h3>
-        <a href="iteracion.crear.php" class="btn btn-success">
-            <span class="oi oi-plus"></span> Nueva Iteración
-        </a>
-    </div>
-
-    <?php if (isset($_GET['msg'])): ?>
-        <div id="flash-alert" class="alert alert-<?= ($_GET['type'] ?? 'info'); ?> alert-dismissible fade show" role="alert">
-            <?= htmlspecialchars($_GET['msg']); ?>
-            <button type="button" class="close" data-dismiss="alert" aria-label="Cerrar">
-                <span aria-hidden="true">&times;</span>
-            </button>
+    <div class="container mt-4">
+        <div class="mb-3">
+            <a href="proyectos.php" class="btn btn-outline-secondary">
+                <span class="oi oi-arrow-left mr-1"></span> Volver
+            </a>
         </div>
-        <script>setTimeout(() => $('#flash-alert').alert('close'), 3000);</script>
-    <?php endif; ?>
-
-    <?php if (empty($iteraciones)): ?>
-        <div class="alert alert-warning">
-            <span class="oi oi-warning"></span> No hay iteraciones registradas en los proyectos que liderás.
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h3 class="mb-0">Iteraciones de mis Proyectos</h3>
+            <a href="iteracion.crear.php" class="btn btn-success">
+                <span class="oi oi-plus"></span> Nueva Iteración
+            </a>
         </div>
-    <?php else: ?>
-        <table class="table table-bordered table-hover table-sm">
-            <thead>
-                <tr>
+
+
+        <?php if (isset($_GET['msg'])): ?>
+            <div id="flash-alert" class="alert alert-<?= ($_GET['type'] ?? 'info'); ?> alert-dismissible fade show" role="alert">
+                <?= htmlspecialchars($_GET['msg']); ?>
+                <button type="button" class="close" data-dismiss="alert" aria-label="Cerrar">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <script>
+                setTimeout(() => $('#flash-alert').alert('close'), 3000);
+            </script>
+        <?php endif; ?>
+
+        <?php if (empty($iteraciones)): ?>
+            <div class="alert alert-warning">
+                <span class="oi oi-warning"></span> No hay iteraciones registradas en los proyectos que liderás.
+            </div>
+        <?php else: ?>
+            <table class="table table-hover table-sm">
+                <tr class="table-info">
                     <th>Proyecto</th>
                     <th>Fase</th>
                     <th>N° Iteración</th>
@@ -95,38 +116,38 @@ $iteraciones = $rs ? $rs->fetch_all(MYSQLI_ASSOC) : [];
                     <th>Fin</th>
                     <th>Acciones</th>
                 </tr>
-            </thead>
-            <tbody>
-                <?php foreach ($iteraciones as $it): ?>
-                    <tr>
-                        <td class="font-weight-bold"><?= htmlspecialchars($it['proyecto']); ?></td>
-                        <td><?= htmlspecialchars($it['fase']); ?></td>
-                        <td><?= (int)$it['numero_iteracion']; ?></td>
-                        <td class="cell-ellipsis"><?= htmlspecialchars($it['objetivo']); ?></td>
-                        <td><?= htmlspecialchars($it['fecha_inicio']); ?></td>
-                        <td><?= htmlspecialchars($it['fecha_fin']); ?></td>
-                        <td>
-                            <a href="iteracion.ver.php?id=<?= $it['id_iteracion']; ?>" class="btn btn-outline-primary btn-sm" title="Ver">
-                                <span class="oi oi-eye"></span>
-                            </a>
-                            <a href="iteracion.modificar.php?id=<?= $it['id_iteracion']; ?>" class="btn btn-outline-warning btn-sm" title="Editar">
-                                <span class="oi oi-pencil"></span>
-                            </a>
-                            <form action="iteracion.eliminar.procesar.php" method="post" style="display:inline-block;"
-                                  onsubmit="return confirm('¿Eliminar esta iteración? Esta acción no se puede deshacer.');">
-                                <input type="hidden" name="id" value="<?= $it['id_iteracion']; ?>">
-                                <button type="submit" class="btn btn-outline-danger btn-sm" title="Eliminar">
-                                    <span class="oi oi-trash"></span>
-                                </button>
-                            </form>
-                        </td>
-                    </tr>
-                <?php endforeach; ?>
-            </tbody>
-        </table>
-    <?php endif; ?>
-</div>
+                <tbody>
+                    <?php foreach ($iteraciones as $it): ?>
+                        <tr>
+                            <td class="font-weight-bold"><?= htmlspecialchars($it['proyecto']); ?></td>
+                            <td><?= htmlspecialchars($it['fase']); ?></td>
+                            <td><?= (int)$it['numero_iteracion']; ?></td>
+                            <td class="cell-ellipsis"><?= htmlspecialchars($it['objetivo']); ?></td>
+                            <td><?= htmlspecialchars($it['fecha_inicio']); ?></td>
+                            <td><?= htmlspecialchars($it['fecha_fin']); ?></td>
+                            <td>
+                                <a href="iteracion.ver.php?id=<?= $it['id_iteracion']; ?>" class="btn btn-outline-primary" title="Ver">
+                                    <span class="oi oi-eye"></span>
+                                </a>
+                                <a href="iteracion.modificar.php?id=<?= $it['id_iteracion']; ?>" class="btn btn-outline-warning" title="Editar">
+                                    <span class="oi oi-pencil"></span>
+                                </a>
+                                <form action="iteracion.eliminar.procesar.php" method="post" style="display:inline-block;"
+                                    onsubmit="return confirm('¿Eliminar esta iteración? Esta acción no se puede deshacer.');">
+                                    <input type="hidden" name="id" value="<?= $it['id_iteracion']; ?>">
+                                    <button type="submit" class="btn btn-outline-danger" title="Eliminar">
+                                        <span class="oi oi-trash"></span>
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        <?php endif; ?>
+    </div>
 
-<?php include_once '../gui/footer.php'; ?>
+    <?php include_once '../gui/footer.php'; ?>
 </body>
+
 </html>

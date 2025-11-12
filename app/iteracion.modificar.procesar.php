@@ -7,7 +7,7 @@ $DatosFormulario = $_POST;
 
 $query = "UPDATE iteracion "
         . "SET numero_iteracion = {$DatosFormulario["nombre"]},  objetivo = '{$DatosFormulario["objetivo"]}',fecha_inicio = '{$DatosFormulario["fecha_inicio"]}',
-        fecha_fin = '{$DatosFormulario["fecha_fin"]}',id_fase = {$DatosFormulario["fase"]}  "
+        fecha_fin = '{$DatosFormulario["fecha_fin"]}'"
         . "WHERE id_iteracion = {$DatosFormulario["id"]}";
 $consulta = BDConexion::getInstancia()->query($query);
 ?>
