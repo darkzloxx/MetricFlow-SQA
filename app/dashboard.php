@@ -204,10 +204,8 @@ if (!$hayIteraciones) {
   // Forzamos estado vacío para renderizar la pantalla con mensajes en lugar de responder JSON
   $DATA = [];
 }
+date_default_timezone_set('America/Argentina/Buenos_Aires');
 
-// ============================
-// Lógica de iteraciones actual y anterior
-// ============================
 $hoy = date('Y-m-d');
 $actualIter = null;
 $anteriorIter = null;
@@ -224,7 +222,9 @@ if (count($DATA) === 0) {
   // Buscar si hay iteración actual (por fechas)
   $actualIndex = null;
   foreach ($DATA as $idx => $it) {
-    if ($it['inicio'] <= $hoy && $it['fin'] >= $hoy) {
+    // ✅ Se suma 1 día al fin para incluir todo el día de cierre
+    $finMas1 = date('Y-m-d', strtotime($it['fin'] . ' +1 day'));
+    if ($it['inicio'] <= $hoy && $finMas1 > $hoy) {
       $actualIndex = $idx;
       break;
     }
@@ -254,6 +254,7 @@ if (count($DATA) === 0) {
     $mensajeActual = "La iteración <b>{$actualIter['iteracion']}</b> no tiene métricas planificadas aún.";
   }
 }
+
 
 
 // $conexion es singleton; no cerramos aquí para reuso.

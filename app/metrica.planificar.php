@@ -19,10 +19,12 @@ if (!ControlAcceso::verificaPermiso(PermisosSistema::GESTION_METRICAS)) {
   exit;
 }
 
-// 🔍 Validar ID métrica
-$id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
-if ($id <= 0) {
-  header('Location: metricas.php?msg=' . urlencode('ID inválido.') . '&type=danger');
+// 🔍 Validar parámetros
+$idMetrica = isset($_GET['id']) ? (int)$_GET['id'] : 0;
+$idProyecto = isset($_GET['proyecto']) ? (int)$_GET['proyecto'] : 0;
+
+if ($idMetrica <= 0 || $idProyecto <= 0) {
+  header('Location: metricas.php?msg=' . urlencode('Faltan parámetros de métrica o proyecto.') . '&type=danger');
   exit;
 }
 
@@ -31,7 +33,7 @@ $cn = BDConexion::getInstancia();
 // ==================================================
 // 🔹 Cargar datos de la métrica (base o personalizada)
 // ==================================================
-$sqlMet = "SELECT id_metrica, nombre, descripcion, tipo FROM metrica WHERE id_metrica = {$id} LIMIT 1";
+$sqlMet = "SELECT id_metrica, nombre, descripcion, tipo FROM metrica WHERE id_metrica = {$idMetrica} LIMIT 1";
 $rsMet = $cn->query($sqlMet);
 if (!$rsMet || !$rsMet->num_rows) {
   header('Location: metricas.php?msg=' . urlencode('La métrica no existe.') . '&type=danger');
@@ -40,33 +42,23 @@ if (!$rsMet || !$rsMet->num_rows) {
 $met = $rsMet->fetch_assoc();
 
 // ==================================================
-// 🔹 Buscar iteración actual (fase + número)
+// 🔹 Buscar iteración activa SOLO del proyecto recibido
 // ==================================================
-$iteracionActual = null;
-if ($usr) {
-  $sqlIter = "
-    SELECT i.id_iteracion, i.numero_iteracion, i.fecha_inicio, i.fecha_fin,
-           f.nombre AS fase, p.nombre AS proyecto
-    FROM iteracion i
-    JOIN fase f ON f.id_fase = i.id_fase
-    JOIN proyecto p ON p.id_proyecto = i.id_proyecto
-    JOIN usuario_proyecto up ON up.id_proyecto = p.id_proyecto
-    WHERE up.id_usuario = ?
-      AND CURRENT_DATE() BETWEEN i.fecha_inicio AND i.fecha_fin
-    LIMIT 1";
-
-  if ($st = $cn->prepare($sqlIter)) {
-    $st->bind_param('i', $usr->id);
-    $st->execute();
-    $res = $st->get_result();
-    $iteracionActual = $res && $res->num_rows ? $res->fetch_assoc() : null;
-    $st->close();
-  }
-}
+$sqlIter = "
+  SELECT i.id_iteracion, i.numero_iteracion, i.fecha_inicio, i.fecha_fin,
+         f.nombre AS fase, p.nombre AS proyecto
+  FROM iteracion i
+  JOIN fase f ON f.id_fase = i.id_fase
+  JOIN proyecto p ON p.id_proyecto = i.id_proyecto
+  WHERE p.id_proyecto = {$idProyecto}
+    AND CURRENT_DATE() BETWEEN i.fecha_inicio AND i.fecha_fin
+  LIMIT 1";
+$rsIter = $cn->query($sqlIter);
+$iteracionActual = ($rsIter && $rsIter->num_rows > 0) ? $rsIter->fetch_assoc() : null;
 
 // Si no hay iteración activa, bloquear planificación
 if (!$iteracionActual) {
-  header('Location: metricas.php?msg=' . urlencode('No hay una iteración activa actualmente. No se puede planificar.') . '&type=warning');
+  header('Location: metricas.php?msg=' . urlencode('No hay una iteración activa actualmente para este proyecto.') . '&type=warning');
   exit;
 }
 
@@ -74,11 +66,11 @@ if (!$iteracionActual) {
 // 🔹 Verificar si ya fue planificada en la iteración actual
 // ==================================================
 $idIter = (int)$iteracionActual['id_iteracion'];
-$sqlPlan = "SELECT 1 FROM metrica_iteracion WHERE id_metrica = {$id} AND id_iteracion = {$idIter} LIMIT 1";
+$sqlPlan = "SELECT 1 FROM metrica_iteracion WHERE id_metrica = {$idMetrica} AND id_iteracion = {$idIter} LIMIT 1";
 $rsPlan = $cn->query($sqlPlan);
 $yaPlanificada = (bool)($rsPlan && $rsPlan->num_rows);
 ?>
-<html>
+<html lang="es">
 
 <head>
   <meta charset="UTF-8" />
@@ -117,14 +109,15 @@ $yaPlanificada = (bool)($rsPlan && $rsPlan->num_rows);
         <?php endif; ?>
 
         <form method="post" action="metrica.planificar.procesar.php" class="mt-3">
-          <input type="hidden" name="id_metrica" value="<?= (int)$met['id_metrica']; ?>" />
-          <input type="hidden" name="id_iteracion" value="<?= (int)$iteracionActual['id_iteracion']; ?>" />
+          <input type="hidden" name="id_metrica" value="<?= $idMetrica; ?>" />
+          <input type="hidden" name="id_iteracion" value="<?= $idIter; ?>" />
+          <input type="hidden" name="id_proyecto" value="<?= $idProyecto; ?>" />
 
           <div class="form-group">
             <label>Iteración actual</label>
             <input type="text" class="form-control" readonly
               value="<?= htmlspecialchars($iteracionActual['proyecto']); ?> — <?= htmlspecialchars($iteracionActual['fase']); ?> <?= (int)$iteracionActual['numero_iteracion']; ?> (<?= htmlspecialchars($iteracionActual['fecha_inicio']); ?> a <?= htmlspecialchars($iteracionActual['fecha_fin']); ?>)">
-            <small class="form-text text-muted">La planificación se aplica siempre sobre la iteración activa.</small>
+            <small class="form-text text-muted">La planificación se aplica siempre sobre la iteración activa del proyecto actual.</small>
           </div>
 
           <div class="form-group">
@@ -138,7 +131,7 @@ $yaPlanificada = (bool)($rsPlan && $rsPlan->num_rows);
             <input type="number" step="any" min="0" class="form-control" id="umbral" name="umbral"
               required placeholder="Ej: 10" />
             <small class="form-text text-muted">
-              Define el porcentaje o valor máximo permitido de diferencia entre lo planificado y lo ejecutado.
+              Define el porcentaje máximo permitido de diferencia entre lo planificado y lo ejecutado.
             </small>
           </div>
 
@@ -155,5 +148,4 @@ $yaPlanificada = (bool)($rsPlan && $rsPlan->num_rows);
 
   <?php include_once '../gui/footer.php'; ?>
 </body>
-
 </html>

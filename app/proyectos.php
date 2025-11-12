@@ -361,7 +361,7 @@ foreach ($proyectos as $pr) {
     $link = null;
     if ($next['estado'] === 'completo') {
         if (ControlAcceso::verificaPermiso(PermisosSistema::REGISTRO_METRICAS)) {
-            $link = "registro_metricas.php?proyecto=$idP";
+            $link = "metricas.php";
         } else {
             $link = "dashboard.php?proyecto=$idP";
         }

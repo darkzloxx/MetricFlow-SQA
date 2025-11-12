@@ -227,6 +227,10 @@ $cn = BDConexion::getInstancia();
                                         <th>Nombre</th>
                                         <th>Descripción</th>
                                         <th>Tipo</th>
+                                        <?php if ($esGerenteOLider): ?>
+                                            <th class="text-center">Planificado</th>
+                                            <th class="text-center">Ejecutado</th>
+                                        <?php endif; ?>
                                         <th>Opciones</th>
                                     </tr>
                                     <tbody>
@@ -234,18 +238,44 @@ $cn = BDConexion::getInstancia();
                                             $idM = (int)$m['id_metrica'];
                                             $esBase = ($m['tipo'] === 'base');
 
-                                            // Planificación actual (solo si hay iteración activa)
+                                            $valorPlan = null;
+                                            $valorEjec = null;
                                             $yaPlanificada = false;
+
+                                            // 🔹 Si hay iteración activa, buscamos valores
                                             if ($iter) {
-                                                $sqlPlan = "SELECT 1 FROM metrica_iteracion WHERE id_metrica={$idM} AND id_iteracion={$iter['id_iteracion']} LIMIT 1";
+                                                $sqlPlan = "SELECT valor_planificado, valor_ejecutado 
+                            FROM metrica_iteracion 
+                            WHERE id_metrica={$idM} 
+                              AND id_iteracion={$iter['id_iteracion']} 
+                            LIMIT 1";
                                                 $rsPlan = $cn->query($sqlPlan);
-                                                $yaPlanificada = $rsPlan && $rsPlan->num_rows > 0;
+                                                if ($rsPlan && $rsPlan->num_rows > 0) {
+                                                    $rowPlan = $rsPlan->fetch_assoc();
+                                                    $valorPlan = $rowPlan['valor_planificado'];
+                                                    $valorEjec = $rowPlan['valor_ejecutado'];
+                                                    $yaPlanificada = true;
+                                                }
                                             }
                                         ?>
                                             <tr>
                                                 <td class="font-weight-bold cell-ellipsis"><?= htmlspecialchars($m['nombre']); ?></td>
                                                 <td class="cell-ellipsis large"><?= htmlspecialchars($m['descripcion']); ?></td>
                                                 <td><span class="badge badge-<?= $esBase ? 'secondary' : 'info'; ?>"><?= ucfirst($m['tipo']); ?></span></td>
+
+                                                <?php if ($esGerenteOLider): ?>
+                                                    <td class="text-center">
+                                                        <?= $valorPlan !== null
+                                                            ? htmlspecialchars($valorPlan)
+                                                            : '<span class="text-muted small">-</span>'; ?>
+                                                    </td>
+                                                    <td class="text-center">
+                                                        <?= $valorEjec !== null
+                                                            ? htmlspecialchars($valorEjec)
+                                                            : '<span class="text-muted small">-</span>'; ?>
+                                                    </td>
+                                                <?php endif; ?>
+
                                                 <td>
                                                     <a href="metrica.ver.php?id=<?= $idM; ?>" class="btn btn-outline-primary btn-icon" title="Ver">
                                                         <span class="oi oi-eye"></span>
@@ -257,9 +287,12 @@ $cn = BDConexion::getInstancia();
                                                                 <span class="oi oi-lock-locked"></span>
                                                             </button>
                                                         <?php elseif (!$yaPlanificada): ?>
-                                                            <a href="metrica.planificar.php?id=<?= $idM; ?>" class="btn btn-outline-success btn-icon" title="Planificar métrica (registrar valor planificado)">
+                                                            <a href="metrica.planificar.php?id=<?= $idM; ?>&proyecto=<?= $proy['id_proyecto']; ?>"
+                                                                class="btn btn-outline-success btn-icon"
+                                                                title="Planificar métrica (registrar valor planificado)">
                                                                 <span class="oi oi-spreadsheet"></span>
                                                             </a>
+
                                                         <?php else: ?>
                                                             <button class="btn btn-outline-success btn-icon" disabled title="Métrica ya planificada en la iteración actual">
                                                                 <span class="oi oi-lock-locked"></span>
@@ -267,9 +300,12 @@ $cn = BDConexion::getInstancia();
                                                         <?php endif; ?>
 
                                                         <?php if ($iter && $yaPlanificada): ?>
-                                                            <a href="metrica.ejecutar.php?id=<?= $idM; ?>" class="btn btn-outline-info btn-icon" title="Ejecutar métrica (registrar valor real)">
+                                                            <a href="metrica.ejecutar.php?id=<?= $idM; ?>&proyecto=<?= $proy['id_proyecto']; ?>"
+                                                                class="btn btn-outline-info btn-icon"
+                                                                title="Ejecutar métrica (registrar valor real)">
                                                                 <span class="oi oi-play-circle"></span>
                                                             </a>
+
                                                         <?php else: ?>
                                                             <button class="btn btn-outline-info btn-icon" disabled title="<?= !$iter ? 'Debe existir una iteración activa' : 'Debe planificarse antes de ejecutar'; ?>">
                                                                 <span class="oi oi-lock-locked"></span>
@@ -281,6 +317,7 @@ $cn = BDConexion::getInstancia();
                                         <?php endforeach; ?>
                                     </tbody>
                                 </table>
+
                             <?php endif; ?>
                 <?php endwhile;
                     endif;
