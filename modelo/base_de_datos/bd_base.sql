@@ -467,7 +467,7 @@ CREATE TABLE `usuario` (
 --
 
 INSERT INTO `usuario` (`id_usuario`, `nombre_apellido`, `email`) VALUES
-(3, 'Lorenzo Teppa', 'lorenzoas12@gmail.com');
+(1, 'Lorenzo Teppa', 'lorenzoas12@gmail.com');
 
 
 -- --------------------------------------------------------
@@ -504,7 +504,7 @@ CREATE TABLE `usuario_rol` (
 --
 
 INSERT INTO `usuario_rol` (`id_usuario`, `id_rol`) VALUES
-(3, 1);
+(1, 1);
 
 
 --

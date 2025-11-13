@@ -32,7 +32,7 @@ $asignados = $asignadosRes->fetch_all(MYSQLI_ASSOC);
 // Roles (excluyendo los prohibidos)
 $rolesRes = $bd->query("SELECT id, nombre FROM rol ORDER BY id ASC");
 $rolesArr = $rolesRes->fetch_all(MYSQLI_ASSOC);
-$forbiddenNames = ['administrador', 'superadmin', 'sin rol'];
+$forbiddenNames = ['administrador', 'sin rol'];
 $rolesOptionsHtml = '';
 $forbiddenRoleIds = [];
 
@@ -323,7 +323,7 @@ $ocultarProyectos = ($esAdmin || $esSuperAdmin);
                     alert('Complete Proyecto y Rol en todas las filas.');
                 } else if (forbidden) {
                     e.preventDefault();
-                    alert('No puede asignar roles de Administrador, Superadmin o Sin rol.');
+                    alert('No puede asignar roles de Administrador.');
                 }
             });
         });
@@ -501,7 +501,7 @@ $ocultarProyectos = ($esAdmin || $esSuperAdmin);
                         </table>
                     <?php else: ?>
                         <div class="alert alert-info mt-3">
-                            <strong>Nota:</strong> Los usuarios con rol <b>Administrador</b> o <b>SuperAdmin</b> no pueden tener proyectos asignados ni cambiar su rol.
+                            <strong>Nota:</strong> Los usuarios con rol <b>Administrador</b> no pueden tener proyectos asignados ni cambiar su rol.
                         </div>
                     <?php endif; ?>
 
