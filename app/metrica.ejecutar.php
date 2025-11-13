@@ -88,6 +88,18 @@ if ($rsPlan && $fila = $rsPlan->fetch_assoc()) {
   <script src="../lib/JQuery/jquery-3.3.1.js"></script>
   <script src="../lib/bootstrap-4.1.1-dist/js/bootstrap.min.js"></script>
   <title><?= Constantes::NOMBRE_SISTEMA; ?> - Ejecutar Métrica</title>
+  <style>
+    .btn-outline-secondary {
+      border-color: #dee2e6;
+      color: #495057;
+      background: #fff;
+    }
+
+    .btn-outline-secondary:hover {
+      background: #f8f9fa;
+      color: #212529;
+    }
+  </style>
 </head>
 
 <body>
@@ -146,7 +158,7 @@ if ($rsPlan && $fila = $rsPlan->fetch_assoc()) {
             <div class="form-group">
               <label for="valor_ejecutado">Valor ejecutado</label>
               <input type="number" step="any" min="0" class="form-control" id="valor_ejecutado" name="valor_ejecutado"
-                     required value="<?= htmlspecialchars((string)$valEjec); ?>" placeholder="Ej: 125" />
+                required value="<?= htmlspecialchars((string)$valEjec); ?>" placeholder="Ej: 125" />
             </div>
 
             <button type="submit" class="btn btn-outline-success">
@@ -163,4 +175,5 @@ if ($rsPlan && $fila = $rsPlan->fetch_assoc()) {
 
   <?php include_once '../gui/footer.php'; ?>
 </body>
+
 </html>

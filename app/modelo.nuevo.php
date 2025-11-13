@@ -25,15 +25,22 @@
   $modeloActual = null;
 
   if ($proyectoCambioId > 0) {
-    $sqlInfo = "SELECT p.nombre AS proyecto, m.nombre AS modelo
-                FROM proyecto p
-                LEFT JOIN modelo_calidad m ON p.id_modelo = m.id_modelo
-                WHERE p.id_proyecto = $proyectoCambioId
-                LIMIT 1";
+    $sqlInfo = "SELECT 
+    p.nombre AS proyecto,
+    mg.nombre AS modelo_global,
+    pmc.nombre AS modelo_personalizado
+FROM proyecto p
+LEFT JOIN modelo_calidad mg 
+       ON mg.id_modelo = p.id_modelo_global
+LEFT JOIN proyecto_modelo_calidad pmc
+       ON pmc.id_proyecto_modelo = p.id_modelo_personalizado
+WHERE p.id_proyecto = $proyectoCambioId
+LIMIT 1";
+
     if ($rsInfo = $cn->query($sqlInfo)) {
       if ($info = $rsInfo->fetch_assoc()) {
         $nombreProyectoActual = $info['proyecto'];
-        $modeloActual = $info['modelo'];
+        $modeloActual = $info['modelo_global'] ?? $info['modelo_personalizado'] ?? null;
       }
     }
   }
