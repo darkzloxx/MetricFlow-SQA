@@ -77,36 +77,34 @@ $listaProyectos = $proyectos ? $proyectos->fetch_all(MYSQLI_ASSOC) : [];
                 }
                 ?>
 
-            <?php if ($esAdmin || $esSuperAdmin): ?>
-    <div class="mt-4 p-3 border rounded d-flex align-items-center justify-content-between" 
-         style="background-color: #f8f9fa; border-color: #dee2e6;">
-        <div>
-            <?php if ($esAdmin): ?>
-                <h5 class="mb-1 text-primary">
-                    <span class="oi oi-person mr-1"></span> Rol: Administrador
-                </h5>
-            <?php elseif ($esSuperAdmin): ?>
-                <h5 class="mb-1 text-dark">
-                    <span class="oi oi-star mr-1"></span> Rol: SuperAdmin
-                </h5>
-                <small class="text-muted">Acceso total al sistema, incluyendo configuración avanzada.</small>
-            <?php endif; ?>
-        </div>
-        <span class="oi oi-lock-locked text-secondary" title="Rol fijo"></span>
-    </div>
-<?php endif; ?>
+                <?php if ($esAdmin || $esSuperAdmin): ?>
+                    <div class="mt-4 p-3 border rounded d-flex align-items-center justify-content-between"
+                        style="background-color: #f8f9fa; border-color: #dee2e6;">
+                        <div>
+                            <?php if ($esAdmin): ?>
+                                <h5 class="mb-1 text-primary">
+                                    <span class="oi oi-person mr-1"></span> Rol: Administrador
+                                </h5>
+                            <?php elseif ($esSuperAdmin): ?>
+                                <h5 class="mb-1 text-dark">
+                                    <span class="oi oi-star mr-1"></span> Rol: SuperAdmin
+                                </h5>
+                                <small class="text-muted">Acceso total al sistema, incluyendo configuración avanzada.</small>
+                            <?php endif; ?>
+                        </div>
+                        <span class="oi oi-lock-locked text-secondary" title="Rol fijo"></span>
+                    </div>
+                <?php endif; ?>
 
 
                 <?php if (!empty($listaProyectos)) : ?>
                     <hr />
                     <h4 class="card-text">Proyectos y Roles</h4>
-                    <table class="table table-bordered table-striped" id="tablaUsuarios">
-                        <thead>
-                            <tr>
-                                <th>Proyecto</th>
-                                <th>Rol</th>
-                            </tr>
-                        </thead>
+                    <table class="table table-hover table-sm">
+                        <tr class="table-info">
+                            <th>Proyecto</th>
+                            <th>Rol</th>
+                        </tr>
                         <tbody>
                             <?php foreach ($listaProyectos as $Proyec): ?>
                                 <tr>
