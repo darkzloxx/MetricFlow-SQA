@@ -107,6 +107,15 @@ LIMIT 1";
         border-color: #17a2b8;
         color: #0c5460;
       }
+
+      .arrow {
+        display: inline-block;
+        transition: transform .25s ease;
+      }
+
+      .arrow.rotated {
+        transform: rotate(180deg);
+      }
     </style>
   </head>
 
@@ -158,8 +167,21 @@ LIMIT 1";
                       <div class="card modelo-card" data-id="<?= (int)$mb['id_modelo']; ?>">
                         <div class="card-body p-3">
                           <h6 class="card-title mb-1"><?= htmlspecialchars($mb['nombre']); ?></h6>
-                          <div class="text-muted small"><?= htmlspecialchars(mb_strimwidth($mb['descripcion'] ?? '', 0, 100, '…')); ?></div>
+                          <div class="text-muted small">
+                            <?= htmlspecialchars(mb_strimwidth($mb['descripcion'] ?? '', 0, 100, '…')); ?>
+                          </div>
+
+                          <!-- Botón Ver Métricas -->
+                          <button type="button"
+                            class="btn btn-sm btn-link text-info mt-2 btnVerMetricas"
+                            data-id="<?= (int)$mb['id_modelo']; ?>">
+                            <span class="txt">Ver métricas</span> <span class="arrow">▼</span>
+                          </button>
+
+                          <!-- Contenedor colapsable -->
+                          <div class="listaMetricas mt-2 d-none small text-dark"></div>
                         </div>
+
                       </div>
                     </div>
                   <?php endforeach; ?>
@@ -535,8 +557,66 @@ LIMIT 1";
             const ok = confirm("⚠️ Este proyecto ya tiene un modelo asignado.\n\n¿Deseás reemplazarlo por el nuevo modelo?\nEsta acción no se puede deshacer.");
             if (!ok) e.preventDefault();
           });
+
         }
 
+
+
+        // 📌 Ver/ocultar métricas del modelo base  <-- YA NO ESTÁ EN EL IF
+        $('.btnVerMetricas').on('click', function(e) {
+          e.preventDefault();
+          const $btn = $(this);
+          const id = $btn.data('id');
+          const $lista = $btn.closest('.card-body').find('.listaMetricas');
+
+          if ($lista.hasClass('cargado')) {
+            $lista.toggleClass('d-none');
+            if (!$lista.hasClass('d-none')) {
+              $lista.slideDown(200);
+            } else {
+              $lista.slideUp(200);
+            }
+            $btn.find('.txt').text($lista.is(':visible') ? 'Ocultar métricas' : 'Ver métricas');
+            $btn.find('.arrow').toggleClass('rotated');
+            return;
+          }
+
+
+          $btn.find('.txt').text('Cargando...');
+          $btn.find('.arrow').removeClass('rotated').text('…');
+$.getJSON('api/modelo_metricas.php', { id_modelo: id }, function(resp) {
+
+    if (!resp || !resp.ok) {
+        $lista.html('<em class="text-danger">Error al cargar métricas.</em>');
+        $btn.find('.txt').text('Ver métricas');
+        $btn.find('.arrow').text('▼').removeClass('rotated');
+        return;
+    }
+
+    if (!resp.metricas || resp.metricas.length === 0) {
+        $lista.html('<span class="text-muted fst-italic">Este modelo no tiene métricas.</span>');
+    } else {
+        let html = '<ul class="pl-3 mb-1">';
+        resp.metricas.forEach(m => {
+            html += `
+                <li>
+                    <strong>${m.nombre}</strong><br>
+                    <span class="text-muted small">${m.descripcion}</span>
+                </li>`;
+        });
+        html += '</ul>';
+        $lista.html(html);
+    }
+
+    // 👇 ESTA LÍNEA ES LA QUE FALTABA
+    $lista.removeClass('d-none').addClass('cargado').slideDown(200);
+
+    $btn.find('.txt').text('Ocultar métricas');
+    $btn.find('.arrow').text('▲').addClass('rotated');
+});
+
+
+        });
         // ========================
         // ⚙️ Validación final al enviar (duplicados y mensaje al final)
         // ========================
