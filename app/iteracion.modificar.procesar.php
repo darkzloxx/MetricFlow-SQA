@@ -2,53 +2,126 @@
 include_once '../lib/ControlAcceso.class.php';
 ControlAcceso::requierePermiso(PermisosSistema::ABM_ITERACIONES);
 include_once '../modelo/BDConexion.Class.php';
-$DatosFormulario = $_POST;
 
+$cn = BDConexion::getInstancia();
+$cn->autocommit(false);
+$cn->begin_transaction();
 
-$query = "UPDATE iteracion "
-        . "SET numero_iteracion = {$DatosFormulario["nombre"]},  objetivo = '{$DatosFormulario["objetivo"]}',fecha_inicio = '{$DatosFormulario["fecha_inicio"]}',
-        fecha_fin = '{$DatosFormulario["fecha_fin"]}'"
-        . "WHERE id_iteracion = {$DatosFormulario["id"]}";
-$consulta = BDConexion::getInstancia()->query($query);
+$id = (int)$_POST['id'];
+$objetivo = trim($_POST['objetivo'] ?? '');
+$fechaInicio = $_POST['fecha_inicio'] ?? '';
+$fechaFin = $_POST['fecha_fin'] ?? '';
+$hoy = date('Y-m-d');
+
+// Obtener datos existentes
+$sql = "SELECT * FROM iteracion WHERE id_iteracion = ?";
+$stmt = $cn->prepare($sql);
+$stmt->bind_param("i", $id);
+$stmt->execute();
+$iter = $stmt->get_result()->fetch_assoc();
+$stmt->close();
+
+if (!$iter) {
+    $mensaje = "Iteración no encontrada.";
+    goto fin;
+}
+
+$idProyecto = (int)$iter['id_proyecto'];
+
+// Validaciones básicas
+if ($fechaInicio < $hoy) {
+    $mensaje = "La fecha de inicio no puede ser anterior a hoy.";
+    goto fin;
+}
+
+if ($fechaFin <= $fechaInicio) {
+    $mensaje = "La fecha de fin debe ser posterior a la fecha de inicio.";
+    goto fin;
+}
+
+// Validación de solapamientos
+$sqlSolap = "
+    SELECT COUNT(*) AS c
+    FROM iteracion
+    WHERE id_proyecto = ?
+      AND id_iteracion != ?
+      AND (
+            DATE(?) = fecha_inicio OR
+            DATE(?) = fecha_fin OR
+            DATE(?) = fecha_inicio OR
+            DATE(?) = fecha_fin OR
+            (DATE(?) > fecha_inicio AND DATE(?) < fecha_fin) OR
+            (DATE(?) < fecha_fin AND DATE(?) > fecha_inicio)
+      )
+";
+
+$stmt = $cn->prepare($sqlSolap);
+$stmt->bind_param(
+    "iissssssss",
+    $idProyecto,
+    $id,
+    $fechaInicio,
+    $fechaInicio,
+    $fechaFin,
+    $fechaFin,
+    $fechaInicio,
+    $fechaInicio,
+    $fechaFin,
+    $fechaFin
+);
+
+$stmt->execute();
+$r = $stmt->get_result()->fetch_assoc();
+$stmt->close();
+
+if ($r['c'] > 0) {
+    $mensaje = "Las fechas modificadas coinciden o invaden otra iteración.";
+    goto fin;
+}
+
+// Actualizar iteración (SIN modificar número)
+$sqlUpdate = "
+    UPDATE iteracion
+    SET objetivo = ?, fecha_inicio = ?, fecha_fin = ?
+    WHERE id_iteracion = ?
+";
+
+$stmt = $cn->prepare($sqlUpdate);
+$stmt->bind_param("sssi", $objetivo, $fechaInicio, $fechaFin, $id);
+
+if ($stmt->execute()) {
+    $cn->commit();
+    $ok = true;
+    $mensaje = "Iteración actualizada correctamente.";
+} else {
+    $cn->rollback();
+    $ok = false;
+    $mensaje = "Error al actualizar la iteración.";
+}
+
+$stmt->close();
+$cn->autocommit(true);
+
+fin:
 ?>
 <html>
-    <head>
-        <meta charset="UTF-8">
-        <link rel="stylesheet" href="../lib/bootstrap-4.1.1-dist/css/bootstrap.css" />
-        <link rel="stylesheet" href="../lib/open-iconic-master/font/css/open-iconic-bootstrap.css" />
-        <script type="text/javascript" src="../lib/JQuery/jquery-3.3.1.js"></script>
-        <script type="text/javascript" src="../lib/bootstrap-4.1.1-dist/js/bootstrap.min.js"></script>
-        <title><?php echo Constantes::NOMBRE_SISTEMA; ?> - Actualizar Iteración</title>
-    </head>
-    <body>
-        <?php include_once '../gui/navbar.php'; ?>
-        <div class="container">
-            <p></p>
-            <div class="card">
-                <div class="card-header">
-                    <h3>Actualizar Iteración</h3>
-                </div>
-                <div class="card-body">
-                    <?php if ($consulta) { ?>
-                        <div class="alert alert-success" role="alert">
-                            Operaci&oacute;n realizada con &eacute;xito.
-                        </div>
-                    <?php } ?>   
-                    <?php if (!$consulta) { ?>
-                        <div class="alert alert-danger" role="alert">
-                            Ha ocurrido un error.
-                        </div>
-                    <?php } ?>
-                    <hr />
-                    <h5 class="card-text">Opciones</h5>
-                    <a href="iteraciones.php">
-                        <button type="button" class="btn btn-primary">
-                            <span class="oi oi-account-logout"></span> Salir
-                        </button>
-                    </a>
-                </div>
-            </div>
-        </div>
-        <?php include_once '../gui/footer.php'; ?>
-    </body>
+<head>
+    <meta charset="UTF-8">
+    <link rel="stylesheet" href="../lib/bootstrap-4.1.1-dist/css/bootstrap.css" />
+    <title>Modificar Iteración</title>
+</head>
+<body>
+<?php include_once '../gui/navbar.php'; ?>
+<div class="container mt-4">
+<div class="alert alert-<?= $ok ? 'success' : 'danger'; ?>">
+    <?= $mensaje ?>
+</div>
+
+<a href="iteraciones.php" class="btn btn-primary">
+    <span class="oi oi-arrow-left"></span> Volver
+</a>
+
+</div>
+<?php include_once '../gui/footer.php'; ?>
+</body>
 </html>
