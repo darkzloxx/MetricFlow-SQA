@@ -197,9 +197,9 @@ unset($_SESSION['form_data']);
                     <button type="submit" class="btn btn-success">
                         <span class="oi oi-check"></span> Confirmar
                     </button>
-                    <a href="iteraciones.php" class="btn btn-outline-secondary">
-                        <span class="oi oi-x"></span> Cancelar
-                    </a>
+                    <a href="iteraciones.php" onclick="return confirm('¿Cancelar la creación de iteración? Se perderán los cambios no guardados.');"><button type="button" class="btn btn-outline-danger">
+                            <span class="oi oi-x"></span> Cancelar
+                        </button></a>
                 </div>
             </div>
         </form>
