@@ -107,6 +107,15 @@ LIMIT 1";
         border-color: #17a2b8;
         color: #0c5460;
       }
+
+      .arrow {
+        display: inline-block;
+        transition: transform .25s ease;
+      }
+
+      .arrow.rotated {
+        transform: rotate(180deg);
+      }
     </style>
   </head>
 
@@ -166,7 +175,7 @@ LIMIT 1";
                           <button type="button"
                             class="btn btn-sm btn-link text-info mt-2 btnVerMetricas"
                             data-id="<?= (int)$mb['id_modelo']; ?>">
-                            Ver métricas ▼
+                            <span class="txt">Ver métricas</span> <span class="arrow">▼</span>
                           </button>
 
                           <!-- Contenedor colapsable -->
@@ -562,38 +571,51 @@ LIMIT 1";
 
           if ($lista.hasClass('cargado')) {
             $lista.toggleClass('d-none');
-            $btn.text($lista.hasClass('d-none') ? 'Ver métricas ▼' : 'Ocultar métricas ▲');
+            if (!$lista.hasClass('d-none')) {
+              $lista.slideDown(200);
+            } else {
+              $lista.slideUp(200);
+            }
+            $btn.find('.txt').text($lista.is(':visible') ? 'Ocultar métricas' : 'Ver métricas');
+            $btn.find('.arrow').toggleClass('rotated');
             return;
           }
 
-          $btn.text('Cargando...');
 
-          $.getJSON('api/modelo_metricas.php', {
-            id_modelo: id
-          }, function(resp) {
-            if (!resp.ok) {
-              $lista.html('<em class="text-danger">Error al cargar métricas.</em>');
-              return;
-            }
+          $btn.find('.txt').text('Cargando...');
+          $btn.find('.arrow').removeClass('rotated').text('…');
+$.getJSON('api/modelo_metricas.php', { id_modelo: id }, function(resp) {
 
-            if (!resp.metricas || resp.metricas.length === 0) {
-              $lista.html('<span class="text-muted fst-italic">Este modelo no tiene métricas.</span>');
-            } else {
-              let html = '<ul class="pl-3 mb-1">';
-              resp.metricas.forEach(m => {
-                html += `
-                    <li>
-                        <strong>${m.nombre}</strong><br>
-                        <span class="text-muted small">${m.descripcion}</span>
-                    </li>`;
-              });
-              html += '</ul>';
-              $lista.html(html);
-            }
+    if (!resp || !resp.ok) {
+        $lista.html('<em class="text-danger">Error al cargar métricas.</em>');
+        $btn.find('.txt').text('Ver métricas');
+        $btn.find('.arrow').text('▼').removeClass('rotated');
+        return;
+    }
 
-            $lista.addClass('cargado').removeClass('d-none');
-            $btn.text('Ocultar métricas ▲');
-          });
+    if (!resp.metricas || resp.metricas.length === 0) {
+        $lista.html('<span class="text-muted fst-italic">Este modelo no tiene métricas.</span>');
+    } else {
+        let html = '<ul class="pl-3 mb-1">';
+        resp.metricas.forEach(m => {
+            html += `
+                <li>
+                    <strong>${m.nombre}</strong><br>
+                    <span class="text-muted small">${m.descripcion}</span>
+                </li>`;
+        });
+        html += '</ul>';
+        $lista.html(html);
+    }
+
+    // 👇 ESTA LÍNEA ES LA QUE FALTABA
+    $lista.removeClass('d-none').addClass('cargado').slideDown(200);
+
+    $btn.find('.txt').text('Ocultar métricas');
+    $btn.find('.arrow').text('▲').addClass('rotated');
+});
+
+
         });
         // ========================
         // ⚙️ Validación final al enviar (duplicados y mensaje al final)
