@@ -174,7 +174,7 @@ foreach ($proyectos as $pr) {
         $idModeloGlobal = (int)($pr['id_modelo_global'] ?? 0);
         $idModeloPers   = (int)($pr['id_modelo_personalizado'] ?? 0);
 
-if (($idModeloGlobal ?? 0) == 0 && ($idModeloPers ?? 0) == 0) {
+        if (($idModeloGlobal ?? 0) == 0 && ($idModeloPers ?? 0) == 0) {
             // ❌ Sin modelo
             $next = [
                 'paso' => 3,
@@ -293,8 +293,10 @@ if (($idModeloGlobal ?? 0) == 0 && ($idModeloPers ?? 0) == 0) {
         $planificadasActual = 0;
         if ($iterActualId > 0) {
             $sqlPlan = "SELECT COUNT(*) AS c 
-                    FROM metrica_iteracion 
-                    WHERE id_iteracion = $iterActualId";
+        FROM metrica_iteracion 
+        WHERE id_iteracion = $iterActualId
+          AND valor_planificado IS NOT NULL";
+
             $rowPlan = $cn->query($sqlPlan)->fetch_assoc();
             $planificadasActual = (int)($rowPlan['c'] ?? 0);
         }
@@ -385,7 +387,12 @@ if (($idModeloGlobal ?? 0) == 0 && ($idModeloPers ?? 0) == 0) {
         }
     }
 
-    $progreso = max(0, min(100, round(($completados / $totalSteps) * 100)));
+    // 👇 100% solo cuando planificación (paso 5) completa
+    if ($next['estado'] === 'completo') {
+        $progreso = 100;
+    } else {
+        $progreso = max(0, min(99, round(($completados / $totalSteps) * 100)));
+    }
     $wizardsPorProyecto[$idP] = ['id' => $idP, 'proyecto' => $nombreP, 'step' => $next, 'progreso' => $progreso, 'detalle' => $detalle, 'link' => $link];
 }
 ?>
