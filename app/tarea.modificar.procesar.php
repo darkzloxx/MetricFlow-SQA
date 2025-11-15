@@ -17,7 +17,7 @@ $consulta = BDConexion::getInstancia()->query($query);
 
 foreach ($DatosFormulario["permiso"] as $idPermiso) {
     $query = "INSERT INTO metrica_tarea "
-            . "VALUES ({$idPermiso},{$idMetrica} )";
+            . "VALUES ({$idPermiso},{$DatosFormulario["id"]} )";
     $consulta = BDConexion::getInstancia()->query($query);
     if (!$consulta) {
         BDConexion::getInstancia()->rollback();
@@ -25,6 +25,19 @@ foreach ($DatosFormulario["permiso"] as $idPermiso) {
         die(BDConexion::getInstancia()->errno);
     }
 }
+
+$query = "DELETE FROM iteracion_tarea "
+        . "WHERE id_tarea = {$DatosFormulario["id"]}";
+$consulta = BDConexion::getInstancia()->query($query);
+
+$query = "INSERT INTO iteracion_tarea "
+            . "VALUES ({$DatosFormulario["iteracion"]},{$DatosFormulario["id"]} )";
+    $consulta = BDConexion::getInstancia()->query($query);
+    if (!$consulta) {
+        BDConexion::getInstancia()->rollback();
+        //arrojar una excepcion
+        die(BDConexion::getInstancia()->errno);
+    }
 ?>
 <html>
     <head>
