@@ -28,11 +28,11 @@ if (!$consulta) {
     die(BDConexion::getInstancia()->errno);
 }
 
-$idMetrica = BDConexion::getInstancia()->insert_id;
+$idTarea = BDConexion::getInstancia()->insert_id;
 
 foreach ($DatosFormulario["permiso"] as $idPermiso) {
     $query = "INSERT INTO metrica_tarea "
-            . "VALUES ({$idPermiso},{$idMetrica} )";
+            . "VALUES ({$idPermiso},{$idTarea} )";
     $consulta = BDConexion::getInstancia()->query($query);
     if (!$consulta) {
         BDConexion::getInstancia()->rollback();
@@ -40,6 +40,17 @@ foreach ($DatosFormulario["permiso"] as $idPermiso) {
         die(BDConexion::getInstancia()->errno);
     }
 }
+
+
+    $query = "INSERT INTO iteracion_tarea "
+            . "VALUES ({$DatosFormulario["iteracion"]},{$idTarea} )";
+    $consulta = BDConexion::getInstancia()->query($query);
+    if (!$consulta) {
+        BDConexion::getInstancia()->rollback();
+        //arrojar una excepcion
+        die(BDConexion::getInstancia()->errno);
+    }
+
 
 BDConexion::getInstancia()->commit();
 BDConexion::getInstancia()->autocommit(true);

@@ -3,7 +3,8 @@ include_once '../lib/ControlAcceso.class.php';
 ControlAcceso::requierePermiso(PermisosSistema::PERMISO_PERMISOS);
 include_once '../modelo/Permiso.php';
 $id = $_GET["id"];
-
+date_default_timezone_set('UTC');
+$fecha = date("Y/m/d");
 ?>
 <html>
     <head>
@@ -46,10 +47,26 @@ $id = $_GET["id"];
                         <div class="form-group">
                             <label for="inputMail">Métricas asociadas:</label>
                             <?php 
+                            $proyectos = "SELECT m.* FROM metrica_tarea mt
+                            join metrica m on m.id_metrica = mt.id_metrica
+                            where mt.id_tarea = ". $_GET["id"] ;  
+                            $proyectos=BDConexion::getInstancia()->query($proyectos);
+                            $proyecto = $proyectos->fetch_all(MYSQLI_ASSOC); 
+                            $metricas = "";
+                            foreach ($proyecto as $Proyec) { 
+                                $metricas = $metricas .$Proyec['id_metrica'] . ","?>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" value="<?= $Proyec['id_metrica']; ?>" id="rol[<?= $$Proyec['id_metrica']; ?>]" name="permiso[<?= $Proyec['id_metrica']; ?>]" checked/>
+                                <label class="form-check-label" for="permiso" title = "<?= $Proyec['descripcion']; ?>">
+                                    <?= $Proyec['nombre']; ?>
+                                </label>
+                            </div>
+                        <?php } ?>
+                            <?php 
                             $id_proyecto = 1;
                             $proyectos = "SELECT m.* FROM proyecto p join metrica_modelo_calidad mm on mm.id_modelo = p.id_modelo
                             join metrica m on m.id_metrica = mm.id_metrica
-                            WHERE p.id_proyecto = ". $id_proyecto . " ORDER BY m.id_metrica asc"; 
+                            WHERE p.id_proyecto = ". $id_proyecto . " and m.id_metrica NOT IN (". substr($metricas, 0, -1) . ") ORDER BY m.id_metrica asc"; 
                             $proyectos=BDConexion::getInstancia()->query($proyectos);
                             $proyecto = $proyectos->fetch_all(MYSQLI_ASSOC); 
                             foreach ($proyecto as $Proyec) { ?>
@@ -59,7 +76,32 @@ $id = $_GET["id"];
                                     <?= $Proyec['nombre']; ?>
                                 </label>
                             </div>
-                        <?php } }?>
+                        <?php } ?> 
+                        
+                        <div class="form-group">
+                            <label for="inputNombre">Iteración - fase</label>
+                            <select id="iteracion" name="iteracion" class="form-control">
+                            <?php 
+                            $proyectos = "SELECT i.*, f.nombre, f.id_fase FROM iteracion i JOIN fase f on i.id_fase = f.id_fase
+                            WHERE ('".$fecha."' BETWEEN fecha_inicio and fecha_fin OR '".$fecha."' < fecha_fin ) and i.id_proyecto = ". $id_proyecto; 
+                            $proyectos=BDConexion::getInstancia()->query($proyectos);
+                            $proyecto = $proyectos->fetch_all(MYSQLI_ASSOC); 
+                            $proyectos2 = "SELECT i.*, f.nombre, f.id_fase FROM iteracion i JOIN fase f on i.id_fase = f.id_fase
+                            join iteracion_tarea it on it.id_iteracion = i.id_iteracion
+                            WHERE it.id_tarea = ". $_GET["id"]; 
+                            $proyectos2=BDConexion::getInstancia()->query($proyectos2);
+                            $proyecto2 = $proyectos2->fetch_all(MYSQLI_ASSOC); 
+                            foreach ($proyecto2 as $Proyec) { ?>
+                            <option value="<?= $Proyec['id_iteracion']; ?>" ><?= $Proyec['numero_iteracion']; ?> - <?= $Proyec['objetivo']; ?> - <?= $Proyec['nombre']; ?></option>
+                            <?php } 
+                            foreach ($proyecto as $Proyec) { ?>
+                            <option value="<?= $Proyec['id_iteracion']; ?>" ><?= $Proyec['numero_iteracion']; ?> - <?= $Proyec['objetivo']; ?> - <?= $Proyec['nombre']; ?></option>
+                            <?php } ?>
+                            </select>
+                        </div>                   
+                        
+                        
+                        <?php } ?>
                         </div>
                         <input type="hidden" name="id" class="form-control" id="id" value="<?= $_GET["id"]; ?>" >
                     </div>

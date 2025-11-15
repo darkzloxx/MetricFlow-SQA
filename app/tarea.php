@@ -38,18 +38,16 @@ $ColeccionPermisos = new ColeccionPermisos();
                             <th>Tarea</th>
                             <th>Descripción</th>
                             <th>Número de Iteración</th>
-                            <th>Métrica</th>
                             <th>Fase</th>
                             <th>Opciones</th>
                         </tr>
                         <tr>
                             <?php 
                             $id = 1;
-                            $proyectos = "SELECT distinct t.*,i.*,m.nombre as nombreMetrica ,f.nombre as nombreFase  
-                            FROM tarea t join metrica_tarea mt on t.id_tarea = mt.id_tarea
-                            join metrica m on m.id_metrica = mt.id_metrica
-                            join metrica_iteracion mi on m.id_metrica = mi.id_metrica
-                            join iteracion i on i.id_iteracion = mi.id_iteracion
+                            $proyectos = "SELECT distinct t.*,i.* ,f.nombre as nombreFase  
+                            FROM tarea t 
+                            join iteracion_tarea it on t.id_tarea = it.id_tarea
+                            join iteracion i on i.id_iteracion = it.id_iteracion
                             join fase f on f.id_fase = i.id_fase
                             where i.id_proyecto = ". $id . " ORDER BY t.id_tarea asc"; 
                             $proyectos=BDConexion::getInstancia()->query($proyectos);
@@ -59,7 +57,6 @@ $ColeccionPermisos = new ColeccionPermisos();
                                 <td><?= $Proyec['nombre']; ?></td>
                                 <td><?= $Proyec['descripcion']; ?></td>
                                 <td><?= $Proyec['numero_iteracion']; ?></td>
-                                <td><?= $Proyec['nombreMetrica']; ?></td>
                                 <td><?= $Proyec['nombreFase']; ?></td>
                                 <td>
                                     <a title="Ver detalle" href="tarea.ver.php?id=<?= $Proyec['id_tarea']; ?>">

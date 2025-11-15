@@ -3,6 +3,8 @@ include_once '../lib/ControlAcceso.Class.php';
 ControlAcceso::requierePermiso(PermisosSistema::PERMISO_USUARIOS);
 include_once '../modelo/ColeccionRoles.php';
 $Roles = new ColeccionRoles();
+date_default_timezone_set('UTC');
+$fecha = date("Y/m/d");
 ?>
 <html>
     <head>
@@ -59,8 +61,9 @@ $Roles = new ColeccionRoles();
                             <label for="inputNombre">Iteración - fase</label>
                             <select id="iteracion" name="iteracion" class="form-control">
                             <?php 
+                            
                             $proyectos = "SELECT i.*, f.nombre, f.id_fase FROM iteracion i JOIN fase f on i.id_fase = f.id_fase
-                            WHERE i.id_proyecto = ". $id_proyecto; 
+                            WHERE ('".$fecha."' BETWEEN fecha_inicio and fecha_fin OR '".$fecha."' < fecha_fin ) and i.id_proyecto = ". $id_proyecto; 
                             $proyectos=BDConexion::getInstancia()->query($proyectos);
                             $proyecto = $proyectos->fetch_all(MYSQLI_ASSOC); 
                             foreach ($proyecto as $Proyec) { ?>

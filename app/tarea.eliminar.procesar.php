@@ -19,6 +19,16 @@ if (!$consulta) {
     die(BDConexion::getInstancia()->errno);
 }
 
+$query = "DELETE FROM iteracion_tarea "
+        . "WHERE id_tarea = {$DatosFormulario["id"]}";
+$consulta = BDConexion::getInstancia()->query($query);
+
+if (!$consulta) {
+    BDConexion::getInstancia()->rollback();
+    //arrojar una excepcion
+    die(BDConexion::getInstancia()->errno);
+}
+
 $query = "DELETE FROM tarea "
         . "WHERE id_tarea = {$DatosFormulario["id"]}";
 
@@ -29,7 +39,6 @@ if (!$consulta) {
     //arrojar una excepcion
     die(BDConexion::getInstancia()->errno);
 }
-
 
 BDConexion::getInstancia()->commit();
 BDConexion::getInstancia()->autocommit(true);
