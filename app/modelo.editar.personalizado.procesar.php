@@ -22,7 +22,8 @@ try {
     // ============================================================
     // 🔹 Validaciones de entrada
     // ============================================================
-    $regexGeneral = "/^[A-Za-zÁÉÍÓÚáéíóúÑñ0-9 _\.\-\/\\():]+$/u";
+    $regexNombre = "/^[A-Za-zÁÉÍÓÚáéíóúÑñ0-9 _\.\-\/\\():]+$/u";
+    $regexDesc   = "/^[A-Za-zÁÉÍÓÚáéíóúÑñ0-9 .,()_\-\/\\:]+$/u";
 
     $idModelo = (int)($_POST['id'] ?? 0);
     $nombre = trim($_POST['nombre'] ?? '');
@@ -36,13 +37,14 @@ try {
         throw new Exception('Debe completar todos los campos obligatorios.');
     }
 
-    if (!preg_match($regexGeneral, $nombre)) {
-        throw new Exception('El nombre contiene caracteres no permitidos.');
+    if (!preg_match($regexNombre, $nombre)) {
+        throw new Exception('Solo se permiten letras (con o sin tilde), números, espacios, puntos, guiones, barras, paréntesis y dos puntos para el nombre.');
     }
 
-    if (!preg_match($regexGeneral, $descripcion)) {
-        throw new Exception('La descripción contiene caracteres no permitidos.');
+    if (!preg_match($regexDesc, $descripcion)) {
+        throw new Exception('Solo se permiten letras, números, espacios, comas, puntos, guiones, barras, paréntesis y dos puntos para la descripción.');
     }
+
 
     // ============================================================
     // 🔒 Validar que el modelo pertenece al usuario

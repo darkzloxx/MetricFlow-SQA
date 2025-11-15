@@ -142,7 +142,8 @@ $modelo = $res->fetch_assoc();
     <!-- ✅ Script -->
     <script>
         $(function() {
-            const regexGeneral = /^[A-Za-zÁÉÍÓÚáéíóúÑñ0-9 _.\-\/\\():]+$/;
+            const nombreRegex = /^[A-Za-zÁÉÍÓÚáéíóúÑñ0-9 _.\-\/\\():]+$/;
+            const descRegex = /^[A-Za-zÁÉÍÓÚáéíóúÑñ0-9 .,()_\-\/\\:]+$/;
             const nombreActual = <?= json_encode($modelo['nombre'] ?? ""); ?>;
             const descActual = <?= json_encode($modelo['descripcion'] ?? ""); ?>;
 
@@ -158,16 +159,16 @@ $modelo = $res->fetch_assoc();
                 if (!nombre) {
                     $('#nombreError').text('El nombre del modelo es obligatorio.').show();
                     valido = false;
-                } else if (!regexGeneral.test(nombre)) {
-                    $('#nombreError').text('Solo se permiten letras, números, espacios, puntos, guiones, barras, paréntesis y dos puntos.').show();
+                } else if (!nombreRegex.test(nombre)) {
+                    $('#nombreError').text('Solo se permiten letras (con o sin tilde), números, espacios, puntos, guiones, barras, paréntesis y dos puntos.').show();
                     valido = false;
                 }
 
                 if (!desc) {
                     $('#descError').text('La descripción es obligatoria.').show();
                     valido = false;
-                } else if (!regexGeneral.test(desc)) {
-                    $('#descError').text('Solo se permiten letras, números, espacios, puntos, guiones, barras, paréntesis y dos puntos.').show();
+                } else if (!descRegex.test(desc)) {
+                    $('#descError').text('Solo se permiten letras, números, espacios, comas, puntos, guiones, paréntesis, barras y dos puntos.').show();
                     valido = false;
                 }
 
@@ -187,8 +188,8 @@ $modelo = $res->fetch_assoc();
                 if (!confirm(resumen)) return false;
 
                 const form = $(this);
-                const data = form.serialize();
-
+                const data = form.serialize() + '&ajax=1';
+                
                 $.ajax({
                     url: form.attr('action'),
                     type: 'POST',
