@@ -20,11 +20,12 @@ try {
     $descripcion = trim($_POST['descripcion'] ?? '');
 
     if (!preg_match("/^[A-Za-zÁÉÍÓÚáéíóúÑñ0-9 _\.\-\/\\():]+$/u", $nombre)) {
-        throw new Exception("El nombre contiene caracteres no permitidos. Solo letras (con o sin tilde), puntos y guiones.");
+        throw new Exception("El nombre contiene caracteres no permitidos. Solo letras (con o sin tilde), números, puntos y guiones.");
     }
 
-    if (!preg_match("/^[A-Za-zÁÉÍÓÚáéíóúÑñ0-9 _\.\-\/\\():]+$/u", $descripcion)) {
-        throw new Exception("La descripción contiene caracteres no permitidos. Solo letras, números, puntos y guiones.");
+    if (!preg_match("/^[A-Za-zÁÉÍÓÚáéíóúÑñ0-9 .,()_\-\/\\:]+$/u", $descripcion)) {
+        throw new Exception( "La descripción contiene caracteres no permitidos. " .
+        "Permitidos: letras (con o sin tilde), números, espacios, comas, puntos, guiones, paréntesis, barras y dos puntos.");
     }
 
     // Verificar duplicado
@@ -107,7 +108,7 @@ try {
 
     header('Location: modelos.php?msg=' . urlencode('Modelo predeterminado creado correctamente.') . '&type=success');
     exit;
-}  catch (Exception $e) {
+} catch (Exception $e) {
     if (session_status() === PHP_SESSION_NONE) {
         session_start();
     }
@@ -132,4 +133,3 @@ try {
     header('Location: modelo.nuevo.predeterminado.php');
     exit;
 }
-

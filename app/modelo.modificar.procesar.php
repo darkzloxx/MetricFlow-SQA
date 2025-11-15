@@ -9,7 +9,7 @@ if (session_status() === PHP_SESSION_NONE) {
 
 $esAdmin = ControlAcceso::esAdminGlobal();
 $esSuper = ControlAcceso::esSuperAdminGlobal();
-$__isAjax = !empty($_POST['ajax']) || 
+$__isAjax = !empty($_POST['ajax']) ||
     (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest');
 
 if (!($esAdmin || $esSuper)) {
@@ -26,7 +26,8 @@ if (!($esAdmin || $esSuper)) {
 $cn = BDConexion::getInstancia();
 
 try {
-    $regexGeneral = "/^[A-Za-zÁÉÍÓÚáéíóúÑñ0-9 _\.\-\/\\():]+$/u";
+    $regexNombre = "/^[A-Za-zÁÉÍÓÚáéíóúÑñ0-9 _\.\-\/\\():]+$/u"; // Nombre NO permite comas
+    $regexDesc   = "/^[A-Za-zÁÉÍÓÚáéíóúÑñ0-9 .,()_\-\/\\:]+$/u"; // Descripción SÍ permite comas
 
     $idModelo = (int)($_POST['id_modelo'] ?? 0);
     $nombre = trim($_POST['nombre'] ?? '');
@@ -43,12 +44,14 @@ try {
         throw new Exception('Debe completar todos los campos obligatorios.');
     }
 
-    if (!preg_match($regexGeneral, $nombre)) {
-        throw new Exception('El nombre contiene caracteres no permitidos.');
+    if (!preg_match($regexNombre, $nombre)) {
+        throw new Exception("Solo se permiten letras (con o sin tilde), números, espacios, puntos, guiones, barras, paréntesis y dos puntos.");
     }
-    if (!preg_match($regexGeneral, $descripcion)) {
-        throw new Exception('La descripción contiene caracteres no permitidos.');
+
+    if (!preg_match($regexDesc, $descripcion)) {
+        throw new Exception("Solo se permiten letras (con o sin tilde), números, espacios, puntos, guiones, barras, paréntesis y dos puntos.");
     }
+
 
     // === Validar unicidad del nombre (excluyendo el mismo modelo) ===
     $stmt = $cn->prepare("SELECT COUNT(*) AS c FROM modelo_calidad WHERE nombre = ? AND id_modelo <> ?");
@@ -132,7 +135,6 @@ try {
     $_SESSION['flash_message'] = ['type' => 'success', 'text' => "Modelo \"$nombre\" actualizado correctamente."];
     header("Location: modelos.php");
     exit;
-
 } catch (Exception $ex) {
     if ($cn) $cn->rollback();
 

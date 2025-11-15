@@ -284,7 +284,7 @@ if ($rsS = $cn->query("SELECT id_metrica FROM metrica_modelo_calidad WHERE id_mo
                 if (!desc) {
                     $('#descError').text('La descripción es obligatoria.').show();
                     valido = false;
-                } else if (!regexGeneral.test(desc)) {
+                } else if (!/^[A-Za-zÁÉÍÓÚáéíóúÑñ0-9 .,()_\-\/\\:]+$/u.test(desc)) {
                     $('#descError').text('Solo se permiten letras (con o sin tilde), números, espacios, puntos, guiones, barras, paréntesis y dos puntos.').show();
                     valido = false;
                 }
@@ -348,8 +348,9 @@ if ($rsS = $cn->query("SELECT id_metrica FROM metrica_modelo_calidad WHERE id_mo
                         var json = typeof resp === 'object' ? resp : JSON.parse(resp);
                         if (json && json.success) {
                             // redirigir con mensaje flash, o mostrar alerta de éxito
-                            var msg = encodeURIComponent(json.message || 'Modelo actualizado correctamente.');
-                            window.location.href = 'modelos.php?msg=' + msg + '&type=success';
+                            sessionStorage.setItem('flash_success', json.message || 'Modelo actualizado correctamente.');
+                            window.location.href = 'modelos.php';
+
                         } else {
                             mostrarAlerta((json && json.error) || 'Error al actualizar el modelo.', 'danger');
                         }
@@ -495,12 +496,15 @@ if ($rsS = $cn->query("SELECT id_metrica FROM metrica_modelo_calidad WHERE id_mo
                 })
             );
 
+            const descRegex = /^[A-Za-zÁÉÍÓÚáéíóúÑñ0-9 .,()_\-\/\\:]+$/u;
+
             descInput.on("input", () =>
-                validarCampo(descInput, regexGeneral, {
+                validarCampo(descInput, descRegex, {
                     requerido: "La descripción es obligatoria.",
-                    invalido: "Solo se permiten letras, números, espacios, puntos, guiones, barras, paréntesis y dos puntos."
+                    invalido: "Solo se permiten: letras, números, espacios, comas, puntos, guiones, paréntesis, barras y dos puntos."
                 })
             );
+
         });
     </script>
 

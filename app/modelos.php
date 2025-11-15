@@ -195,16 +195,30 @@ if (!empty($proyectos)) {
                 <h3>Modelos de calidad</h3>
             </div>
             <div class="card-body">
-                <?php if (isset($_SESSION['flash_message'])): ?>
-                    <?php $flash = $_SESSION['flash_message'];
-                    unset($_SESSION['flash_message']); ?>
-                    <div class="alert alert-<?= htmlspecialchars($flash['type']); ?> alert-dismissible fade show" role="alert">
-                        <?= htmlspecialchars($flash['text']); ?>
-                        <button type="button" class="close" data-dismiss="alert" aria-label="Cerrar">
-                            <span aria-hidden="true">&times;</span>
-                        </button>
-                    </div>
+                <div id="alertContainer"></div>
+                <?php if (!empty($_GET['msg'])): ?>
+                    <script>
+                        document.addEventListener("DOMContentLoaded", function() {
+                            const msg = <?= json_encode($_GET['msg']); ?>;
+                            const type = <?= json_encode($_GET['type'] ?? 'info'); ?>;
+
+                            const alertHtml = `
+                <div class="alert alert-${type} alert-dismissible fade show mt-3" role="alert">
+                    ${msg}
+                    <button type="button" class="close" data-dismiss="alert" aria-label="Cerrar">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+            `;
+
+                            document.getElementById("alertContainer")
+                                .insertAdjacentHTML("afterbegin", alertHtml);
+
+                            setTimeout(() => $('.alert').alert('close'), 3500);
+                        });
+                    </script>
                 <?php endif; ?>
+
                 <?php if ($esAdminGlobal || $esSuperAdmin): ?>
                     <!-- ===========================================
                  🧩 VISTA ADMIN/SUPERADMIN: SOLO MODELOS GLOBALES
@@ -417,6 +431,31 @@ if (!empty($proyectos)) {
                 }
             });
         }
+        // ===============================
+        // 🔹 FLASH DESDE AJAX (sessionStorage)
+        // ===============================
+        document.addEventListener("DOMContentLoaded", function() {
+            const msg = sessionStorage.getItem("flash_success");
+            if (msg) {
+                sessionStorage.removeItem("flash_success");
+
+                const alertHtml = `
+            <div class="alert alert-success alert-dismissible fade show mt-3" role="alert">
+                ${msg}
+                <button type="button" class="close" data-dismiss="alert" aria-label="Cerrar">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+        `;
+
+                // Insertar al inicio del contenido principal
+                document.querySelector(".card-body").insertAdjacentHTML("afterbegin", alertHtml);
+
+                setTimeout(() => {
+                    $('.alert').alert('close');
+                }, 3000);
+            }
+        });
     </script>
 </body>
 

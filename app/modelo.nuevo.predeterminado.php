@@ -468,12 +468,13 @@ $modelosBase = $rsMb ? $rsMb->fetch_all(MYSQLI_ASSOC) : [];
 
       descInput.on("input", function() {
         const val = descInput.val().trim();
-        const descRegex = /^[A-Za-zÁÉÍÓÚáéíóúÑñ0-9 _.\-\/\\():]+$/;
+        const descRegex = /^[A-Za-zÁÉÍÓÚáéíóúÑñ0-9 .,()_\-\/\\:]+$/u;
         if (val === "") {
           errorDesc.text("La descripción es obligatoria.");
           descInput.addClass("is-invalid");
         } else if (!descRegex.test(val)) {
-          errorDesc.text("Solo se permiten letras, números, puntos y guiones.");
+          errorDesc.text("La descripción contiene caracteres no permitidos. " +
+        "Permitidos: letras (con o sin tilde), números, espacios, comas, puntos, guiones, paréntesis, barras y dos puntos.");
           descInput.addClass("is-invalid");
         } else {
           errorDesc.text("");
@@ -490,7 +491,7 @@ $modelosBase = $rsMb ? $rsMb->fetch_all(MYSQLI_ASSOC) : [];
         const nombre = nombreInput.val().trim();
         const desc = descInput.val().trim();
         const nombreRegex = /^[A-Za-zÁÉÍÓÚáéíóúÑñ0-9 _.\-\/\\():]+$/;
-        const descRegex = /^[A-Za-zÁÉÍÓÚáéíóúÑñ0-9 _.\-\/\\():]+$/;
+        const descRegex = /^[A-Za-zÁÉÍÓÚáéíóúÑñ0-9 .,()_\-\/\\:]+$/u;
 
         // Validar nombre y descripción
         if (nombre === "") {
@@ -511,7 +512,8 @@ $modelosBase = $rsMb ? $rsMb->fetch_all(MYSQLI_ASSOC) : [];
           descInput.addClass("is-invalid");
           valid = false;
         } else if (!descRegex.test(desc)) {
-          errorDesc.text("Solo se permiten letras, números, puntos y guiones.");
+          errorDesc.text("La descripción contiene caracteres no permitidos. " +
+        "Permitidos: letras (con o sin tilde), números, espacios, comas, puntos, guiones, paréntesis, barras y dos puntos.");
           descInput.addClass("is-invalid");
           valid = false;
         } else {
