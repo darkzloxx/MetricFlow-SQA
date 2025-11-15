@@ -76,7 +76,7 @@ if ($existenProyectos === 0) {
         'paso' => 1,
         'texto' => 'No existen proyectos en el sistema.',
         'accion' => 'Creá un nuevo proyecto desde esta pantalla.',
-        'responsable' => 'Administrador o SuperAdmin',
+        'responsable' => 'Administrador',
         'icono' => 'oi-plus',
         'estado' => 'pendiente',
     ];
@@ -179,7 +179,7 @@ foreach ($proyectos as $pr) {
             $next = [
                 'paso' => 3,
                 'texto' => 'Sin modelo de calidad asignado.',
-                'accion' => 'Seleccioná o creá un modelo personalizado basado en uno global existente (debe tener métricas).',
+                'accion' => 'Seleccioná un modelo base o creá un modelo personalizado basado en uno(debe tener métricas).',
                 'responsable' => 'Gerente de Calidad o Líder de Proyecto',
                 'icono' => 'oi-layers',
                 'estado' => 'pendiente'
