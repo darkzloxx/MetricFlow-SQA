@@ -23,6 +23,7 @@ class PermisosSistema
     public const PERMISO_ROLES = 'ABM Roles';
     public const REGISTRO_METRICAS = 'Registro de Métricas Ejecutadas';
     public const ABM_ITERACIONES = 'Gestión de Iteraciones';
+    public const GESTION_TAREAS = 'Gestión de Tareas';
     // Rol por defecto para auto-registro
     public const ROL_ESTANDAR = 'Espectador';
 }
@@ -243,25 +244,25 @@ class ControlAcceso
             ? $_SESSION['usuario']
             : null;
     }
-   public static function rolUsuarioEnProyecto($idProyecto)
-{
-    if (!isset($_SESSION['usuario']) || !is_object($_SESSION['usuario'])) {
-        return null;
-    }
-    $usuario = $_SESSION['usuario'];
-    if (!isset($usuario->proyectos) || !is_array($usuario->proyectos)) {
-        return null;
-    }
-    foreach ($usuario->proyectos as $p) {
-        // ⚙️ Cambiado id_proyecto → id
-        if ((int)$p->id === (int)$idProyecto) {
-            if (isset($p->roles) && is_array($p->roles) && count($p->roles)) {
-                return $p->roles[0]->nombre; // devuelve el nombre del primer rol asignado
+    public static function rolUsuarioEnProyecto($idProyecto)
+    {
+        if (!isset($_SESSION['usuario']) || !is_object($_SESSION['usuario'])) {
+            return null;
+        }
+        $usuario = $_SESSION['usuario'];
+        if (!isset($usuario->proyectos) || !is_array($usuario->proyectos)) {
+            return null;
+        }
+        foreach ($usuario->proyectos as $p) {
+            // ⚙️ Cambiado id_proyecto → id
+            if ((int)$p->id === (int)$idProyecto) {
+                if (isset($p->roles) && is_array($p->roles) && count($p->roles)) {
+                    return $p->roles[0]->nombre; // devuelve el nombre del primer rol asignado
+                }
             }
         }
+        return null;
     }
-    return null;
-}
 
 
     /**

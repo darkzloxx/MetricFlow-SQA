@@ -1,6 +1,6 @@
 <?php
 include_once '../lib/ControlAcceso.Class.php';
-ControlAcceso::requierePermiso(PermisosSistema::PERMISO_USUARIOS);
+ControlAcceso::requierePermiso(PermisosSistema::GESTION_TAREAS);
 include_once '../modelo/ColeccionRoles.php';
 $Roles = new ColeccionRoles();
 date_default_timezone_set('UTC');
@@ -70,6 +70,24 @@ $fecha = date("Y/m/d");
                             <option value="<?= $Proyec['id_iteracion']; ?>" ><?= $Proyec['numero_iteracion']; ?> - <?= $Proyec['objetivo']; ?> - <?= $Proyec['nombre']; ?></option>
                             <?php } ?>
                             </select>
+
+                            <div class="form-group mt-3">
+                                <label for="metricas_existentes">Métricas existentes:</label>
+                                <div>
+                                <?php
+                                    $metricas = BDConexion::getInstancia()->query("SELECT * FROM metrica ORDER BY id_metrica ASC");
+                                    $listaMetricas = $metricas->fetch_all(MYSQLI_ASSOC);
+                                    foreach ($listaMetricas as $metrica) {
+                                ?>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" value="<?= $metrica['id_metrica']; ?>" id="metrica_<?= $metrica['id_metrica']; ?>" name="permiso[]" />
+                                        <label class="form-check-label" for="metrica_<?= $metrica['id_metrica']; ?>" title="<?= $metrica['descripcion']; ?>">
+                                            <?= $metrica['nombre']; ?>
+                                        </label>
+                                    </div>
+                                <?php } ?>
+                                </div>
+                            </div>
                         </div>
                         <hr />
                     </div>

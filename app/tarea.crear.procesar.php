@@ -1,6 +1,6 @@
 <?php
 include_once '../lib/ControlAcceso.Class.php';
-ControlAcceso::requierePermiso(PermisosSistema::PERMISO_USUARIOS);
+ControlAcceso::requierePermiso(PermisosSistema::GESTION_TAREAS);
 include_once '../modelo/BDConexion.Class.php';
 $DatosFormulario = $_POST;
 BDConexion::getInstancia()->autocommit(false);
@@ -8,54 +8,76 @@ BDConexion::getInstancia()->begin_transaction();
 
 $nombre = $DatosFormulario["nombre"];
 
+
 $resultado = "";
 $mensaje = "Ha ocurrido un error.";
 
-$query = "select * from tarea where nombre = '{$nombre}'";
-$consulta = BDConexion::getInstancia()->query($query);
-
-if ($consulta->num_rows > 0){
-	$resultado = false;
-	$mensaje = "Ya existe una tarea con el nombre ingresado";
+// Validación de campos requeridos
+if (empty($DatosFormulario["nombre"])) {
+    $resultado = false;
+    $mensaje = "El nombre de la tarea es obligatorio.";
+} elseif (!preg_match('/^[A-Za-zÁÉÍÓÚáéíóúÑñ0-9 _.\-\/\\():]+$/', $DatosFormulario["nombre"])) {
+    $resultado = false;
+    $mensaje = "El nombre solo puede contener letras, números, espacios, puntos, guiones, barras, paréntesis y dos puntos.";
+} elseif (empty($DatosFormulario["descripcion"])) {
+    $resultado = false;
+    $mensaje = "La descripción de la tarea es obligatoria.";
+} elseif (!preg_match('/^[A-Za-zÁÉÍÓÚáéíóúÑñ0-9 .,()_\-\/\\:]+$/', $DatosFormulario["descripcion"])) {
+    $resultado = false;
+    $mensaje = "La descripción solo puede contener letras, números, espacios, puntos, guiones, barras, paréntesis y dos puntos.";
+} elseif (!isset($DatosFormulario["permiso"]) || !is_array($DatosFormulario["permiso"]) || count($DatosFormulario["permiso"]) == 0) {
+    $resultado = false;
+    $mensaje = "Debe seleccionar al menos una métrica asociada.";
+} elseif (empty($DatosFormulario["iteracion"])) {
+    $resultado = false;
+    $mensaje = "Debe seleccionar una iteración.";
 } else {
-
-$query = "INSERT INTO tarea "
-        . "VALUES (null,'{$DatosFormulario["nombre"]}','{$DatosFormulario["descripcion"]}')";
-$consulta = BDConexion::getInstancia()->query($query);
-if (!$consulta) {
-    BDConexion::getInstancia()->rollback();
-    //arrojar una excepcion
-    die(BDConexion::getInstancia()->errno);
-}
-
-$idTarea = BDConexion::getInstancia()->insert_id;
-
-foreach ($DatosFormulario["permiso"] as $idPermiso) {
-    $query = "INSERT INTO metrica_tarea "
-            . "VALUES ({$idPermiso},{$idTarea} )";
+    // Validar que el nombre no exista
+    $query = "SELECT * FROM tarea WHERE nombre = '" . BDConexion::getInstancia()->real_escape_string($nombre) . "'";
     $consulta = BDConexion::getInstancia()->query($query);
-    if (!$consulta) {
-        BDConexion::getInstancia()->rollback();
-        //arrojar una excepcion
-        die(BDConexion::getInstancia()->errno);
+    if ($consulta->num_rows > 0) {
+        $resultado = false;
+        $mensaje = "Ya existe una tarea con el nombre ingresado.";
+    } else {
+        // Validar que la iteración exista
+        $idIteracion = intval($DatosFormulario["iteracion"]);
+        $query = "SELECT * FROM iteracion WHERE id_iteracion = $idIteracion";
+        $consultaIter = BDConexion::getInstancia()->query($query);
+        if ($consultaIter->num_rows == 0) {
+            $resultado = false;
+            $mensaje = "La iteración seleccionada no existe.";
+        } else {
+            // Crear la tarea
+            $query = "INSERT INTO tarea (nombre, descripcion) VALUES ('" . BDConexion::getInstancia()->real_escape_string($DatosFormulario["nombre"]) . "', '" . BDConexion::getInstancia()->real_escape_string($DatosFormulario["descripcion"]) . "')";
+            $consulta = BDConexion::getInstancia()->query($query);
+            if (!$consulta) {
+                BDConexion::getInstancia()->rollback();
+                die(BDConexion::getInstancia()->errno);
+            }
+            $idTarea = BDConexion::getInstancia()->insert_id;
+            // Insertar métricas asociadas
+            foreach ($DatosFormulario["permiso"] as $idPermiso) {
+                $idPermiso = intval($idPermiso);
+                $query = "INSERT INTO metrica_tarea (id_metrica, id_tarea) VALUES ($idPermiso, $idTarea)";
+                $consulta = BDConexion::getInstancia()->query($query);
+                if (!$consulta) {
+                    BDConexion::getInstancia()->rollback();
+                    die(BDConexion::getInstancia()->errno);
+                }
+            }
+            // Insertar iteración asociada
+            $query = "INSERT INTO iteracion_tarea (id_iteracion, id_tarea) VALUES ($idIteracion, $idTarea)";
+            $consulta = BDConexion::getInstancia()->query($query);
+            if (!$consulta) {
+                BDConexion::getInstancia()->rollback();
+                die(BDConexion::getInstancia()->errno);
+            }
+            BDConexion::getInstancia()->commit();
+            BDConexion::getInstancia()->autocommit(true);
+            $resultado = true;
+            $mensaje = "Operación Realizada con Éxito";
+        }
     }
-}
-
-
-    $query = "INSERT INTO iteracion_tarea "
-            . "VALUES ({$DatosFormulario["iteracion"]},{$idTarea} )";
-    $consulta = BDConexion::getInstancia()->query($query);
-    if (!$consulta) {
-        BDConexion::getInstancia()->rollback();
-        //arrojar una excepcion
-        die(BDConexion::getInstancia()->errno);
-    }
-
-
-BDConexion::getInstancia()->commit();
-BDConexion::getInstancia()->autocommit(true);
-$resultado = true;
-$mensaje = "Operación Realizada con Éxito";
 }
 ?>
 <html>
