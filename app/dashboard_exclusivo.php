@@ -1934,44 +1934,11 @@ switch (strtoupper(str_replace(' ', '_', trim((string)$estadoProyecto)))) {
         },
 
         // 🔹 Bloque único de texto centrado geométricamente
-        graphic: [{
-          type: 'text',
-          left: 'center',
-          top: 'middle',
-          position: [0, 0],
-          // centrado geométrico estable (pantalla y export)
-          z: 100,
-          silent: true,
-          bounding: 'raw',
-          style: {
-            text: `{val|${avg}%}` + '\n' + `{sub|Cumplimiento}` + '\n' + `{cnt|(${totalMetricas} métricas)}`,
-            rich: {
-              val: {
-                fontSize: 34,
-                fontWeight: 700,
-                fill: '#212529',
-                lineHeight: 36
-              },
-              sub: {
-                fontSize: 14,
-                fill: '#6c757d',
-                lineHeight: 18
-              },
-              cnt: {
-                fontSize: 12,
-                fill: '#6c757d',
-                lineHeight: 16
-              }
-            },
-            align: 'center',
-            verticalAlign: 'middle'
-          }
-        }],
-
+        graphic: [],
         series: [{
           type: 'pie',
           // centro geométrico
-          radius: ['45%', '70%'],
+          radius: ['30%', '60%'],
           center: ['50%', '50%'],
           label: {
             formatter: '{b}\n{d}%',

@@ -511,19 +511,20 @@
                                                                     <span class="oi oi-lock-locked"></span>
                                                                 </button>
 
-                                                            <?php elseif (!$yaPlanificada): ?>
-                                                                <a href="metrica.planificar.php?id=<?= $idM; ?>&proyecto=<?= $proy['id_proyecto']; ?>"
-                                                                    class="btn btn-outline-success"
-                                                                    title="Planificar valor">
-                                                                    <span class="oi oi-spreadsheet"></span>
-                                                                </a>
-
-                                                            <?php else: ?>
+                                                            <?php elseif ($valorEjec !== null): ?>
                                                                 <button class="btn btn-outline-success" disabled
-                                                                    title="Métrica ya planificada en esta iteración">
+                                                                    title="La métrica ya tiene valor ejecutado, no se puede modificar lo planificado">
                                                                     <span class="oi oi-lock-locked"></span>
                                                                 </button>
+
+                                                            <?php else: ?>
+                                                                <a href="metrica.planificar.php?id=<?= $idM; ?>&proyecto=<?= $proy['id_proyecto']; ?>"
+                                                                    class="btn btn-outline-success"
+                                                                    title="<?= $yaPlanificada ? 'Modificar valor planificado' : 'Planificar valor'; ?>">
+                                                                    <span class="oi oi-spreadsheet"></span>
+                                                                </a>
                                                             <?php endif; ?>
+
 
                                                             <!-- EJECUTAR -->
                                                             <?php if ($iter && $yaPlanificada): ?>
