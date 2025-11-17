@@ -61,7 +61,7 @@ if ($nombre === "") {
         $cn->autocommit(true);
 
         unset($_SESSION['old']);
-        $_SESSION['flash'] = ["success", "Tarea creada exitosamente. 🚀"];
+        $_SESSION['flash'] = ["success", "Tarea creada exitosamente."];
         header("Location: tarea.php");
         exit;
     }
