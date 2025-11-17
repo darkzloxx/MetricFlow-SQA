@@ -186,10 +186,10 @@ unset($_SESSION['form_data']);
                     <!-- 🔹 OBJETIVO -->
                     <div class="form-group">
                         <label for="objetivo">Objetivo de la Iteración</label>
-                        <input type="text" name="objetivo" id="objetivo" class="form-control"
-                            placeholder="Ejemplo: Planificación del sprint"
-                            value="<?= htmlspecialchars($form['objetivo'] ?? '') ?>">
+                        <textarea name="objetivo" id="objetivo" rows="3" class="form-control"
+                            placeholder="Describa el objetivo principal de esta iteración..."><?= htmlspecialchars($form['objetivo'] ?? '') ?></textarea>
                     </div>
+
 
                 </div>
 

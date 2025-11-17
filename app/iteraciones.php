@@ -17,15 +17,19 @@ $idUsuario = (int)$usr->id;
 // =====================================================
 $sqlIter = "
     SELECT i.id_iteracion, i.numero_iteracion, i.fecha_inicio, i.fecha_fin,
-           i.objetivo, f.nombre AS fase, p.nombre AS proyecto
+           i.objetivo, f.nombre AS fase, p.nombre AS proyecto,
+           COUNT(mi.id_metrica) AS tiene_metricas
     FROM iteracion i
     JOIN fase f ON f.id_fase = i.id_fase
     JOIN proyecto p ON p.id_proyecto = i.id_proyecto
     JOIN usuario_proyecto up ON up.id_proyecto = p.id_proyecto
     JOIN rol r ON r.id = up.id_rol
+    LEFT JOIN metrica_iteracion mi ON mi.id_iteracion = i.id_iteracion
     WHERE up.id_usuario = {$idUsuario}
-      AND LOWER(r.nombre) IN ('líder', 'lider de proyecto', 'líder de proyecto')
+      AND LOWER(r.nombre) LIKE '%líder%'
+    GROUP BY i.id_iteracion
     ORDER BY p.nombre ASC, i.numero_iteracion ASC";
+
 
 $rs = $cn->query($sqlIter);
 $iteraciones = $rs ? $rs->fetch_all(MYSQLI_ASSOC) : [];
@@ -126,20 +130,50 @@ $iteraciones = $rs ? $rs->fetch_all(MYSQLI_ASSOC) : [];
                             <td><?= htmlspecialchars($it['fecha_inicio']); ?></td>
                             <td><?= htmlspecialchars($it['fecha_fin']); ?></td>
                             <td>
-                                <a href="iteracion.ver.php?id=<?= $it['id_iteracion']; ?>" class="btn btn-outline-primary" title="Ver">
+                                <!-- 🔹 Botón Ver SIEMPRE disponible -->
+                                <a href="iteracion.ver.php?id=<?= $it['id_iteracion']; ?>"
+                                    class="btn btn-outline-primary" title="Ver">
                                     <span class="oi oi-eye"></span>
                                 </a>
-                                <a href="iteracion.modificar.php?id=<?= $it['id_iteracion']; ?>" class="btn btn-outline-warning" title="Editar">
-                                    <span class="oi oi-pencil"></span>
-                                </a>
-                                <form action="iteracion.eliminar.procesar.php" method="post" style="display:inline-block;"
-                                    onsubmit="return confirm('¿Eliminar esta iteración? Esta acción no se puede deshacer.');">
-                                    <input type="hidden" name="id" value="<?= $it['id_iteracion']; ?>">
-                                    <button type="submit" class="btn btn-outline-danger" title="Eliminar">
-                                        <span class="oi oi-trash"></span>
+
+                                <?php if ((int)$it['tiene_metricas'] === 0): ?>
+
+                                    <!-- 🟢 EDITAR habilitado -->
+                                    <a href="iteracion.modificar.php?id=<?= $it['id_iteracion']; ?>"
+                                        class="btn btn-outline-warning" title="Editar">
+                                        <span class="oi oi-pencil"></span>
+                                    </a>
+
+                                    <!-- 🟢 ELIMINAR habilitado -->
+                                    <form action="iteracion.eliminar.procesar.php" method="post"
+                                        style="display:inline-block;"
+                                        onsubmit="return confirm('¿Eliminar esta iteración? Esta acción no se puede deshacer.');">
+                                        <input type="hidden" name="id" value="<?= $it['id_iteracion']; ?>">
+                                        <button type="submit" class="btn btn-outline-danger" title="Eliminar">
+                                            <span class="oi oi-trash"></span>
+                                        </button>
+                                    </form>
+
+                                <?php else: ?>
+
+                                    <!-- 🔒 EDITAR deshabilitado -->
+                                    <button class="btn btn-outline-warning disabled"
+                                        data-toggle="tooltip"
+                                        title="No se puede editar: tiene métricas planificadas">
+                                        <span class="oi oi-lock-locked"></span>
                                     </button>
-                                </form>
+
+                                    <!-- 🔒 ELIMINAR deshabilitado -->
+                                    <button class="btn btn-outline-danger disabled"
+                                        data-toggle="tooltip"
+                                        title="No se puede eliminar: tiene métricas planificadas">
+                                        <span class="oi oi-lock-locked"></span>
+                                    </button>
+
+                                <?php endif; ?>
+
                             </td>
+
                         </tr>
                     <?php endforeach; ?>
                 </tbody>

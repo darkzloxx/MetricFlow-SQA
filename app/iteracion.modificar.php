@@ -77,9 +77,11 @@ $iteraciones = $resI ? $resI->fetch_all(MYSQLI_ASSOC) : [];
                     <!-- Objetivo -->
                     <div class="form-group">
                         <label>Objetivo</label>
-                        <input type="text" name="objetivo" required class="form-control"
-                            value="<?= htmlspecialchars($iteracion['objetivo']); ?>">
+                        <textarea name="objetivo" required class="form-control" rows="4"><?= htmlspecialchars($iteracion['objetivo']); ?></textarea>
                     </div>
+
+
+
 
                     <!-- Fechas -->
                     <div class="form-group">
@@ -198,6 +200,44 @@ $iteraciones = $resI ? $resI->fetch_all(MYSQLI_ASSOC) : [];
             });
 
         });
+document.getElementById("formIteracion").addEventListener("submit", function(e) {
+    const objetivoActual = <?= json_encode($iteracion['objetivo']); ?>;
+    const inicioActual = "<?= $iteracion['fecha_inicio']; ?>";
+    const finActual = "<?= $iteracion['fecha_fin']; ?>";
+
+    const nuevoObjetivo = document.querySelector("textarea[name='objetivo']").value.trim();
+    const nuevoInicio = document.getElementById("fecha_inicio").value;
+    const nuevoFin = document.getElementById("fecha_fin").value;
+
+    let cambios = [];
+
+    // Detecta cambio en objetivo con texto exacto
+    if (nuevoObjetivo !== objetivoActual) {
+        cambios.push(`- Objetivo:\n   "${objetivoActual}"\n   → "${nuevoObjetivo}"`);
+    }
+
+    // Detecta cambio en fecha de inicio
+    if (nuevoInicio !== inicioActual) {
+        cambios.push(`- Fecha Inicio: ${inicioActual} → ${nuevoInicio}`);
+    }
+
+    // Detecta cambio en fecha de fin
+    if (nuevoFin !== finActual) {
+        cambios.push(`- Fecha Fin: ${finActual} → ${nuevoFin}`);
+    }
+
+    if (cambios.length === 0) {
+        alert("No se detectaron cambios.");
+        e.preventDefault();
+        return;
+    }
+
+    if (!confirm("Cambios detectados:\n\n" + cambios.join("\n\n") + "\n\n¿Confirmar actualización?")) {
+        e.preventDefault();
+    }
+});
+
+
     </script>
 
 </body>
