@@ -1,86 +1,88 @@
 <?php
-include_once '../lib/ControlAcceso.class.php';
+include_once '../lib/ControlAcceso.Class.php';
 ControlAcceso::requierePermiso(PermisosSistema::ABM_ITERACIONES);
 include_once '../modelo/BDConexion.Class.php';
-
-$DatosFormulario = $_POST;
-$idIteracion = (int)$DatosFormulario["id"];
 
 $cn = BDConexion::getInstancia();
 $cn->autocommit(false);
 $cn->begin_transaction();
 
-$resultado = false;
-$mensaje = "Ha ocurrido un error.";
+$usr = ControlAcceso::usuarioActual();
+$idUsuario = (int)$usr->id;
+$idIter = (int)($_POST['id'] ?? 0);
 
-// 🔹 1. Verificar si la iteración tiene tareas asociadas
-$sqlTareas = "SELECT 1 FROM iteracion_tarea WHERE id_iteracion = ? LIMIT 1";
-$stmtTareas = $cn->prepare($sqlTareas);
-$stmtTareas->bind_param('i', $idIteracion);
-$stmtTareas->execute();
-$resTareas = $stmtTareas->get_result();
+$ok = false;
+$mensaje = "Error inesperado.";
 
-if ($resTareas && $resTareas->num_rows > 0) {
-    $mensaje = "❌ La iteración no puede eliminarse porque tiene tareas asociadas.";
-} else {
-    // 🔹 2. Verificar si la iteración tiene métricas planificadas o ejecutadas
-    $sqlMetricas = "SELECT 1 FROM metrica_iteracion WHERE id_iteracion = ? LIMIT 1";
-    $stmtMetricas = $cn->prepare($sqlMetricas);
-    $stmtMetricas->bind_param('i', $idIteracion);
-    $stmtMetricas->execute();
-    $resMetricas = $stmtMetricas->get_result();
+// 1️⃣ Verificar existencia de iteración + rol de líder en ese proyecto
+$sqlCheck = "
+    SELECT i.id_proyecto
+    FROM iteracion i
+    JOIN proyecto p ON p.id_proyecto = i.id_proyecto
+    JOIN usuario_proyecto up ON up.id_proyecto = p.id_proyecto
+    JOIN rol r ON r.id = up.id_rol
+    WHERE i.id_iteracion = ?
+      AND up.id_usuario = ?
+      AND LOWER(r.nombre) LIKE '%líder%'
+    LIMIT 1
+";
+$stmt = $cn->prepare($sqlCheck);
+$stmt->bind_param("ii", $idIter, $idUsuario);
+$stmt->execute();
+$res = $stmt->get_result()->fetch_assoc();
+$stmt->close();
 
-    if ($resMetricas && $resMetricas->num_rows > 0) {
-        $mensaje = "⚠️ La iteración no puede eliminarse porque tiene métricas planificadas o ejecutadas.";
-    } else {
-        // 🔹 3. Eliminar la iteración si no tiene dependencias
-        $sqlDelete = "DELETE FROM iteracion WHERE id_iteracion = ?";
-        $stmtDel = $cn->prepare($sqlDelete);
-        $stmtDel->bind_param('i', $idIteracion);
-
-        if ($stmtDel->execute()) {
-            $cn->commit();
-            $resultado = true;
-            $mensaje = "✅ Iteración eliminada correctamente.";
-        } else {
-            $cn->rollback();
-            $mensaje = "Error al eliminar la iteración: " . $stmtDel->error;
-        }
-        $stmtDel->close();
-    }
-
-    $stmtMetricas->close();
+if (!$res) {
+    $mensaje = "No tenés permisos para eliminar esta iteración.";
+    goto fin;
 }
-$stmtTareas->close();
 
+$idProyecto = (int)$res['id_proyecto'];
+
+// 2️⃣ Verificar si tiene métricas ejecutadas
+$sqlCheckMetrics = "
+    SELECT COUNT(*) AS c
+    FROM metrica_iteracion
+    WHERE id_iteracion = ?
+      AND valor_ejecutado IS NOT NULL
+      AND valor_ejecutado <> ''
+";
+$stmt = $cn->prepare($sqlCheckMetrics);
+$stmt->bind_param("i", $idIter);
+$stmt->execute();
+$r = $stmt->get_result()->fetch_assoc();
+$stmt->close();
+
+if ($r['c'] > 0) {
+    $mensaje = "La iteración tiene métricas ejecutadas y no puede eliminarse.";
+    goto fin;
+}
+
+// 3️⃣ Eliminar registros relacionados: metrica_iteracion
+$sqlDelMI = "DELETE FROM metrica_iteracion WHERE id_iteracion = ?";
+$stmt = $cn->prepare($sqlDelMI);
+$stmt->bind_param("i", $idIter);
+$stmt->execute();
+$stmt->close();
+
+// 4️⃣ Eliminar la iteración
+$sqlDelIter = "DELETE FROM iteracion WHERE id_iteracion = ?";
+$stmt = $cn->prepare($sqlDelIter);
+$stmt->bind_param("i", $idIter);
+if ($stmt->execute()) {
+    $cn->commit();
+    $ok = true;
+    $mensaje = "Iteración eliminada correctamente.";
+} else {
+    $cn->rollback();
+    $mensaje = "Error al intentar eliminar la iteración.";
+}
+$stmt->close();
 $cn->autocommit(true);
-?>
-<html lang="es-AR">
-<head>
-    <meta charset="UTF-8">
-    <title><?= Constantes::NOMBRE_SISTEMA; ?> - Eliminar Iteración</title>
-    <link rel="stylesheet" href="../lib/bootstrap-4.1.1-dist/css/bootstrap.css" />
-    <link rel="stylesheet" href="../lib/open-iconic-master/font/css/open-iconic-bootstrap.css" />
-    <script src="../lib/JQuery/jquery-3.3.1.js"></script>
-    <script src="../lib/bootstrap-4.1.1-dist/js/bootstrap.min.js"></script>
-</head>
-<body>
-    <?php include_once '../gui/navbar.php'; ?>
-    <div class="container mt-4">
-        <div class="card shadow-sm">
-            <div class="card-header bg-danger text-white">
-                <h3>Resultado de la eliminación</h3>
-            </div>
-            <div class="card-body">
-                <div class="alert alert-<?= $resultado ? 'success' : 'danger'; ?>">
-                    <?= htmlspecialchars($mensaje); ?>
-                </div>
-                <a href="iteraciones.php" class="btn btn-outline-primary">
-                    <span class="oi oi-arrow-left"></span> Volver
-                </a>
-            </div>
-        </div>
-    </div>
-    <?php include_once '../gui/footer.php'; ?>
-</body>
-</html>
+
+fin:
+$type = $ok ? 'success' : 'danger';
+$cn->close();
+
+header('Location: iteraciones.php?msg=' . urlencode($mensaje) . '&type=' . $type);
+exit;
