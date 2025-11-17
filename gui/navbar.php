@@ -86,6 +86,14 @@ $currentPage = isset($_SERVER['SCRIPT_NAME']) ? basename($_SERVER['SCRIPT_NAME']
                     </a>
                 </li>
             <?php } ?>
+            <!-- 🔹 Tareas (solo líder/Gerente) -->
+            <?php if (ControlAcceso::verificaPermiso(PermisosSistema::GESTION_TAREAS)) { ?>
+                <li class="nav-item">
+                    <a class="nav-link" href="../app/tarea.php">
+                        <span class="oi oi-task"></span> Tareas
+                    </a>
+                </li>
+            <?php } ?>
             <!-- 🔹 Botón Salir: solo si no estamos en index.php ni salir.php -->
             <?php if (!in_array($currentPage, ['index.php', 'salir.php'])) { ?>
                 <li class="nav-item">
