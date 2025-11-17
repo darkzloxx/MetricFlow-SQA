@@ -88,7 +88,7 @@ if (empty($errores)) {
   if ($stmt) {
     $stmt->bind_param('dii', $valEjec, $idMetrica, $idIter);
     if ($stmt->execute()) {
-      $msg = '✅ Ejecución registrada o actualizada correctamente (valor: ' . $valEjec . ').';
+      $msg = '✅ Ejecución registrada o actualizada correctamente (valor ejecutado: ' . $valEjec . ').';
     } else {
       $errores[] = 'Error al guardar la ejecución: ' . $stmt->error;
     }
@@ -108,11 +108,28 @@ if (empty($errores)) {
   <script type="text/javascript" src="../lib/JQuery/jquery-3.3.1.js"></script>
   <script type="text/javascript" src="../lib/bootstrap-4.1.1-dist/js/bootstrap.min.js"></script>
   <title><?= Constantes::NOMBRE_SISTEMA; ?> - Ejecutar Métrica</title>
+  <style>
+    .btn-outline-secondary {
+      border-color: #dee2e6;
+      color: #495057;
+      background-color: #fff;
+    }
+
+    .btn-outline-secondary:hover {
+      background-color: #f8f9fa;
+      color: #212529;
+    }
+  </style>
 </head>
 
 <body>
   <?php include_once '../gui/navbar.php'; ?>
   <div class="container">
+    <div class="mb-3">
+      <a href="metricas.php" class="btn btn-outline-secondary">
+        <span class="oi oi-arrow-left mr-1"></span> Volver
+      </a>
+    </div>
     <div class="card mt-3">
       <div class="card-header">
         <h3>Resultado de Ejecución</h3>
@@ -134,21 +151,9 @@ if (empty($errores)) {
           </p>
         <?php endif; ?>
         <hr />
-        <h5>Datos ingresados</h5>
-        <ul>
-          <li>ID Métrica: <?= (int)$idMetrica; ?></li>
-          <li>ID Iteración: <?= (int)$idIter; ?></li>
-          <li>Valor ejecutado: <?= htmlspecialchars($valEjec); ?></li>
-        </ul>
-      </div>
-      <div class="card-footer">
-        <a class="btn btn-outline-primary" href="metricas.php">
-          <span class="oi oi-account-logout"></span> Volver
-        </a>
       </div>
     </div>
-  </div>
-  <?php include_once '../gui/footer.php'; ?>
+    <?php include_once '../gui/footer.php'; ?>
 </body>
 
 </html>

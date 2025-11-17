@@ -34,8 +34,8 @@ $rolesRes = $bd->query("SELECT id, nombre FROM rol ORDER BY id ASC");
 $rolesArr = $rolesRes->fetch_all(MYSQLI_ASSOC);
 $forbiddenNames = ['administrador', 'sin rol'];
 $rolesOptionsHtml = '';
-$forbiddenRoleIds = [];
-
+// roles prohibidos por nombre (comparación case-insensitive)
+$forbiddenNames = ['administrador', 'superadmin', 'sin rol'];
 foreach ($rolesArr as $r) {
     $rid = (int)$r['id'];
     $rname = htmlspecialchars($r['nombre'], ENT_QUOTES, 'UTF-8');

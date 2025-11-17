@@ -1,82 +1,72 @@
 <?php
-include_once '../lib/ControlAcceso.class.php';
-ControlAcceso::requierePermiso(PermisosSistema::PERMISO_PERMISOS);
+include_once '../lib/ControlAcceso.Class.php';
+ControlAcceso::requierePermiso(PermisosSistema::GESTION_TAREAS);
 include_once '../modelo/BDConexion.Class.php';
-$DatosFormulario = $_POST;
 
+if (session_status() === PHP_SESSION_NONE) session_start();
+$cn = BDConexion::getInstancia();
 
-$query = "UPDATE tarea "
-        . "SET nombre = '{$DatosFormulario["nombre"]}',  descripcion = '{$DatosFormulario["descripcion"]}'  "
-        . "WHERE id_tarea = {$DatosFormulario["id"]}";
-$consulta = BDConexion::getInstancia()->query($query);
+$Datos = $_POST;
+$nombre = trim($Datos["nombre"] ?? "");
+$id = intval($Datos["id"] ?? 0);
+$iteracion = intval($Datos["iteracion"] ?? 0);
 
+$cn->autocommit(false);
+$cn->begin_transaction();
 
-$query = "DELETE FROM metrica_tarea "
-        . "WHERE id_tarea = {$DatosFormulario["id"]}";
-$consulta = BDConexion::getInstancia()->query($query);
+$regex = '/^[A-Za-zÁÉÍÓÚáéíóúÑñ0-9 _.\-\/():]+$/u';
+$err = null;
 
-foreach ($DatosFormulario["permiso"] as $idPermiso) {
-    $query = "INSERT INTO metrica_tarea "
-            . "VALUES ({$idPermiso},{$DatosFormulario["id"]} )";
-    $consulta = BDConexion::getInstancia()->query($query);
-    if (!$consulta) {
-        BDConexion::getInstancia()->rollback();
-        //arrojar una excepcion
-        die(BDConexion::getInstancia()->errno);
-    }
+if ($id <= 0)        $err = "Tarea inválida.";
+elseif ($nombre==="")$err = "El nombre es obligatorio.";
+elseif (!preg_match($regex,$nombre)) $err="Formato inválido en nombre.";
+elseif ($iteracion<=0)$err="Debe seleccionar una iteración.";
+elseif (!isset($Datos['metricas']) || count($Datos['metricas'])==0)
+    $err="Debe seleccionar al menos una métrica.";
+
+if ($err) {
+    $_SESSION['old']=$Datos;
+    $_SESSION['flash']=['danger',$err];
+    header("Location: tarea.modificar.php?id=$id");
+    exit;
 }
 
-$query = "DELETE FROM iteracion_tarea "
-        . "WHERE id_tarea = {$DatosFormulario["id"]}";
-$consulta = BDConexion::getInstancia()->query($query);
+// Evitar duplicado
+$sql="SELECT 1 FROM tarea WHERE nombre='".$cn->real_escape_string($nombre)."' AND id_tarea<>$id";
+if($cn->query($sql)->num_rows>0){
+    $_SESSION['old']=$Datos;
+    $_SESSION['flash']=['danger',"Ya existe una tarea con ese nombre"];
+    header("Location: tarea.modificar.php?id=$id");
+    exit;
+}
 
-$query = "INSERT INTO iteracion_tarea "
-            . "VALUES ({$DatosFormulario["iteracion"]},{$DatosFormulario["id"]} )";
-    $consulta = BDConexion::getInstancia()->query($query);
-    if (!$consulta) {
-        BDConexion::getInstancia()->rollback();
-        //arrojar una excepcion
-        die(BDConexion::getInstancia()->errno);
-    }
-?>
-<html>
-    <head>
-        <meta charset="UTF-8">
-        <link rel="stylesheet" href="../lib/bootstrap-4.1.1-dist/css/bootstrap.css" />
-        <link rel="stylesheet" href="../lib/open-iconic-master/font/css/open-iconic-bootstrap.css" />
-        <script type="text/javascript" src="../lib/JQuery/jquery-3.3.1.js"></script>
-        <script type="text/javascript" src="../lib/bootstrap-4.1.1-dist/js/bootstrap.min.js"></script>
-        <title><?php echo Constantes::NOMBRE_SISTEMA; ?> - Actualizar Tarea</title>
-    </head>
-    <body>
-        <?php include_once '../gui/navbar.php'; ?>
-        <div class="container">
-            <p></p>
-            <div class="card">
-                <div class="card-header">
-                    <h3>Actualizar Tarea</h3>
-                </div>
-                <div class="card-body">
-                    <?php if ($consulta) { ?>
-                        <div class="alert alert-success" role="alert">
-                            Operaci&oacute;n realizada con &eacute;xito.
-                        </div>
-                    <?php } ?>   
-                    <?php if (!$consulta) { ?>
-                        <div class="alert alert-danger" role="alert">
-                            Ha ocurrido un error.
-                        </div>
-                    <?php } ?>
-                    <hr />
-                    <h5 class="card-text">Opciones</h5>
-                    <a href="tarea.php">
-                        <button type="button" class="btn btn-primary">
-                            <span class="oi oi-account-logout"></span> Salir
-                        </button>
-                    </a>
-                </div>
-            </div>
-        </div>
-        <?php include_once '../gui/footer.php'; ?>
-    </body>
-</html>
+// Actualizar nombre
+$sql="UPDATE tarea SET nombre='".$cn->real_escape_string($nombre)."' WHERE id_tarea=$id";
+if(!$cn->query($sql)) goto FAIL;
+
+// Actualizar métricas
+$cn->query("DELETE FROM metrica_tarea WHERE id_tarea=$id");
+foreach($Datos['metricas'] as $m){
+    $m=intval($m);
+    if(!$cn->query("INSERT INTO metrica_tarea VALUES ($m,$id)")) goto FAIL;
+}
+
+// Actualizar iteración
+$cn->query("DELETE FROM iteracion_tarea WHERE id_tarea=$id");
+if(!$cn->query("INSERT INTO iteracion_tarea VALUES ($iteracion,$id)")) goto FAIL;
+
+$cn->commit();
+$cn->autocommit(true);
+
+unset($_SESSION['old']);
+$_SESSION['flash']=['success','Tarea actualizada correctamente'];
+header("Location: tarea.php");
+exit;
+
+FAIL:
+$cn->rollback();
+$cn->autocommit(true);
+$_SESSION['old']=$Datos;
+$_SESSION['flash']=['danger',"Error al guardar los cambios"];
+header("Location: tarea.modificar.php?id=$id");
+exit;

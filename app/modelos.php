@@ -324,24 +324,65 @@ if (!empty($proyectos)) {
                                         <td>
                                             <a href="modelo.ver.php?id=<?= (int)$p['id_proyecto']; ?>" class="btn btn-outline-primary btn-icon" title="Ver detalles"><span class="oi oi-eye"></span></a>
                                             <?php if ($tipo === 'Predeterminado'): ?>
-                                                <button class="btn btn-outline-warning btn-icon" disabled title="Los modelos globales no pueden modificarse.">
-                                                    <span class="oi oi-lock-locked"></span>
-                                                </button>
-                                                <a href="#"
-                                                    onclick="confirmarDesvinculacionModeloGlobal(<?= (int)$p['id_proyecto']; ?>, event)"
-                                                    class="btn btn-outline-danger btn-icon"
-                                                    title="Desvincular modelo predeterminado del proyecto">
-                                                    <span class="oi oi-x"></span>
-                                                </a>
+                                                <?php
+                                                $pid = (int)$p['id_proyecto'];
+                                                $tienePlanificados = !empty($mapPlanificados[$pid]);
+                                                ?>
+
+                                                <?php if ($tienePlanificados): ?>
+                                                    <?php $tooltip = htmlspecialchars('No se puede desvincular: este modelo ya tiene métricas planificadas en iteraciones.', ENT_QUOTES, 'UTF-8'); ?>
+                                                    <button class="btn btn-outline-warning btn-icon" disabled data-toggle="tooltip" title="<?= $tooltip; ?>">
+                                                        <span class="oi oi-lock-locked"></span>
+                                                    </button>
+                                                    <button class="btn btn-outline-danger btn-icon" disabled data-toggle="tooltip" title="<?= $tooltip; ?>">
+                                                        <span class="oi oi-lock-locked"></span>
+                                                    </button>
+
+                                                <?php else: ?>
+                                                    <button class="btn btn-outline-warning btn-icon" disabled
+                                                        title="Los modelos globales no pueden modificarse directamente.">
+                                                        <span class="oi oi-lock-locked"></span>
+                                                    </button>
+
+                                                    <a href="#"
+                                                        onclick="confirmarDesvinculacionModeloGlobal(<?= $pid; ?>, event)"
+                                                        class="btn btn-outline-danger btn-icon"
+                                                        title="Desvincular modelo predeterminado del proyecto">
+                                                        <span class="oi oi-x"></span>
+                                                    </a>
+                                                <?php endif; ?>
 
                                             <?php elseif ($tipo === 'Personalizado'): ?>
-                                                <a href="modelo.editar.personalizado.php?id=<?= $modeloPersId; ?>" class="btn btn-outline-warning btn-icon" title="Editar modelo personalizado"><span class="oi oi-pencil"></span></a>
-                                                <a href="#" onclick="confirmarEliminacionPersonalizado(<?= (int)$modeloPersId; ?>, event)"
-                                                    class="btn btn-outline-danger btn-icon"
-                                                    title="Eliminar modelo personalizado">
-                                                    <span class="oi oi-trash"></span>
-                                                </a>
 
+                                                <?php
+                                                $pid = (int)$p['id_proyecto'];
+                                                $tienePlanificados = !empty($mapPlanificados[$pid]); // ya cargado antes
+                                                ?>
+
+                                                <?php if ($tienePlanificados): ?>
+                                                    <?php $tooltip = htmlspecialchars('No se puede editar/eliminar: este modelo personalizado ya tiene métricas planificadas en su proyecto.', ENT_QUOTES, 'UTF-8'); ?>
+
+                                                    <button class="btn btn-outline-warning btn-icon" disabled data-toggle="tooltip" title="<?= $tooltip; ?>">
+                                                        <span class="oi oi-lock-locked"></span>
+                                                    </button>
+
+                                                    <button class="btn btn-outline-danger btn-icon" disabled data-toggle="tooltip" title="<?= $tooltip; ?>">
+                                                        <span class="oi oi-lock-locked"></span>
+                                                    </button>
+
+                                                <?php else: ?>
+                                                    <a href="modelo.editar.personalizado.php?id=<?= $modeloPersId; ?>"
+                                                        class="btn btn-outline-warning btn-icon"
+                                                        title="Editar modelo personalizado">
+                                                        <span class="oi oi-pencil"></span>
+                                                    </a>
+
+                                                    <a href="#" onclick="confirmarEliminacionPersonalizado(<?= (int)$modeloPersId; ?>, event)"
+                                                        class="btn btn-outline-danger btn-icon"
+                                                        title="Eliminar modelo personalizado">
+                                                        <span class="oi oi-trash"></span>
+                                                    </a>
+                                                <?php endif; ?>
 
                                             <?php endif; ?>
                                         </td>

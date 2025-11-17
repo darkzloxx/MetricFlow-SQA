@@ -1,102 +1,78 @@
 <?php
 include_once '../lib/ControlAcceso.Class.php';
-ControlAcceso::requierePermiso(PermisosSistema::PERMISO_USUARIOS);
+ControlAcceso::requierePermiso(PermisosSistema::GESTION_TAREAS);
 include_once '../modelo/BDConexion.Class.php';
+
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
 $DatosFormulario = $_POST;
-BDConexion::getInstancia()->autocommit(false);
-BDConexion::getInstancia()->begin_transaction();
+$cn = BDConexion::getInstancia();
+$cn->autocommit(false);
+$cn->begin_transaction();
 
-$nombre = $DatosFormulario["nombre"];
+$nombre = trim($DatosFormulario["nombre"] ?? '');
+$iteracion = intval($DatosFormulario["iteracion"] ?? 0);
 
-$resultado = "";
+$tipo = "danger";
 $mensaje = "Ha ocurrido un error.";
 
-$query = "select * from tarea where nombre = '{$nombre}'";
-$consulta = BDConexion::getInstancia()->query($query);
-
-if ($consulta->num_rows > 0){
-	$resultado = false;
-	$mensaje = "Ya existe una tarea con el nombre ingresado";
+// ==========================
+// VALIDACIONES
+// ==========================
+if ($nombre === "") {
+    $mensaje = "El nombre de la tarea es obligatorio.";
+} elseif (!preg_match('/^[A-Za-zÁÉÍÓÚáéíóúÑñ0-9 _.\-\/():]+$/u', $nombre)) {
+    $mensaje = "El nombre solo puede contener letras, números y . - _ / ( ) :";
+} elseif (!isset($DatosFormulario["metricas"]) || count($DatosFormulario["metricas"]) == 0) {
+    $mensaje = "Debe seleccionar al menos una métrica.";
+} elseif ($iteracion <= 0) {
+    $mensaje = "Debe seleccionar una iteración.";
 } else {
 
-$query = "INSERT INTO tarea "
-        . "VALUES (null,'{$DatosFormulario["nombre"]}','{$DatosFormulario["descripcion"]}')";
-$consulta = BDConexion::getInstancia()->query($query);
-if (!$consulta) {
-    BDConexion::getInstancia()->rollback();
-    //arrojar una excepcion
-    die(BDConexion::getInstancia()->errno);
-}
+    // Nombre duplicado
+    $sql = "SELECT 1 FROM tarea WHERE nombre = '" . $cn->real_escape_string($nombre) . "'";
+    $dup = $cn->query($sql);
 
-$idTarea = BDConexion::getInstancia()->insert_id;
+    if ($dup->num_rows > 0) {
+        $mensaje = "Ya existe una tarea con ese nombre.";
+    } else {
 
-foreach ($DatosFormulario["permiso"] as $idPermiso) {
-    $query = "INSERT INTO metrica_tarea "
-            . "VALUES ({$idPermiso},{$idTarea} )";
-    $consulta = BDConexion::getInstancia()->query($query);
-    if (!$consulta) {
-        BDConexion::getInstancia()->rollback();
-        //arrojar una excepcion
-        die(BDConexion::getInstancia()->errno);
+        // Crear tarea
+        $sql = "INSERT INTO tarea (nombre) VALUES ('" . $cn->real_escape_string($nombre) . "')";
+        if (!$cn->query($sql)) goto ERROR_SQL;
+
+        $idTarea = $cn->insert_id;
+
+        // Asociar métricas
+        foreach ($DatosFormulario["metricas"] as $idMetrica) {
+            $sql = "INSERT INTO metrica_tarea (id_metrica, id_tarea)
+                    VALUES (" . intval($idMetrica) . ", $idTarea)";
+            if (!$cn->query($sql)) goto ERROR_SQL;
+        }
+
+        // Asociar iteración
+        $sql = "INSERT INTO iteracion_tarea (id_iteracion, id_tarea)
+                VALUES ($iteracion, $idTarea)";
+        if (!$cn->query($sql)) goto ERROR_SQL;
+
+        $cn->commit();
+        $cn->autocommit(true);
+
+        unset($_SESSION['old']);
+        $_SESSION['flash'] = ["success", "Tarea creada exitosamente. 🚀"];
+        header("Location: tarea.php");
+        exit;
     }
 }
 
+// ========= ERROR ==========
+ERROR_SQL:
+$cn->rollback();
+$cn->autocommit(true);
 
-    $query = "INSERT INTO iteracion_tarea "
-            . "VALUES ({$DatosFormulario["iteracion"]},{$idTarea} )";
-    $consulta = BDConexion::getInstancia()->query($query);
-    if (!$consulta) {
-        BDConexion::getInstancia()->rollback();
-        //arrojar una excepcion
-        die(BDConexion::getInstancia()->errno);
-    }
-
-
-BDConexion::getInstancia()->commit();
-BDConexion::getInstancia()->autocommit(true);
-$resultado = true;
-$mensaje = "Operación Realizada con Éxito";
-}
-?>
-<html>
-    <head>
-        <meta charset="UTF-8">
-        <link rel="stylesheet" href="../lib/bootstrap-4.1.1-dist/css/bootstrap.css" />
-        <link rel="stylesheet" href="../lib/open-iconic-master/font/css/open-iconic-bootstrap.css" />
-        <script type="text/javascript" src="../lib/JQuery/jquery-3.3.1.js"></script>
-        <script type="text/javascript" src="../lib/bootstrap-4.1.1-dist/js/bootstrap.min.js"></script>
-        <title><?= Constantes::NOMBRE_SISTEMA; ?> - Crear Tarea</title>
-    </head>
-    <body>
-        <?php include_once '../gui/navbar.php'; ?>
-
-        <div class="container">
-            <p></p>
-            <div class="card">
-                <div class="card-header">
-                    <h3>Crear Tarea</h3>
-                </div>
-                <div class="card-body">
-                    <?php if ($resultado) { ?>
-                        <div class="alert alert-success" role="alert">
-                            <?= $mensaje; ?>
-                        </div>
-                    <?php } ?>   
-                    <?php if (!$resultado) { ?>
-                        <div class="alert alert-danger" role="alert">
-                            <?= $mensaje; ?>
-                        </div>
-                    <?php } ?>
-                    <hr />
-                    <h5 class="card-text">Opciones</h5>
-                    <a href="tarea.php">
-                        <button type="button" class="btn btn-primary">
-                            <span class="oi oi-account-logout"></span> Salir
-                        </button>
-                    </a>
-                </div>
-            </div>
-        </div>
-        <?php include_once '../gui/footer.php'; ?>
-    </body>
-</html>
+$_SESSION['old'] = $_POST;
+$_SESSION['flash'] = [$tipo, $mensaje];
+header("Location: tarea.crear.php");
+exit;

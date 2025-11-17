@@ -1,77 +1,119 @@
 <?php
 include_once '../lib/ControlAcceso.class.php';
-ControlAcceso::requierePermiso(PermisosSistema::PERMISO_PERMISOS);
-include_once '../modelo/Permiso.php';
+ControlAcceso::requierePermiso(PermisosSistema::GESTION_TAREAS);
+include_once '../modelo/BDConexion.Class.php';
 
-$id = $_GET["id"];
+$id = intval($_GET["id"] ?? 0);
+
+if ($id <= 0) {
+    header("Location: tarea.php?msg=" . urlencode("Tarea inválida.") . "&type=danger");
+    exit;
+}
+
+$cn = BDConexion::getInstancia();
+
+$sql = "
+SELECT 
+    t.nombre AS nombreTarea,
+    i.numero_iteracion,
+    m.nombre AS nombreMetrica,
+    i.fecha_inicio,
+    i.fecha_fin,
+    f.nombre AS nombreFase
+FROM tarea t
+JOIN metrica_tarea mt ON t.id_tarea = mt.id_tarea
+JOIN metrica m ON m.id_metrica = mt.id_metrica
+JOIN iteracion_tarea it ON it.id_tarea = t.id_tarea
+JOIN iteracion i ON i.id_iteracion = it.id_iteracion
+JOIN fase f ON f.id_fase = i.id_fase
+WHERE t.id_tarea = $id
+ORDER BY f.id_fase ASC, i.numero_iteracion ASC, m.nombre ASC
+";
+
+$res = $cn->query($sql);
+$datos = $res ? $res->fetch_all(MYSQLI_ASSOC) : [];
 ?>
 
-
 <html>
-    <head>
-        <meta charset="UTF-8">
-        <link rel="stylesheet" href="../lib/bootstrap-4.1.1-dist/css/bootstrap.css" />
-        <link rel="stylesheet" href="../lib/open-iconic-master/font/css/open-iconic-bootstrap.css" />
-        <script type="text/javascript" src="../lib/JQuery/jquery-3.3.1.js"></script>
-        <script type="text/javascript" src="../lib/bootstrap-4.1.1-dist/js/bootstrap.min.js"></script>
-       <title><?php echo Constantes::NOMBRE_SISTEMA; ?> - Propiedades de la Tarea</title>
 
-    </head>
-    <body>
-        <?php include_once '../gui/navbar.php'; ?>
-        <div class="container">
-            <p></p>
-            <div class="card">
-                <div class="card-header">
-                    <h3>Propiedades de la Tarea</h3>
-                </div>
-                <div class="card-body">
+<head>
+    <meta charset="UTF-8">
+    <title><?php echo Constantes::NOMBRE_SISTEMA; ?> - Propiedades de la Tarea</title>
+    <link rel="stylesheet" href="../lib/bootstrap-4.1.1-dist/css/bootstrap.css" />
+    <link rel="stylesheet" href="../lib/open-iconic-master/font/css/open-iconic-bootstrap.css" />
+    <script src="../lib/JQuery/jquery-3.3.1.js"></script>
+    <script src="../lib/bootstrap-4.1.1-dist/js/bootstrap.min.js"></script>
+    <style>
+        
+        .btn-outline-secondary {
+            border-color: #dee2e6;
+            color: #495057;
+            background: #fff;
+        }
+
+        .btn-outline-secondary:hover {
+            background: #f8f9fa;
+            color: #212529;
+        }
+    </style>
+</head>
+
+<body>
+    <?php include_once '../gui/navbar.php'; ?>
+
+    <div class="container mt-3">
+
+        <div class="mb-3">
+            <a href="tarea.php" class="btn btn-outline-secondary">
+                <span class="oi oi-arrow-left mr-1"></span> Volver
+            </a>
+        </div>
+
+        <div class="card shadow-sm">
+            <div class="card-header">
+                <h3 class="mb-0 text-primary">Propiedades de la Tarea</h3>
+            </div>
+
+            <div class="card-body">
+
+                <?php if (empty($datos)): ?>
+
+                    <div class="alert alert-warning">⚠️ Esta tarea no tiene métricas asociadas.</div>
+
+                <?php else: ?>
+
                     <table class="table table-hover table-sm">
                         <tr class="table-info">
                             <th>Tarea</th>
-                            <th>Descripción</th>
-                            <th>Número de Iteración</th>
+                            <th>Fase</th>
+                            <th>Iteración</th>
                             <th>Métrica</th>
                             <th>Fecha Inicio</th>
                             <th>Fecha Fin</th>
                         </tr>
-                        <tr>
-                            <?php 
-                            $proyectos = "SELECT distinct t.*,i.*,m.nombre as nombreMetrica ,f.nombre as nombreFase  
-                            FROM tarea t join metrica_tarea mt on t.id_tarea = mt.id_tarea
-                            join metrica m on m.id_metrica = mt.id_metrica
-                            join iteracion_tarea it on t.id_tarea = it.id_tarea
-                            join iteracion i on i.id_iteracion = it.id_iteracion
-                            join fase f on f.id_fase = i.id_fase
-                            where t.id_tarea  = ". $id . " ORDER BY t.id_tarea asc"; 
-                            $proyectos=BDConexion::getInstancia()->query($proyectos);
-                            $tiene = 0;
-                            $proyecto = $proyectos->fetch_all(MYSQLI_ASSOC); 
-                            foreach ($proyecto as $Proyec) { 
-                                $tiene = 1;?>
-                                <td><?= $Proyec['nombre']; ?></td>
-                                <td><?= $Proyec['descripcion']; ?></td>
-                                <td><?= $Proyec['numero_iteracion']; ?></td>
-                                <td><?= $Proyec['nombreMetrica']; ?></td>
-                                <td><?= $Proyec['fecha_inicio']; ?></td>
-                                <td><?= $Proyec['fecha_fin']; ?></td>
-                            </tr>
-                        <?php } 
-                        if($tiene == 0){
-                                echo "<td colspan='5'>La tarea no tiene métricas asociadas</td>";
-                        }
-                        ?>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($datos as $row): ?>
+                                <tr>
+                                    <td><?= htmlspecialchars($row['nombreTarea']); ?></td>
+                                    <td><?= htmlspecialchars($row['nombreFase']); ?></td>
+                                    <td class="text-center"><?= intval($row['numero_iteracion']); ?></td>
+                                    <td><?= htmlspecialchars($row['nombreMetrica']); ?></td>
+                                    <td><?= htmlspecialchars($row['fecha_inicio']); ?></td>
+                                    <td><?= htmlspecialchars($row['fecha_fin']); ?></td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
                     </table>
-                </div>
-                <div class="card-footer">
-                        <a href="tarea.php">
-                            <button type="button" class="btn btn-outline-danger">
-                                <span class="oi oi-x"></span> Volver
-                            </button>
-                        </a>
-                    </div>
+
+                <?php endif; ?>
+
             </div>
         </div>
-        <?php include_once '../gui/footer.php'; ?>
-    </body>
+
+    </div>
+
+    <?php include_once '../gui/footer.php'; ?>
+</body>
+
 </html>
