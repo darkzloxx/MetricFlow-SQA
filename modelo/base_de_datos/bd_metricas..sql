@@ -579,7 +579,7 @@ CREATE TABLE `usuario_rol` (
 INSERT INTO `usuario_rol` (`id_usuario`, `id_rol`) VALUES
 (1, 2),
 (2, 4),
-(3, 6),
+(3, 1),
 (4, 3),
 (5, 4),
 (6, 1),
