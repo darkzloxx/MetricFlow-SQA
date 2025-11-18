@@ -28,7 +28,10 @@ $sqlIter = "
     WHERE up.id_usuario = {$idUsuario}
       AND LOWER(r.nombre) LIKE '%líder%'
     GROUP BY i.id_iteracion
-    ORDER BY p.nombre ASC, i.numero_iteracion ASC";
+    ORDER BY p.nombre ASC,
+         FIELD(f.nombre, 'Inicio', 'Elaboración', 'Construcción', 'Transición'),
+         i.numero_iteracion ASC";
+
 
 
 $rs = $cn->query($sqlIter);

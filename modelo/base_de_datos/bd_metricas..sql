@@ -20,8 +20,6 @@ SET time_zone = "+00:00";
 /*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
 /*!40101 SET NAMES utf8mb4 */;
 
-
-
 CREATE TABLE `fase` (
   `id_fase` int(11) NOT NULL,
   `nombre` varchar(100) NOT NULL
@@ -95,23 +93,23 @@ CREATE TABLE `metrica` (
 --
 
 INSERT INTO `metrica` (`id_metrica`, `nombre`, `descripcion`, `tipo`) VALUES
-(1, 'Revisiones de documentos', 'Cantidad de documentos revisados frente a los planificados.','base'),
-(2, 'Revisiones técnicas formales (RTF)', 'Número de revisiones técnicas realizadas.','base'),
-(3, 'Reuniones de equipo', 'Número total de reuniones efectuadas en la iteración.','base'),
-(4, 'Tasa de corrección de defectos', 'Defectos corregidos frente a defectos reportados.','base'),
-(5, 'Horas trabajadas por iteración', 'Cantidad total de horas registradas en la iteración.','base'),
-(6, 'Cumplimiento de actividades previstas', 'Número de actividades completadas frente a las planificadas.','base'),
-(7, 'Cobertura de pruebas', 'Cantidad de pruebas ejecutadas frente a las planificadas.','base'),
-(8, 'Defectos detectados', 'Número total de defectos encontrados durante pruebas o revisión.','base'),
-(9, 'Defectos corregidos', 'Cantidad de defectos corregidos durante la iteración.','base'),
-(10, 'Requisitos implementados', 'Número de requisitos implementados durante la iteración.','base'),
-(11, 'Retrabajos realizados', 'Cantidad de tareas repetidas por errores o ajustes.','base'),
-(12, 'Incidencias reportadas', 'Número total de incidencias registradas.','base'),
-(13, 'Iteraciones completadas', 'Cantidad de iteraciones finalizadas dentro del proyecto.','base'),
-(14, 'Revisiones realizadas', 'Número total de revisiones completadas en el ciclo.','base'),
-(15, 'Casos de prueba ejecutados', 'Cantidad total de casos de prueba efectivamente ejecutados.','base'),
-(16, 'Casos de prueba exitosos', 'Número de casos de prueba que pasaron exitosamente.','base'),
-(17, 'Defectos postentrega', 'Cantidad de defectos reportados después de la entrega.','base');
+(1, 'Revisiones de documentos', 'Cantidad de documentos revisados frente a los planificados.', 'base'),
+(2, 'Revisiones técnicas formales (RTF)', 'Número de revisiones técnicas realizadas.', 'base'),
+(3, 'Reuniones de equipo', 'Número total de reuniones efectuadas en la iteración.', 'base'),
+(4, 'Tasa de corrección de defectos', 'Defectos corregidos frente a defectos reportados.', 'base'),
+(5, 'Horas trabajadas por iteración', 'Cantidad total de horas registradas en la iteración.', 'base'),
+(6, 'Cumplimiento de actividades previstas', 'Número de actividades completadas frente a las planificadas.', 'base'),
+(7, 'Cobertura de pruebas', 'Cantidad de pruebas ejecutadas frente a las planificadas.', 'base'),
+(8, 'Defectos detectados', 'Número total de defectos encontrados durante pruebas o revisión.', 'base'),
+(9, 'Defectos corregidos', 'Cantidad de defectos corregidos durante la iteración.', 'base'),
+(10, 'Requisitos implementados', 'Número de requisitos implementados durante la iteración.', 'base'),
+(11, 'Retrabajos realizados', 'Cantidad de tareas repetidas por errores o ajustes.', 'base'),
+(12, 'Incidencias reportadas', 'Número total de incidencias registradas.', 'base'),
+(13, 'Iteraciones completadas', 'Cantidad de iteraciones finalizadas dentro del proyecto.', 'base'),
+(14, 'Revisiones realizadas', 'Número total de revisiones completadas en el ciclo.', 'base'),
+(15, 'Casos de prueba ejecutados', 'Cantidad total de casos de prueba efectivamente ejecutados.', 'base'),
+(16, 'Casos de prueba exitosos', 'Número de casos de prueba que pasaron exitosamente.', 'base'),
+(17, 'Defectos postentrega', 'Cantidad de defectos reportados después de la entrega.', 'base');
 
 -- --------------------------------------------------------
 
@@ -134,22 +132,28 @@ CREATE TABLE `metrica_iteracion` (
 INSERT INTO `metrica_iteracion` (`id_metrica`, `id_iteracion`, `valor_planificado`, `valor_ejecutado`, `umbral_desviacion`) VALUES
 (1, 3, 8, 8, 10),
 (1, 4, 9, 9, 10),
-(1, 5, 6, 1, 10),
+(1, 5, 6, 6, 10),
+(1, 6, 6, 7, 10),
 (2, 3, 1, 2, 10),
 (2, 4, 1, 1, 10),
 (2, 5, 0, 0, 10),
+(2, 6, 0, 0, 10),
 (3, 3, 2, 2, 15),
 (3, 4, 3, 3, 15),
-(3, 5, 2, 0, 15),
+(3, 5, 2, 2, 15),
+(3, 6, 2, 2, 10),
 (5, 3, 130, 143, 15),
 (5, 4, 120, 137, 15),
-(5, 5, 70, 6, 15),
+(5, 5, 70, 72, 15),
+(5, 6, 40, 42, 10),
 (6, 3, 22, 22, 10),
 (6, 4, 18, 20, 10),
-(6, 5, 16, 2, 10),
+(6, 5, 16, 16, 10),
+(6, 6, 12, 15, 10),
 (7, 3, 0, 3, 10),
 (7, 4, 3, 75, 10),
-(7, 5, 30, 0, 10);
+(7, 5, 30, 32, 10),
+(7, 6, 14, 20, 10);
 
 -- --------------------------------------------------------
 
@@ -360,8 +364,8 @@ CREATE TABLE `proyecto` (
 -- Volcado de datos para la tabla `proyecto`
 --
 
-INSERT INTO `proyecto` (`id_proyecto`, `objetivo`, `descripcion`, `estado`, `nombre`, `id_modelo`, `id_modelo_global`, `id_modelo_personalizado`) VALUES
-(1, 'MetricFlow SQA es un software web para registrar, seguir y analizar métricas de calidad durante las iteraciones del proyecto.', 'Permite el seguimiento de estándares de calidad mediante métricas e indicadores definidos en el plan de SQA.', 'En Progreso', 'MetricFlow-SQA', 7, NULL, NULL);
+INSERT INTO `proyecto` (`id_proyecto`, `objetivo`, `descripcion`, `estado`, `nombre`, `id_modelo`, `fecha_creacion`, `id_modelo_global`, `id_modelo_personalizado`) VALUES
+(1, 'MetricFlow SQA es un software web para registrar, seguir y analizar métricas de calidad durante las iteraciones del proyecto.', 'Permite el seguimiento de estándares de calidad mediante métricas e indicadores definidos en el plan de SQA.', 'En Progreso', 'MetricFlow-SQA', 7, '2025-11-18 12:41:09', NULL, NULL);
 
 -- --------------------------------------------------------
 
@@ -534,9 +538,7 @@ INSERT INTO `usuario` (`id_usuario`, `nombre_apellido`, `email`) VALUES
 (6, 'Osiris Sofia', 'osofia@uarg.unpa.edu.ar'),
 (7, 'Karim Hallar', 'khallar@uarg.unpa.edu.ar'),
 (8, 'Esteban Gesto', 'estebangesto@gmail.com'),
-(12, 'Lorenzo Teppa', 'sistemasprexa@gmail.com'),
-(13, 'Silvia ailen Gariglio', 'silviagarigliosivi@gmail.com'),
-(14, 'Aylen Gariglio', 'gariglioaylen@gmail.com');
+(12, 'Lorenzo Teppa', 'sistemasprexa@gmail.com');
 
 -- --------------------------------------------------------
 
@@ -556,8 +558,8 @@ CREATE TABLE `usuario_proyecto` (
 
 INSERT INTO `usuario_proyecto` (`id_usuario`, `id_proyecto`, `id_rol`) VALUES
 (1, 1, 2),
-(13, 1, 2),
 (4, 1, 3),
+(12, 1, 3),
 (2, 1, 4),
 (5, 1, 4);
 
@@ -579,15 +581,13 @@ CREATE TABLE `usuario_rol` (
 INSERT INTO `usuario_rol` (`id_usuario`, `id_rol`) VALUES
 (1, 2),
 (2, 4),
-(3, 6),
+(3, 1),
 (4, 3),
 (5, 4),
 (6, 1),
 (7, 1),
 (8, 1),
-(12, 2),
-(13, 2),
-(14, 2);
+(12, 3);
 
 --
 -- Índices para tablas volcadas
