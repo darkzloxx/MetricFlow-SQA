@@ -1,7 +1,0 @@
-Enlace del archivo Figma de MetricFlow SQA: https://www.figma.com/design/C36tnzqvKNKDcioRRBa7re/Prototipo-MetricFlow-SQA?node-id=6-15&t=OvZFhpAlq7NycNMB-1
-
-IA útiles para generar pantallas de prueba:
-
--V0: https://v0.app/
-
--Dualite: https://dualite.dev/
